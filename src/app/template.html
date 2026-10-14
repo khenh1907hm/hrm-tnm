@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quản lý nhân sự Thiên Nhật Minh (bản thử giao diện)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#edf0f3;--surface:#ffffff;--soft:#f4f6f8;--ink:#16222e;--muted:#5b6b7b;--line:#d5dce3;
+  --brand:#1f3f5e;--brand-ink:#ffffff;--accent:#f5b800;--accent-soft:#fff1b8;
+  --ok:#1d6f46;--ok-bg:#e0f2e8;--warn:#7a5200;--warn-bg:#fff0c2;--bad:#a8231b;--bad-bg:#fbe3e0;--focus:#1f6fd1;
+  color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Be Vietnam Pro",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:14px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.app{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:100vh}
+.side{background:var(--surface);border-right:1px solid var(--line);padding:20px 14px;display:flex;flex-direction:column;gap:20px;position:sticky;top:0;height:100vh;overflow:auto}
+.brand{display:flex;gap:10px;align-items:center;padding:0 6px}
+.mark{width:38px;height:38px;border-radius:6px;background:var(--accent);color:#1a1400;font-weight:700;display:grid;place-items:center;font-size:13px;letter-spacing:.02em;flex:none}
+.brand b{display:block;font-size:15px;line-height:1.2}
+.brand span{font-size:12px;color:var(--muted)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{all:unset;cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:9px 12px;border-radius:6px;border-left:3px solid transparent;color:var(--muted);font-weight:500}
+.nav button:hover{background:var(--soft);color:var(--ink)}
+.nav button[aria-current="page"]{background:var(--soft);color:var(--ink);border-left-color:var(--accent);font-weight:600}
+.nav button:focus-visible{outline:2px solid var(--focus)}
+.count{background:var(--bad);color:#fff;border-radius:999px;font-size:12px;font-weight:600;padding:0 7px;min-width:22px;text-align:center}
+.side .foot{margin-top:auto;display:flex;flex-direction:column;gap:10px;font-size:12px;color:var(--muted)}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{all:unset;cursor:pointer;flex:1;text-align:center;padding:7px 4px;font-weight:500;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink);font-weight:600}
+.seg button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.main{padding:28px clamp(16px,3vw,40px) 60px;min-width:0}
+.head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:18px}
+h1{font-size:24px;line-height:1.25;margin:0;font-weight:700}
+h2{font-size:16px;margin:0 0 10px;font-weight:600}
+.sub{color:var(--muted);margin:2px 0 0}
+.btn{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:8px 14px;font-weight:600;display:inline-flex;gap:6px;align-items:center}
+.btn:hover{background:var(--soft)}
+.btn.primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.btn.primary:hover{filter:brightness(1.1)}
+.btn.danger{color:var(--bad)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.bar{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px}
+.in{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;min-width:0}
+.in[readonly],.in:disabled{background:var(--soft);color:var(--muted)}
+.bar .grow{flex:1 1 240px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:13px;padding:10px 14px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr[data-a]{cursor:pointer}
+tbody tr[data-a]:hover{background:var(--soft)}
+.name{font-weight:600}
+.muted{color:var(--muted)}
+.pill{display:inline-block;border-radius:999px;padding:1px 9px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);color:var(--bad)}
+.pill.none{background:var(--soft);color:var(--muted)}
+.empty{padding:36px 16px;text-align:center;color:var(--muted)}
+.back{all:unset;cursor:pointer;color:var(--muted);font-weight:500;margin-bottom:10px;display:inline-block}
+.back:hover{color:var(--ink)}
+.back:focus-visible{outline:2px solid var(--focus)}
+.cols{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:20px;align-items:start}
+.dl{display:grid;grid-template-columns:120px 1fr;gap:0}
+.dl dt,.dl dd{margin:0;padding:9px 16px;border-bottom:1px solid var(--line)}
+.dl dt{color:var(--muted)}
+.dl dd{word-break:break-word}
+.dl dt:nth-last-of-type(1),.dl dd:last-of-type{border-bottom:0}
+.cert{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px 16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:center}
+.cert:last-child{border-bottom:0}
+.cert .t{font-weight:600}
+.cert .en{font-size:12px;color:var(--muted)}
+.cert .links{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.linkbtn{all:unset;cursor:pointer;color:var(--focus);font-size:13px;text-decoration:underline;text-underline-offset:2px}
+.linkbtn:focus-visible{outline:2px solid var(--focus)}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.chip{cursor:pointer;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 14px;font-weight:500}
+.chip[aria-pressed="true"]{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+.sigs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.sig{overflow:hidden}
+.sig .pic{height:110px;display:grid;place-items:center;border-bottom:1px solid var(--line);background-color:var(--surface);background-image:linear-gradient(45deg,var(--soft) 25%,transparent 25%,transparent 75%,var(--soft) 75%),linear-gradient(45deg,var(--soft) 25%,transparent 25%,transparent 75%,var(--soft) 75%);background-size:16px 16px;background-position:0 0,8px 8px}
+.sig .pic img{max-height:84px;max-width:86%}
+.sig .body{padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.field label{font-weight:600;font-size:13px}
+.field .in{width:100%}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
+.auto{background:var(--accent-soft)!important;border-color:var(--accent)!important}
+.backdrop{position:fixed;inset:0;background:rgba(10,18,26,.55);display:flex;justify-content:center;align-items:flex-start;padding:5vh 16px;overflow:auto;z-index:50}
+.modal{background:var(--surface);border-radius:10px;width:100%;max-width:560px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+.modal.wide{max-width:900px}
+.modal header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--line)}
+.modal header h2{margin:0;font-size:17px}
+.modal .bodyc{padding:18px 20px}
+.modal footer{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid var(--line);flex-wrap:wrap}
+.x{all:unset;cursor:pointer;font-size:22px;line-height:1;padding:2px 8px;color:var(--muted)}
+.x:focus-visible{outline:2px solid var(--focus)}
+.drop{display:block;border:2px dashed var(--line);border-radius:8px;padding:18px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop:hover{border-color:var(--accent)}
+.drop input{display:none}
+.drop:focus-within{outline:2px solid var(--focus)}
+.prev{margin:10px 0;display:none;gap:12px;align-items:flex-start}
+.prev.on{display:flex}
+.prev img{width:150px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.ocr{font-size:13px;flex:1}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--line);border-top-color:var(--brand);border-radius:50%;animation:sp .8s linear infinite;vertical-align:-2px;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:8px;font-weight:500;z-index:80;max-width:90vw}
+.note{background:var(--soft);border-radius:6px;padding:10px 12px;font-size:13px;color:var(--muted)}
+/* Phiếu thông tin công nhân: luôn nền trắng như bản in */
+.paper{background:#fff;color:#111;border:1px solid #c9d0d7;padding:26px 30px;font-size:12px;line-height:1.45;font-family:"Be Vietnam Pro",Arial,sans-serif}
+.paper h3{text-align:center;margin:0;font-size:15px}
+.paper .co{text-align:center;font-weight:600;margin:2px 0 14px}
+.paper .top{display:grid;grid-template-columns:1fr 92px;gap:14px}
+.paper .photo{border:1px solid #888;height:120px;display:grid;place-items:center;color:#777;font-size:11px;text-align:center}
+.paper .row{display:grid;grid-template-columns:230px 1fr;border-bottom:1px solid #ddd;padding:3px 0}
+.paper .row b{font-weight:600}
+.paper .sec{margin-top:12px;font-weight:700;border-bottom:2px solid #111;padding-bottom:2px}
+.paper .ticks{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;margin-top:8px}
+.paper .tk{display:flex;gap:6px;align-items:flex-start}
+.paper .box{font-size:15px;line-height:1}
+.paper .sign{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:16px;text-align:center}
+.paper .sigimg{height:62px;display:grid;place-items:center}
+.paper .sigimg img{max-height:58px;max-width:90%}
+.paper .fine{margin-top:14px;font-size:10.5px;color:#444}
+.print-only{display:none}
+@media (max-width:860px){
+  .app{grid-template-columns:1fr}
+  .side{position:static;height:auto;flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px;gap:10px;border-right:0;border-bottom:1px solid var(--line)}
+  .nav{flex-direction:row;overflow-x:auto;max-width:100%}
+  .nav button{white-space:nowrap}
+  .side .foot{margin:0;flex-direction:row;align-items:center;flex-wrap:wrap}
+  .cols{grid-template-columns:1fr}
+  .cert{grid-template-columns:1fr}
+  .grid2{grid-template-columns:1fr}
+  .paper{padding:16px}
+  .paper .row{grid-template-columns:1fr}
+  .paper .top{grid-template-columns:1fr}
+  .paper .ticks,.paper .sign{grid-template-columns:1fr}
+}
+@media print{
+  html,body{background:#fff}
+  .app,.toast,.no-print{display:none!important}
+  .backdrop{position:static;background:none;padding:0;display:block;overflow:visible}
+  .modal{box-shadow:none;max-width:none;border-radius:0}
+  .modal .bodyc{padding:0}
+  .paper{border:0;padding:0}
+  .print-only{display:block;page-break-before:always;text-align:center}
+  .print-only img{max-width:100%;border:1px solid #ccc}
+}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" aria-label="Điều hướng">
+    <div class="brand"><div class="mark" aria-hidden="true">TNM</div><div><b>Thiên Nhật Minh</b><span>Quản lý nhân sự</span></div></div>
+    <nav class="nav" id="nav" aria-label="Chức năng"></nav>
+    <div class="foot">
+      <div>Vai trò đang xem thử
+        <div class="seg" role="group" aria-label="Vai trò" id="roleSeg" style="margin-top:6px"></div>
+      </div>
+      <div>Bản thử giao diện, dữ liệu mẫu, chưa lưu lại khi tải lại trang.</div>
+    </div>
+  </aside>
+  <main class="main" id="main"></main>
+</div>
+<div id="modalRoot"></div>
+<div id="toastRoot" aria-live="polite"></div>
+
+<script>
+/* ---------- Tiện ích ---------- */
+const TODAY=new Date();TODAY.setHours(0,0,0,0);
+const z2=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+z2(d.getMonth()+1)+'-'+z2(d.getDate());
+const addDays=n=>{const d=new Date(TODAY);d.setDate(d.getDate()+n);return ymd(d)};
+const parse=s=>{const [y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d)};
+const fmt=s=>{if(!s)return '';const [y,m,d]=s.split('-');return d+'/'+m+'/'+y};
+const daysLeft=s=>Math.round((parse(s)-TODAY)/86400000);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm=s=>String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d');
+const $=id=>document.getElementById(id);
+function expText(startStr,endStr){
+  const a=parse(startStr),b=parse(endStr);
+  let m=(b.getFullYear()-a.getFullYear())*12+(b.getMonth()-a.getMonth());
+  if(b.getDate()<a.getDate())m--;
+  if(m<0)m=0;
+  const y=Math.floor(m/12),r=m%12;
+  return (y?y+' năm':'')+(y&&r?' ':'')+(r||!y?r+' tháng':'');
+}
+const dataUri=svg=>'data:image/svg+xml;utf8,'+encodeURIComponent(svg);
+
+/* ---------- Dữ liệu mẫu ---------- */
+const TYPES=[
+ {k:'atld',vi:'Chứng nhận huấn luyện an toàn',en:'Safety training cer.',pre:'ATLĐ',yrs:2},
+ {k:'health',vi:'Giấy khám sức khỏe',en:'Health examination report',pre:'KSK',yrs:1},
+ {k:'elec',vi:'Thẻ an toàn điện',en:'Electrical safety cer.',pre:'ATĐ',yrs:2},
+ {k:'ins',vi:'Bảo hiểm tai nạn lao động',en:'Labour accident insurance',pre:'BH-TNLĐ',yrs:1},
+ {k:'weld',vi:'Chứng chỉ thợ hàn',en:'Certificate of welding',pre:'CCH',yrs:3},
+ {k:'crane',vi:'Chứng chỉ vận hành cần cẩu',en:'Crane operator cer.',pre:'CCVH-CC',yrs:2},
+ {k:'fork',vi:'Chứng chỉ vận hành xe nâng hàng',en:'Fork-lift operator cer.',pre:'CCVH-XN',yrs:2}
+];
+const TYPE=k=>TYPES.find(t=>t.k===k);
+const POS=['Giám đốc','Nhân sự','Trưởng phòng kỹ thuật','Nhân viên kỹ thuật','Nhân viên hiện trường'];
+const COMMANDERS=[
+ {name:'Phạm Văn Sơn',rel:'Chỉ huy trưởng công trường',phone:'0902.000.111',addr:'8 đường Mẫu, P. Tân Sơn Nhì, Q. Tân Phú, TP.HCM'},
+ {name:'Võ Hoàng Kha',rel:'Chỉ huy trưởng công trường',phone:'0903.222.456',addr:'8 đường Mẫu, P. Tân Sơn Nhì, Q. Tân Phú, TP.HCM'}
+];
+const c=(num,ago,exp,list=true)=>({num,issued:addDays(-ago),exp:addDays(exp),doc:true,list});
+const SIG_A=dataUri("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 80'><path d='M10 55 C25 8 42 8 38 46 S62 72 76 30 S96 14 101 46 S131 60 151 24 C161 8 176 20 190 40' fill='none' stroke='#1d2f8f' stroke-width='3' stroke-linecap='round'/><path d='M20 68 C70 60 130 66 185 58' fill='none' stroke='#1d2f8f' stroke-width='2' stroke-linecap='round'/></svg>");
+const SIG_B=dataUri("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 80'><path d='M12 60 C30 20 34 14 40 18 C48 24 30 58 52 56 C72 54 70 24 90 28 C108 32 92 62 118 54 C140 46 150 30 172 36 C182 38 186 46 190 52' fill='none' stroke='#14336b' stroke-width='3' stroke-linecap='round'/></svg>");
+const SIG_C=dataUri("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 80'><path d='M14 48 C20 20 34 16 36 36 C38 58 52 58 60 34 C66 18 78 22 78 42 C78 62 94 62 104 36 L116 22 L122 56 C132 66 150 40 162 28 C170 22 182 30 188 44' fill='none' stroke='#233a8a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+const S={
+  view:'list',role:'admin',id:null,q:'',pos:'',st:'',alertF:'all',reveal:false,defSig:'s1',
+  mail:{to:'',days:30},
+  sigs:[
+    {id:'s1',name:'Trần Quốc Bảo',role:'Giám đốc công ty thầu phụ',src:SIG_A},
+    {id:'s2',name:'Phạm Minh Tuấn',role:'Trưởng phòng kỹ thuật',src:SIG_B},
+    {id:'s3',name:'Lê Thị Hoa',role:'Phụ trách nhân sự',src:SIG_C}
+  ],
+  emps:[
+   {id:'e1',code:'TNM001',name:'Trần Quốc Bảo',dob:'1975-03-12',gender:'Nam',cccd:'079075003412',phone:'0903 001 001',home:'Tiền Giang',addr:'12 Nguyễn Văn Linh, P. Tân Phong, Q.7, TP.HCM',pos:'Giám đốc',grp:'3',start:'2005-02-15',em:0,
+    certs:{atld:c('ATLĐ-N3-0412',300,430),health:c('KSK-26-0881',60,305,false)}},
+   {id:'e2',code:'TNM007',name:'Phạm Minh Tuấn',dob:'1980-06-24',gender:'Nam',cccd:'079080011245',phone:'0902 472 898',home:'Quảng Nam',addr:'45 Lê Văn Quới, P. Bình Hưng Hòa, Q. Bình Tân, TP.HCM',pos:'Trưởng phòng kỹ thuật',grp:'3',start:'2008-07-01',em:0,
+    certs:{atld:c('ATLĐ-N3-1120',500,230),health:c('KSK-26-1013',100,265),elec:c('ATĐ-5-0377',700,25),weld:c('CCH-3G-4410',900,600),crane:c('CCVH-CC-2209',400,330)}},
+   {id:'e3',code:'TNM003',name:'Lê Thị Hoa',dob:'1988-09-02',gender:'Nữ',cccd:'079188007731',phone:'0938 448 886',home:'Đồng Nai',addr:'22/3 Phạm Văn Chiêu, P.14, Q. Gò Vấp, TP.HCM',pos:'Nhân sự',grp:'2',start:'2014-03-10',em:0,
+    certs:{atld:c('ATLĐ-N2-0199',250,480),health:c('KSK-26-0455',40,325)}},
+   {id:'e4',code:'TNM045',name:'Nguyễn Thanh Long',dob:'1983-05-01',gender:'Nam',cccd:'082083004456',phone:'0933 296 029',home:'Quảng Nam',addr:'Lệ An, X. Duy Châu, H. Duy Xuyên, Quảng Nam',pos:'Nhân viên kỹ thuật',grp:'3',start:'2012-05-14',em:1,
+    certs:{atld:c('ATLĐ-N3-0833',600,130),health:c('KSK-26-0612',120,245),elec:c('ATĐ-5-0291',800,-12),ins:c('BH-26-7781',200,165)}},
+   {id:'e5',code:'TNM052',name:'Bùi Văn Nam',dob:'1983-08-06',gender:'Nam',cccd:'075083009312',phone:'0902 332 656',home:'Thanh Hóa',addr:'Ấp Phú Lâm 1, X. Phú Sơn, H. Tân Phú, Đồng Nai',pos:'Nhân viên hiện trường',grp:'3',start:'2006-08-01',em:1,
+    certs:{atld:c('ATLĐ-N3-0620',700,60),health:c('KSK-26-0734',150,215),elec:c('ATĐ-4-0118',500,360),weld:c('CCH-2G-1807',1000,8),ins:c('BH-26-7790',200,165),fork:c('CCVH-XN-0508',300,420)}},
+   {id:'e6',code:'TNM184',name:'Đỗ Văn Khoa',dob:'1980-04-20',gender:'Nam',cccd:'087080002217',phone:'0385 264 169',home:'An Giang',addr:'Ấp 2, X. Phú Lợi, H. Thanh Bình, Đồng Tháp',pos:'Nhân viên hiện trường',grp:'3',start:'2011-12-05',em:0,
+    certs:{atld:c('ATLĐ-N3-0940',650,90),health:c('KSK-26-0771',170,195),elec:c('ATĐ-4-0152',600,300)}},
+   {id:'e7',code:'TNM313',name:'Nguyễn Hoàng Hiếu',dob:'1993-01-15',gender:'Nam',cccd:'087093006655',phone:'0359 566 360',home:'Đồng Tháp',addr:'Ấp 2, X. Phú Lợi, H. Thanh Bình, Đồng Tháp',pos:'Nhân viên hiện trường',grp:'3',start:'2021-10-08',em:1,
+    certs:{atld:c('ATLĐ-N3-1291',300,430),health:c('KSK-26-0902',90,275),ins:c('BH-26-7812',150,215)}},
+   {id:'e8',code:'TNM591',name:'Lê Quang Tâm',dob:'1991-04-02',gender:'Nam',cccd:'045091003320',phone:'0332 978 858',home:'Quảng Trị',addr:'X. Vĩnh Lâm, H. Vĩnh Linh, Quảng Trị',pos:'Nhân viên hiện trường',grp:'3',start:'2021-09-01',em:0,
+    certs:{atld:c('ATLĐ-N3-1302',330,400),health:c('KSK-26-0911',95,270),weld:c('CCH-3G-5521',500,-40)}},
+   {id:'e9',code:'TNM724',name:'Phạm Xuân Tùng',dob:'1981-10-12',gender:'Nam',cccd:'060081008841',phone:'0917 338 224',home:'Bình Thuận',addr:'Thôn Kim Ngọc, X. Hàm Thắng, H. Hàm Thuận Bắc, Bình Thuận',pos:'Nhân viên hiện trường',grp:'3',start:'2021-10-20',em:1,
+    certs:{atld:c('ATLĐ-N3-1330',320,380),health:c('KSK-26-0934',80,285),crane:c('CCVH-CC-3340',700,28)}},
+   {id:'e10',code:'TNM801',name:'Trần Minh Khải',dob:'1996-11-23',gender:'Nam',cccd:'079096012290',phone:'0366 015 906',home:'Đồng Nai',addr:'14/28 KP4, P. Trảng Dài, TP. Biên Hòa, Đồng Nai',pos:'Nhân viên kỹ thuật',grp:'3',start:'2022-05-10',em:0,
+    certs:{atld:c('ATLĐ-N3-1405',200,520),health:c('KSK-26-1002',60,305),elec:c('ATĐ-5-0402',200,530),weld:c('CCH-3G-6004',200,880)}},
+   {id:'e11',code:'TNM815',name:'Võ Thị Mai',dob:'1992-07-07',gender:'Nữ',cccd:'079192005519',phone:'0909 057 849',home:'TP.HCM',addr:'64 Tổ 3, Ấp 3, X. Long Thới, H. Nhà Bè, TP.HCM',pos:'Nhân sự',grp:'2',start:'2023-02-01',em:0,
+    certs:{atld:c('ATLĐ-N2-0301',180,550),health:c('KSK-26-1044',45,320)}},
+   {id:'e12',code:'TNM879',name:'Đặng Quốc Việt',dob:'1999-12-30',gender:'Nam',cccd:'091099001134',phone:'',home:'Cà Mau',addr:'Ấp Trại Lưới A, X. Đất Mới, H. Năm Căn, Cà Mau',pos:'Nhân viên hiện trường',grp:'3',start:'2025-06-02',em:1,
+    certs:{atld:c('ATLĐ-N3-1500',120,610)}}
+  ]
+};
+const isAdmin=()=>S.role==='admin';
+const emp=id=>S.emps.find(e=>e.id===id);
+const sigOf=id=>S.sigs.find(s=>s.id===id);
+
+/* ---------- Trạng thái chứng chỉ ---------- */
+function cs(cert){
+  if(!cert)return {k:'none',t:'Chưa có'};
+  const d=daysLeft(cert.exp);
+  if(d<0)return {k:'bad',t:'Hết hạn '+(-d)+' ngày',d};
+  if(d<=30)return {k:'warn',t:'Còn '+d+' ngày',d};
+  return {k:'ok',t:'Còn hiệu lực',d};
+}
+function counts(e){
+  const r={bad:0,warn:0,ok:0};
+  Object.values(e.certs).forEach(x=>{r[cs(x).k]++});
+  return r;
+}
+function empPill(e){
+  const r=counts(e);
+  if(r.bad)return `<span class="pill bad">${r.bad} hết hạn</span>`;
+  if(r.warn)return `<span class="pill warn">${r.warn} sắp hết hạn</span>`;
+  if(r.ok)return `<span class="pill ok">${r.ok} còn hiệu lực</span>`;
+  return `<span class="pill none">Chưa có chứng chỉ</span>`;
+}
+function alertItems(){
+  const out=[];
+  S.emps.forEach(e=>Object.entries(e.certs).forEach(([k,x])=>{
+    const d=daysLeft(x.exp);
+    if(d<=60)out.push({e,k,x,d});
+  }));
+  return out.sort((a,b)=>a.d-b.d);
+}
+const alertCount=()=>alertItems().filter(i=>i.d<=30).length;
+
+/* ---------- Giao diện chung ---------- */
+function toast(msg){
+  const r=$('toastRoot');r.innerHTML=`<div class="toast">${esc(msg)}</div>`;
+  clearTimeout(toast.t);toast.t=setTimeout(()=>{r.innerHTML=''},2600);
+}
+function modal(html,wide){
+  $('modalRoot').innerHTML=`<div class="backdrop"><div class="modal ${wide?'wide':''}" role="dialog" aria-modal="true">${html}</div></div>`;
+  const f=$('modalRoot').querySelector('input:not([type=file]):not([disabled]),select:not([disabled]),button.primary');
+  if(f)setTimeout(()=>f.focus(),30);
+}
+function closeModal(){$('modalRoot').innerHTML=''}
+function confirmBox(title,msg,yesLabel,onYes){
+  modal(`<header><h2>${esc(title)}</h2><button class="x no-print" data-a="close" aria-label="Đóng">×</button></header>
+  <div class="bodyc">${msg}</div>
+  <footer><button class="btn" data-a="close">Hủy</button><button class="btn primary" id="yesBtn">${esc(yesLabel)}</button></footer>`);
+  $('yesBtn').onclick=()=>{closeModal();onYes()};
+}
+function readFile(file){return new Promise(res=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsDataURL(file)})}
+function docSvg(title,name,num){
+  return dataUri(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 300'><rect width='420' height='300' fill='#fffdf5'/><rect x='10' y='10' width='400' height='280' fill='none' stroke='#2a4f7a' stroke-width='3'/><rect x='16' y='16' width='388' height='268' fill='none' stroke='#2a4f7a' stroke-width='1'/><text x='210' y='52' font-size='13' text-anchor='middle' fill='#2a4f7a' font-family='Arial'>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</text><text x='210' y='92' font-size='20' font-weight='bold' text-anchor='middle' fill='#8a1c1c' font-family='Arial'>${esc(title)}</text><text x='40' y='140' font-size='13' fill='#222' font-family='Arial'>Họ và tên: ${esc(name)}</text><text x='40' y='168' font-size='13' fill='#222' font-family='Arial'>Số: ${esc(num||'')}</text><line x1='40' y1='196' x2='300' y2='196' stroke='#bbb'/><line x1='40' y1='218' x2='260' y2='218' stroke='#bbb'/><line x1='40' y1='240' x2='280' y2='240' stroke='#bbb'/><circle cx='345' cy='235' r='28' fill='none' stroke='#b33' stroke-width='2'/><text x='345' y='239' font-size='10' text-anchor='middle' fill='#b33' font-family='Arial'>ẢNH SCAN MẪU</text></svg>`);
+}
+
+/* ---------- Điều hướng ---------- */
+function renderNav(){
+  const n=alertCount();
+  const items=[['list','Nhân sự'],['alerts','Chứng chỉ sắp hết hạn'],['sigs','Thư viện chữ ký'],['settings','Cài đặt email']];
+  $('nav').innerHTML=items.map(([v,l])=>{
+    const cur=(S.view===v)||(v==='list'&&S.view==='detail');
+    return `<button data-a="nav" data-v="${v}" ${cur?'aria-current="page"':''}><span>${l}</span>${v==='alerts'&&n?`<span class="count" aria-label="${n} chứng chỉ cần chú ý">${n}</span>`:''}</button>`;
+  }).join('');
+  $('roleSeg').innerHTML=`<button data-a="role" data-r="admin" aria-pressed="${S.role==='admin'}">Admin</button><button data-a="role" data-r="hr" aria-pressed="${S.role==='hr'}">HR</button>`;
+}
+function render(){
+  renderNav();
+  const m=$('main');
+  if(S.view==='list')m.innerHTML=viewList();
+  else if(S.view==='detail')m.innerHTML=viewDetail();
+  else if(S.view==='alerts')m.innerHTML=viewAlerts();
+  else if(S.view==='sigs')m.innerHTML=viewSigs();
+  else m.innerHTML=viewSettings();
+}
+const roleNote=()=>isAdmin()?'':`<div class="note" style="margin-bottom:14px">Bạn đang ở vai trò HR: chỉ xem dữ liệu và xuất file. Các nút thêm, sửa, xóa được ẩn.</div>`;
+
+/* ---------- Danh sách nhân sự ---------- */
+function filtered(){
+  const q=norm(S.q.trim());
+  return S.emps.filter(e=>{
+    if(q&&!(norm(e.name).includes(q)||norm(e.code).includes(q)||norm(e.phone).includes(q.replace(/\s/g,''))||norm(e.phone).replace(/\s/g,'').includes(q.replace(/\s/g,''))))return false;
+    if(S.pos&&e.pos!==S.pos)return false;
+    const r=counts(e);
+    if(S.st==='bad'&&!r.bad)return false;
+    if(S.st==='warn'&&!r.warn)return false;
+    return true;
+  });
+}
+function rowsHtml(){
+  const list=filtered();
+  if(!list.length)return `<tr><td colspan="6"><div class="empty">Không có nhân sự nào khớp. Thử xóa bộ lọc hoặc đổi từ khóa tìm kiếm.</div></td></tr>`;
+  return list.map(e=>`<tr data-a="open" data-id="${e.id}" tabindex="0">
+    <td>${esc(e.code)}</td>
+    <td><div class="name">${esc(e.name)}</div><div class="muted">${esc(e.pos)}</div></td>
+    <td>${esc(e.phone)||'<span class="muted">Chưa có</span>'}</td>
+    <td>Nhóm ${esc(e.grp)}</td>
+    <td>${fmt(e.start)}<div class="muted">${expText(e.start,ymd(TODAY))}</div></td>
+    <td>${empPill(e)}</td></tr>`).join('');
+}
+function viewList(){
+  return `<div class="head"><div><h1>Nhân sự</h1><p class="sub" id="countTxt">${filtered().length} trên ${S.emps.length} người</p></div>
+  <div class="actions">${isAdmin()?'<button class="btn primary" data-a="addEmp">Thêm nhân sự</button>':''}</div></div>
+  ${roleNote()}
+  <div class="bar">
+    <input class="in grow" id="q" type="search" placeholder="Tìm theo tên, mã nhân viên hoặc số điện thoại" value="${esc(S.q)}" aria-label="Tìm nhân sự">
+    <select class="in" id="fpos" aria-label="Lọc theo chức danh"><option value="">Tất cả chức danh</option>${POS.map(p=>`<option ${S.pos===p?'selected':''}>${p}</option>`).join('')}</select>
+    <select class="in" id="fst" aria-label="Lọc theo tình trạng chứng chỉ"><option value="">Mọi tình trạng chứng chỉ</option><option value="warn" ${S.st==='warn'?'selected':''}>Có chứng chỉ sắp hết hạn</option><option value="bad" ${S.st==='bad'?'selected':''}>Có chứng chỉ đã hết hạn</option></select>
+  </div>
+  <div class="panel tablewrap"><table><thead><tr><th>Mã</th><th>Họ và tên</th><th>Điện thoại</th><th>Nhóm ATLĐ</th><th>Ngày nhận việc</th><th>Chứng chỉ</th></tr></thead><tbody id="rows">${rowsHtml()}</tbody></table></div>`;
+}
+function refreshRows(){
+  $('rows').innerHTML=rowsHtml();
+  $('countTxt').textContent=filtered().length+' trên '+S.emps.length+' người';
+}
+
+/* ---------- Chi tiết nhân sự ---------- */
+function maskId(s){return s.length>4?s.slice(0,3)+'•'.repeat(s.length-7)+s.slice(-4):s}
+function viewDetail(){
+  const e=emp(S.id);if(!e){S.view='list';return viewList()}
+  const rows=TYPES.map(t=>{
+    const x=e.certs[t.k],st=cs(x);
+    if(!x)return `<div class="cert"><div><div class="t">${t.vi}</div><div class="en">${t.en}</div></div><div class="muted">Chưa có hồ sơ</div><div>${isAdmin()?`<button class="btn sm" data-a="addCert" data-t="${t.k}">Thêm</button>`:''}</div></div>`;
+    return `<div class="cert"><div><div class="t">${t.vi}</div><div class="en">${t.en}</div>
+      <div class="links"><button class="linkbtn" data-a="scan" data-t="${t.k}" data-kind="doc">Ảnh giấy tờ</button>${x.list?`<button class="linkbtn" data-a="scan" data-t="${t.k}" data-kind="list">Danh sách thi hoặc cấp bằng</button>`:'<span class="muted" style="font-size:13px">Chưa có danh sách thi</span>'}</div></div>
+      <div>Số ${esc(x.num)}<div class="muted">Hết hạn ${fmt(x.exp)}</div><span class="pill ${st.k}">${st.t}</span></div>
+      <div class="actions">${isAdmin()?`<button class="btn sm" data-a="editCert" data-t="${t.k}">Sửa</button><button class="btn sm danger" data-a="delCert" data-t="${t.k}">Xóa</button>`:''}</div></div>`;
+  }).join('');
+  const cmd=COMMANDERS[e.em]||COMMANDERS[0];
+  return `<button class="back" data-a="back">Quay lại danh sách nhân sự</button>
+  <div class="head"><div><h1>${esc(e.name)}</h1><p class="sub">${esc(e.code)} · ${esc(e.pos)}</p></div>
+  <div class="actions"><button class="btn primary" data-a="export">Xuất hồ sơ PDF</button>${isAdmin()?`<button class="btn" data-a="editEmp">Sửa thông tin</button><button class="btn danger" data-a="delEmp">Xóa</button>`:''}</div></div>
+  ${roleNote()}
+  <div class="cols">
+    <section><h2>Thông tin cá nhân</h2><div class="panel"><dl class="dl">
+      <dt>Ngày sinh</dt><dd>${fmt(e.dob)}</dd>
+      <dt>Giới tính</dt><dd>${esc(e.gender)}</dd>
+      <dt>Số CCCD</dt><dd>${S.reveal?esc(e.cccd):esc(maskId(e.cccd))} <button class="linkbtn" data-a="reveal">${S.reveal?'Ẩn':'Hiện'}</button></dd>
+      <dt>Điện thoại</dt><dd>${esc(e.phone)||'<span class="muted">Chưa có</span>'}</dd>
+      <dt>Nguyên quán</dt><dd>${esc(e.home)}</dd>
+      <dt>Thường trú</dt><dd>${esc(e.addr)}</dd>
+      <dt>Nhóm ATLĐ</dt><dd>Nhóm ${esc(e.grp)}</dd>
+      <dt>Ngày nhận việc</dt><dd>${fmt(e.start)}</dd>
+      <dt>Số năm làm việc</dt><dd>${expText(e.start,ymd(TODAY))} <span class="muted">(tự tính)</span></dd>
+      <dt>Liên hệ khẩn cấp</dt><dd>${esc(cmd.name)}<div class="muted">${esc(cmd.rel)}, ${esc(cmd.phone)}</div></dd>
+    </dl></div></section>
+    <section><h2>Chứng chỉ và hồ sơ an toàn</h2><div class="panel">${rows}</div></section>
+  </div>`;
+}
+
+/* ---------- Chứng chỉ sắp hết hạn ---------- */
+function viewAlerts(){
+  const all=alertItems();
+  const list=all.filter(i=>S.alertF==='all'||(S.alertF==='bad'&&i.d<0)||(S.alertF==='30'&&i.d>=0&&i.d<=30)||(S.alertF==='60'&&i.d>30));
+  const chips=[['all','Tất cả',all.length],['bad','Đã hết hạn',all.filter(i=>i.d<0).length],['30','Trong 30 ngày',all.filter(i=>i.d>=0&&i.d<=30).length],['60','31 đến 60 ngày',all.filter(i=>i.d>30).length]];
+  const rows=list.length?list.map(i=>{
+    const st=cs(i.x),send=addDays(i.d-30),sent=daysLeft(send)<=0;
+    return `<tr data-a="open" data-id="${i.e.id}" tabindex="0"><td><div class="name">${esc(i.e.name)}</div><div class="muted">${esc(i.e.code)}</div></td><td>${TYPE(i.k).vi}</td><td>${fmt(i.x.exp)}</td><td><span class="pill ${st.k}">${st.t}</span></td>
+    <td>${sent?`<span class="pill ok">Đã gửi ngày ${fmt(send)}</span>`:`<span class="muted">Sẽ gửi ngày ${fmt(send)}</span>`}</td></tr>`;
+  }).join(''):`<tr><td colspan="5"><div class="empty">Không có chứng chỉ nào trong nhóm này.</div></td></tr>`;
+  return `<div class="head"><div><h1>Chứng chỉ sắp hết hạn</h1><p class="sub">Hệ thống gửi email khi một chứng chỉ còn 30 ngày là hết hạn.</p></div></div>
+  <div class="chips" role="group" aria-label="Lọc theo hạn">${chips.map(([f,l,n])=>`<button class="chip" data-a="alertF" data-f="${f}" aria-pressed="${S.alertF===f}">${l} (${n})</button>`).join('')}</div>
+  <div class="panel tablewrap"><table><thead><tr><th>Nhân sự</th><th>Chứng chỉ</th><th>Ngày hết hạn</th><th>Còn lại</th><th>Email nhắc</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+/* ---------- Thư viện chữ ký ---------- */
+function viewSigs(){
+  return `<div class="head"><div><h1>Thư viện chữ ký</h1><p class="sub">Chữ ký đã tách nền, dùng để chèn vào phiếu khi xuất PDF kể cả lúc người ký vắng mặt.</p></div>
+  <div class="actions">${isAdmin()?'<button class="btn primary" data-a="addSig">Thêm chữ ký</button>':''}</div></div>
+  ${roleNote()}
+  <div class="sigs">${S.sigs.map(s=>`<div class="panel sig"><div class="pic"><img src="${s.src}" alt="Chữ ký của ${esc(s.name)}"></div>
+    <div class="body"><div><div class="name">${esc(s.name)}</div><div class="muted">${esc(s.role)}</div></div>
+    <div class="actions">${S.defSig===s.id?'<span class="pill ok">Mặc định khi xuất phiếu</span>':(isAdmin()?`<button class="btn sm" data-a="defSig" data-id="${s.id}">Đặt làm mặc định</button>`:'')}${isAdmin()?`<button class="btn sm danger" data-a="delSig" data-id="${s.id}">Xóa</button>`:''}</div></div></div>`).join('')}</div>`;
+}
+
+/* ---------- Cài đặt email ---------- */
+function viewSettings(){
+  const dis=isAdmin()?'':'disabled';
+  return `<div class="head"><div><h1>Cài đặt email nhắc hạn</h1><p class="sub">Chọn địa chỉ nhận thông báo khi chứng chỉ sắp hết hạn.</p></div></div>
+  ${roleNote()}
+  <div class="panel" style="max-width:640px;padding:20px">
+    <div class="field"><label for="mailTo">Gửi tới email</label><input class="in" id="mailTo" type="text" placeholder="vd: nhansu@gmail.com (nhiều địa chỉ cách nhau bằng dấu phẩy)" value="${esc(S.mail.to)}" ${dis}></div>
+    <div class="field"><label for="mailDays">Nhắc trước</label><select class="in" id="mailDays" ${dis}><option value="30" selected>30 ngày (1 tháng)</option></select></div>
+    <div class="field"><label>Nội dung email gửi đi</label><div class="note">Tiêu đề: Chứng chỉ của Trần Minh Khải sắp hết hạn<br>Thẻ an toàn điện số ATĐ-5-0402 sẽ hết hạn vào ngày ${fmt(addDays(30))} (còn 30 ngày). Bấm vào liên kết để mở hồ sơ.</div></div>
+    <div class="actions"><button class="btn primary" data-a="saveMail" ${dis}>Lưu cài đặt</button><button class="btn" data-a="testMail" ${dis}>Gửi thử</button></div>
+  </div>`;
+}
+
+/* ---------- Form nhân sự ---------- */
+function empModal(id){
+  const e=id?emp(id):{code:'',name:'',dob:'',gender:'Nam',cccd:'',phone:'',home:'',addr:'',pos:POS[4],grp:'3',start:ymd(TODAY),em:0};
+  const f=(lab,idn,val,type='text',full)=>`<div class="field" ${full?'style="grid-column:1/-1"':''}><label for="${idn}">${lab}</label><input class="in" id="${idn}" type="${type}" value="${esc(val)}"></div>`;
+  modal(`<header><h2>${id?'Sửa thông tin nhân sự':'Thêm nhân sự'}</h2><button class="x" data-a="close" aria-label="Đóng">×</button></header>
+  <div class="bodyc"><div class="grid2">
+    <div style="grid-column:1/-1;margin-bottom:12px"><label class="drop"><input type="file" id="id_files" accept="image/*" multiple><b>Đọc từ ảnh CCCD</b><br><span style="font-size:13px">Chọn một hoặc nhiều ảnh (ảnh thẻ, ảnh chụp màn hình VNeID). Hệ thống điền sẵn họ tên, ngày sinh, giới tính, số CCCD, nguyên quán, thường trú và số điện thoại. Ảnh chỉ dùng để đọc, không được lưu lại.</span></label><div class="ocr" id="id_status" style="margin-top:8px" role="status"></div></div>${f('Mã nhân viên','f_code',e.code)}${f('Họ và tên','f_name',e.name)}
+    ${f('Ngày sinh','f_dob',e.dob,'date')}
+    <div class="field"><label for="f_gender">Giới tính</label><select class="in" id="f_gender"><option ${e.gender==='Nam'?'selected':''}>Nam</option><option ${e.gender==='Nữ'?'selected':''}>Nữ</option></select></div>
+    ${f('Số CCCD','f_cccd',e.cccd)}${f('Số điện thoại','f_phone',e.phone,'tel')}
+    ${f('Nguyên quán','f_home',e.home)}
+    <div class="field"><label for="f_pos">Chức danh</label><select class="in" id="f_pos">${POS.map(p=>`<option ${e.pos===p?'selected':''}>${p}</option>`).join('')}</select></div>
+    ${f('Địa chỉ thường trú','f_addr',e.addr,'text',true)}
+    <div class="field"><label for="f_grp">Nhóm ATLĐ</label><select class="in" id="f_grp">${['1','2','3','4','5','6'].map(g=>`<option ${e.grp===g?'selected':''} value="${g}">Nhóm ${g}</option>`).join('')}</select></div>
+    ${f('Ngày nhận việc','f_start',e.start,'date')}
+  </div><p class="muted" id="f_err" style="color:var(--bad);margin:0"></p></div>
+  <footer><button class="btn" data-a="close">Hủy</button><button class="btn primary" id="saveEmp">Lưu</button></footer>`);
+  $('saveEmp').onclick=()=>{
+    const v=i=>$(i).value.trim();
+    if(!v('f_code')||!v('f_name')){$('f_err').textContent='Nhập mã nhân viên và họ tên trước khi lưu.';return}
+    const dupe=S.emps.some(x=>x.code===v('f_code')&&x.id!==id);
+    if(dupe){$('f_err').textContent='Mã nhân viên này đã có trong danh sách.';return}
+    const d={code:v('f_code'),name:v('f_name'),dob:v('f_dob'),gender:v('f_gender'),cccd:v('f_cccd'),phone:v('f_phone'),home:v('f_home'),addr:v('f_addr'),pos:v('f_pos'),grp:v('f_grp'),start:v('f_start')||ymd(TODAY)};
+    if(id)Object.assign(emp(id),d);
+    else{const n={id:'e'+Date.now(),em:0,certs:{},...d};S.emps.unshift(n);S.id=n.id;S.view='detail'}
+    closeModal();render();toast(id?'Đã lưu thông tin':'Đã thêm nhân sự');
+  };
+}
+
+/* ---------- Form chứng chỉ (có đọc ảnh) ---------- */
+let TMP={doc:null,list:false,listName:''};
+function certModal(id,t){
+  const e=emp(id),cur=e.certs[t]||null;
+  TMP={doc:cur?cur.doc:null,list:cur?cur.list:false,listName:''};
+  modal(`<header><h2>${cur?'Sửa':'Thêm'} chứng chỉ cho ${esc(e.name)}</h2><button class="x" data-a="close" aria-label="Đóng">×</button></header>
+  <div class="bodyc">
+    <div class="field"><label for="c_type">Loại chứng chỉ</label><select class="in" id="c_type" ${cur?'disabled':''}>${TYPES.map(x=>`<option value="${x.k}" ${x.k===t?'selected':''}>${x.vi}</option>`).join('')}</select></div>
+    <label class="drop"><input type="file" id="c_file" accept="image/*"><b>Tải ảnh giấy tờ lên</b><br><span style="font-size:13px">Hệ thống đọc ảnh và điền sẵn các ô bên dưới</span></label>
+    <div style="margin:6px 0 10px"><button class="linkbtn" data-a="sample">Chưa có ảnh? Dùng ảnh mẫu để thử</button></div>
+    <div class="prev" id="c_prev"><img id="c_img" alt="Ảnh giấy tờ đã tải lên"><div class="ocr" id="c_ocr"></div></div>
+    <div class="field"><label for="c_num">Số chứng chỉ</label><input class="in" id="c_num" value="${esc(cur?cur.num:'')}"></div>
+    <div class="grid2"><div class="field"><label for="c_iss">Ngày cấp</label><input class="in" type="date" id="c_iss" value="${cur?cur.issued:''}"></div>
+    <div class="field"><label for="c_exp">Ngày hết hạn</label><input class="in" type="date" id="c_exp" value="${cur?cur.exp:''}"></div></div>
+    <div class="field"><label for="c_list">Danh sách thi hoặc cấp bằng (bằng chứng khóa học đã diễn ra)</label><input class="in" type="file" id="c_list" accept="image/*,application/pdf"><span class="muted" id="c_listname">${TMP.list?'Đã có tệp đính kèm':'Chưa đính kèm'}</span></div>
+    <p id="c_err" style="color:var(--bad);margin:0"></p>
+  </div>
+  <footer><button class="btn" data-a="close">Hủy</button><button class="btn primary" id="saveCert">Lưu chứng chỉ</button></footer>`);
+  if(cur&&typeof cur.doc==='string'){showPrev(cur.doc,false)}
+  $('saveCert').onclick=()=>{
+    const num=$('c_num').value.trim(),exp=$('c_exp').value,iss=$('c_iss').value;
+    if(!num||!exp){$('c_err').textContent='Nhập số chứng chỉ và ngày hết hạn trước khi lưu.';return}
+    if(iss&&iss>exp){$('c_err').textContent='Ngày cấp phải trước ngày hết hạn.';return}
+    const key=$('c_type').value;
+    e.certs[key]={num,issued:iss||ymd(TODAY),exp,doc:TMP.doc||true,list:TMP.list};
+    closeModal();render();toast('Đã lưu '+TYPE(key).vi.toLowerCase());
+  };
+}
+function showPrev(src,ocr){
+  $('c_img').src=src;$('c_prev').classList.add('on');
+  if(!ocr){$('c_ocr').innerHTML='Ảnh giấy tờ đang lưu.';return}
+  $('c_ocr').innerHTML='<span class="spin"></span>Đang đọc ảnh…';
+  setTimeout(()=>{
+    if(!$('c_num'))return;
+    const e=emp(S.id),k=$('c_type').value,ty=TYPE(k);
+    const num=ty.pre+'-'+TODAY.getFullYear()+'-'+String(Math.floor(1000+Math.random()*9000));
+    const iss=addDays(-20),exp=addDays(Math.round(365*ty.yrs)-20);
+    $('c_num').value=num;$('c_iss').value=iss;$('c_exp').value=exp;
+    ['c_num','c_iss','c_exp'].forEach(i=>$(i).classList.add('auto'));
+    $('c_ocr').innerHTML=`<b>Đã điền 3 ô từ ảnh (tô vàng).</b><br>Tên trên giấy: ${esc(e.name.toUpperCase())}<br><span class="pill ok">Khớp với hồ sơ</span><br><span class="muted">Kiểm tra lại số và ngày tháng rồi bấm Lưu.</span>`;
+  },1200);
+}
+
+/* ---------- Xem ảnh scan ---------- */
+function scanModal(t,kind){
+  const e=emp(S.id),x=e.certs[t],ty=TYPE(t);
+  const isDoc=kind==='doc';
+  const src=isDoc&&typeof x.doc==='string'?x.doc:docSvg(isDoc?ty.vi.toUpperCase():'DANH SÁCH THI / CẤP BẰNG',e.name,x.num);
+  modal(`<header><h2>${isDoc?'Ảnh giấy tờ':'Danh sách thi hoặc cấp bằng'}: ${ty.vi}</h2><button class="x" data-a="close" aria-label="Đóng">×</button></header>
+  <div class="bodyc" style="text-align:center"><img src="${src}" alt="${isDoc?'Ảnh giấy tờ':'Danh sách thi'} ${esc(ty.vi)}" style="max-width:100%;border:1px solid var(--line);border-radius:6px;background:#fff"></div>`,true);
+}
+
+/* ---------- Xuất PDF ---------- */
+let X={sig:'s1',date:ymd(TODAY),scans:true};
+function paper(e){
+  const sig=sigOf(X.sig),cmd=COMMANDERS[e.em]||COMMANDERS[0];
+  const row=(a,b,v)=>`<div class="row"><b>${a}<br><span style="font-weight:400;color:#555">${b}</span></b><div>${v}</div></div>`;
+  const ticks=TYPES.map(t=>{
+    const x=e.certs[t.k],st=cs(x),on=x&&st.k!=='bad';
+    return `<div class="tk"><span class="box">${on?'☑':'☐'}</span><span>${t.en.toUpperCase()} / ${t.vi.toUpperCase()}${x&&!on?' <i style="color:#a00">(đã hết hạn)</i>':''}${t.k==='atld'&&on?' — Nhóm '+esc(e.grp):''}</span></div>`;
+  }).join('');
+  return `<div class="paper">
+   <h3>WORKER PROFILE – BẢN THÔNG TIN VỀ CÔNG NHÂN</h3><div class="co">CÔNG TY TNHH THIÊN NHẬT MINH</div>
+   <div class="top"><div>
+    ${row('FULL NAME','HỌ VÀ TÊN',esc(e.name.toUpperCase()))}
+    ${row('DATE OF BIRTH','NGÀY SINH',fmt(e.dob)+' &nbsp; '+(e.gender==='Nam'?'☑ Nam ☐ Nữ':'☐ Nam ☑ Nữ'))}
+    ${row('MOTHERLAND','QUÊ QUÁN',esc(e.home))}
+    ${row('ADDRESS','THƯỜNG TRÚ',esc(e.addr))}
+    ${row('TEL','ĐIỆN THOẠI',esc(e.phone)||'—')}
+    ${row('SUB-CONTRACTOR','THẦU PHỤ','Công ty TNHH THIÊN NHẬT MINH')}
+    ${row('START WORKING DATE','NGÀY BẮT ĐẦU LÀM VIỆC Ở DỰ ÁN',fmt(e.start))}
+    ${row('WORKING EXPERIENCE','KINH NGHIỆM LÀM CÔNG VIỆC TƯƠNG TỰ',expText(e.start,X.date))}
+   </div><div class="photo">Ảnh 3×4</div></div>
+   <div class="sec">EMERGENCY CONTACT / LIÊN HỆ KHẨN CẤP</div>
+   ${row('NAME / RELATION','HỌ TÊN / QUAN HỆ',esc(cmd.name)+', '+esc(cmd.rel))}
+   ${row('TEL / ADDRESS','SỐ ĐIỆN THOẠI / ĐỊA CHỈ',esc(cmd.phone)+', '+esc(cmd.addr))}
+   <div class="sec">ATTACHED COPIES OF CERTIFICATES / CHỨNG CHỈ ĐÍNH KÈM</div>
+   <div class="ticks">${ticks}</div>
+   <div class="sign"><div><b>TVE confirmation</b><br>Nhân viên TVE xác nhận sau khi kiểm tra<div class="sigimg"></div></div>
+    <div><b>Sub-contractor Director sign &amp; seal</b><br>Giám đốc công ty thầu phụ ký và đóng dấu<div class="sigimg">${sig?`<img src="${sig.src}" alt="Chữ ký ${esc(sig.name)}">`:''}</div><b>${sig?esc(sig.name):''}</b><br>Ngày: ${fmt(X.date)}</div></div>
+   <div class="fine">Bản thông tin phải đầy đủ và gửi đến công trường trước khi công nhân đến làm việc 03 ngày. Chỉ nhận bản thông tin khi thông tin có đủ và hợp lệ.</div>
+  </div>`;
+}
+function scanPages(e){
+  if(!X.scans)return '';
+  let h='';
+  TYPES.forEach(t=>{const x=e.certs[t.k];if(!x||cs(x).k==='bad')return;
+    h+=`<div class="print-only"><p>${t.vi} (${esc(x.num)})</p><img src="${typeof x.doc==='string'?x.doc:docSvg(t.vi.toUpperCase(),e.name,x.num)}" alt=""></div>`;
+    if(x.list)h+=`<div class="print-only"><p>Danh sách thi hoặc cấp bằng: ${t.vi}</p><img src="${docSvg('DANH SÁCH THI / CẤP BẰNG',e.name,x.num)}" alt=""></div>`;
+  });
+  return h;
+}
+function scanCount(e){let n=0;TYPES.forEach(t=>{const x=e.certs[t.k];if(x&&cs(x).k!=='bad'){n++;if(x.list)n++}});return n}
+function exportModal(id){
+  const e=emp(id);
+  if(!sigOf(X.sig))X.sig=S.defSig;
+  X.sig=S.sigs.some(s=>s.id===X.sig)?X.sig:S.defSig;
+  modal(`<header class="no-print"><h2>Xuất hồ sơ PDF: ${esc(e.name)}</h2><button class="x" data-a="close" aria-label="Đóng">×</button></header>
+  <div class="bodyc">
+   <div class="grid2 no-print" style="margin-bottom:6px">
+    <div class="field"><label for="x_sig">Người ký (từ thư viện chữ ký)</label><select class="in" id="x_sig">${S.sigs.map(s=>`<option value="${s.id}" ${s.id===X.sig?'selected':''}>${esc(s.name)}, ${esc(s.role)}</option>`).join('')}</select></div>
+    <div class="field"><label for="x_date">Ngày ký</label><input class="in" type="date" id="x_date" value="${X.date}"></div>
+   </div>
+   <label class="no-print" style="display:flex;gap:8px;align-items:center;margin-bottom:14px"><input type="checkbox" id="x_scans" ${X.scans?'checked':''}> Ghép ảnh scan chứng chỉ phía sau phiếu (${scanCount(e)} trang)</label>
+   <div id="paperHost">${paper(e)}</div>${'<div id="scanHost">'+scanPages(e)+'</div>'}
+  </div>
+  <footer class="no-print"><span class="muted" style="margin-right:auto;align-self:center;font-size:13px">Ô tick lấy theo hồ sơ chứng chỉ còn hiệu lực của người này.</span><button class="btn" data-a="close">Đóng</button><button class="btn primary" id="doPrint">Tải PDF</button></footer>`,true);
+  $('doPrint').onclick=()=>{try{window.print()}catch(err){toast('Trình duyệt chặn in. Mở bản thử ở tab riêng để tải PDF.')}};
+}
+
+/* ---------- Form chữ ký (tách nền thật bằng canvas) ---------- */
+function removeBg(url){
+  return new Promise(res=>{
+    const im=new Image();
+    im.onload=()=>{try{
+      const cv=document.createElement('canvas'),w=Math.min(im.width,600),h=Math.round(im.height*w/im.width);
+      cv.width=w;cv.height=h;const cx=cv.getContext('2d');cx.drawImage(im,0,0,w,h);
+      const d=cx.getImageData(0,0,w,h),p=d.data;
+      for(let i=0;i<p.length;i+=4){
+        const l=p[i]*.3+p[i+1]*.59+p[i+2]*.11;
+        const a=l>225?0:l>160?Math.round((225-l)/65*255):255;
+        p[i+3]=Math.min(p[i+3],a);
+      }
+      cx.putImageData(d,0,0);res(cv.toDataURL('image/png'));
+    }catch(err){res(url)}};
+    im.onerror=()=>res(url);im.src=url;
+  });
+}
+let SIGTMP=null;
+function sigModal(){
+  SIGTMP=null;
+  modal(`<header><h2>Thêm chữ ký</h2><button class="x" data-a="close" aria-label="Đóng">×</button></header>
+  <div class="bodyc">
+   <div class="field"><label for="s_name">Họ và tên người ký</label><input class="in" id="s_name"></div>
+   <div class="field"><label for="s_role">Chức danh</label><input class="in" id="s_role" value="Giám đốc công ty thầu phụ"></div>
+   <label class="drop"><input type="file" id="s_file" accept="image/*"><b>Tải ảnh chữ ký lên</b><br><span style="font-size:13px">Chụp hoặc scan chữ ký trên giấy trắng, hệ thống sẽ tách nền</span></label>
+   <div class="sig panel" style="margin-top:12px"><div class="pic" id="s_pic"><span class="muted">Chữ ký sau khi tách nền hiện ở đây</span></div></div>
+   <p id="s_err" style="color:var(--bad);margin:8px 0 0"></p>
+  </div>
+  <footer><button class="btn" data-a="close">Hủy</button><button class="btn primary" id="saveSig">Lưu chữ ký</button></footer>`);
+  $('saveSig').onclick=()=>{
+    const n=$('s_name').value.trim();
+    if(!n||!SIGTMP){$('s_err').textContent='Nhập họ tên và tải ảnh chữ ký trước khi lưu.';return}
+    S.sigs.push({id:'s'+Date.now(),name:n,role:$('s_role').value.trim(),src:SIGTMP});
+    closeModal();render();toast('Đã thêm chữ ký');
+  };
+}
+
+/* ---------- Đọc thông tin từ ảnh CCCD ---------- */
+let SAMPLE_FN;
+async function getSample(){
+  if(SAMPLE_FN!==undefined)return SAMPLE_FN;
+  try{SAMPLE_FN=window.claude?await window.claude.use('sample'):null}catch(err){SAMPLE_FN=null}
+  return SAMPLE_FN;
+}
+const ID_PROMPT=`Các ảnh đính kèm là ảnh thẻ căn cước công dân (CCCD) hoặc ảnh chụp màn hình ứng dụng VNeID của MỘT người. Hãy đọc chính xác từng ký tự, giữ đầy đủ dấu tiếng Việt, và chỉ trả về một đối tượng JSON, không thêm lời giải thích, không dùng markdown.
+Các khóa:
+- name: họ và tên, viết hoa chữ cái đầu mỗi từ theo cách viết tên người Việt
+- dob: ngày sinh, định dạng YYYY-MM-DD
+- gender: "Nam" hoặc "Nữ"
+- cccd: số định danh cá nhân 12 số (không lấy số chứng minh nhân dân 9 số cũ)
+- phone: số điện thoại di động nếu có trong ảnh
+- home: quê quán
+- addr: nơi thường trú, viết đầy đủ trên một dòng
+Nếu một thông tin không có trong ảnh hoặc không đọc rõ thì để null, tuyệt đối không đoán. Nếu ảnh không phải giấy tờ tùy thân hoặc thuộc nhiều người khác nhau thì trả {"error":"lý do ngắn gọn"}.`;
+async function readIdImages(files){
+  const st=$('id_status');if(!st)return;
+  const sample=await getSample();
+  if(!sample){st.textContent='Chức năng đọc ảnh chỉ chạy khi mở trang này trong claude.ai.';return}
+  let lim={};try{lim=await sample.limits()}catch(err){}
+  if(!lim.images){st.textContent='Chỗ bạn đang mở chưa hỗ trợ gửi ảnh để đọc.';return}
+  const arr=Array.from(files).slice(0,lim.images.maxCount||4);
+  st.innerHTML='<span class="spin"></span>Đang đọc '+arr.length+' ảnh…';
+  try{
+    const r=await sample.json(ID_PROMPT,{images:arr});
+    if(!$('id_status'))return;
+    if(!r||r.error){$('id_status').textContent='Không đọc được: '+((r&&r.error)||'kết quả trống')+'. Hãy chọn ảnh khác.';return}
+    const map=[['name','f_name','Họ tên'],['dob','f_dob','Ngày sinh'],['gender','f_gender','Giới tính'],['cccd','f_cccd','Số CCCD'],['phone','f_phone','Điện thoại'],['home','f_home','Nguyên quán'],['addr','f_addr','Thường trú']];
+    let ok=0;const miss=[];
+    map.forEach(([k,id,lab])=>{
+      let v=r[k];if(v==null||v==='')v=null;
+      if(v!=null&&k==='dob'&&!/^\d{4}-\d{2}-\d{2}$/.test(v))v=null;
+      if(v!=null&&k==='gender'&&v!=='Nam'&&v!=='Nữ')v=null;
+      if(v!=null&&k==='phone')v=String(v).replace(/[^\d]/g,'');
+      const el=$(id);
+      if(v==null||!el){miss.push(lab);return}
+      el.value=String(v).trim();el.classList.add('auto');ok++;
+    });
+    $('id_status').innerHTML='<b>Đã điền '+ok+' ô từ ảnh (tô vàng).</b>'+(miss.length?'<br>Chưa tìm thấy: '+miss.join(', ')+'. Bạn tự nhập hoặc tải thêm ảnh.':'')+'<br><span class="muted">Kiểm tra lại từng ô rồi bấm Lưu.</span>';
+  }catch(e){
+    const el=$('id_status');if(!el)return;
+    const m={not_granted:'Bạn chưa cho phép trang này dùng Claude nên chưa đọc được ảnh.',rate_limited:'Đã đọc quá nhiều lần, hãy thử lại sau ít phút.',image_rejected:'Ảnh không đọc được hoặc quá lớn, hãy chọn ảnh khác.',invalid_json:'Chưa đọc ra kết quả rõ ràng. Thử lại hoặc chọn ảnh rõ hơn.',cancelled:''};
+    el.textContent=(e&&e.code in m)?m[e.code]:'Chưa đọc được ảnh lúc này. Thử lại sau.';
+  }
+}
+
+/* ---------- Sự kiện ---------- */
+const A={
+  close:closeModal,
+  nav:d=>{S.view=d.v;S.id=null;render();window.scrollTo(0,0)},
+  role:d=>{S.role=d.r;render()},
+  open:d=>{S.view='detail';S.id=d.id;S.reveal=false;render();window.scrollTo(0,0)},
+  back:()=>{S.view='list';render()},
+  reveal:()=>{S.reveal=!S.reveal;render()},
+  addEmp:()=>empModal(),
+  editEmp:()=>empModal(S.id),
+  delEmp:()=>{const e=emp(S.id);confirmBox('Xóa nhân sự',`Xóa hồ sơ của <b>${esc(e.name)}</b> cùng toàn bộ chứng chỉ? Thao tác này không hoàn tác được.`,'Xóa nhân sự',()=>{S.emps=S.emps.filter(x=>x.id!==e.id);S.view='list';S.id=null;render();toast('Đã xóa nhân sự')})},
+  addCert:d=>certModal(S.id,d.t),
+  editCert:d=>certModal(S.id,d.t),
+  delCert:d=>{const e=emp(S.id),t=TYPE(d.t);confirmBox('Xóa chứng chỉ',`Xóa <b>${t.vi}</b> của ${esc(e.name)}?`,'Xóa chứng chỉ',()=>{delete e.certs[d.t];render();toast('Đã xóa chứng chỉ')})},
+  scan:d=>scanModal(d.t,d.kind),
+  sample:()=>{
+    const e=emp(S.id),t=$('c_type').value;TMP.doc=docSvg(TYPE(t).vi.toUpperCase(),e.name,'');showPrev(TMP.doc,true);
+  },
+  export:()=>exportModal(S.id),
+  alertF:d=>{S.alertF=d.f;render()},
+  addSig:()=>sigModal(),
+  defSig:d=>{S.defSig=d.id;render();toast('Đã đặt chữ ký mặc định')},
+  delSig:d=>{
+    if(S.sigs.length<=1){toast('Cần giữ lại ít nhất một chữ ký.');return}
+    const s=sigOf(d.id);confirmBox('Xóa chữ ký',`Xóa chữ ký của <b>${esc(s.name)}</b> khỏi thư viện?`,'Xóa chữ ký',()=>{S.sigs=S.sigs.filter(x=>x.id!==s.id);if(S.defSig===s.id)S.defSig=S.sigs[0].id;render();toast('Đã xóa chữ ký')});
+  },
+  saveMail:()=>{
+    const v=$('mailTo').value.trim();
+    if(v&&!v.split(',').every(a=>/^\S+@\S+\.\S+$/.test(a.trim()))){toast('Địa chỉ email chưa đúng định dạng.');return}
+    S.mail.to=v;toast(v?'Đã lưu cài đặt email':'Đã lưu, nhưng chưa có địa chỉ nhận');
+  },
+  testMail:()=>{const v=$('mailTo').value.trim();toast(v?'Đã gửi thử tới '+v+' (bản thử, chưa gửi thật)':'Nhập địa chỉ email trước khi gửi thử')}
+};
+document.addEventListener('click',ev=>{
+  if(ev.target.classList&&ev.target.classList.contains('backdrop')){closeModal();return}
+  const t=ev.target.closest('[data-a]');
+  if(t&&A[t.dataset.a]){ev.preventDefault();A[t.dataset.a](t.dataset)}
+});
+document.addEventListener('keydown',ev=>{
+  if(ev.key==='Escape')closeModal();
+  if((ev.key==='Enter')&&ev.target.matches&&ev.target.matches('tr[data-a]')){A[ev.target.dataset.a](ev.target.dataset)}
+});
+document.addEventListener('input',ev=>{
+  if(ev.target.id==='q'){S.q=ev.target.value;refreshRows()}
+});
+document.addEventListener('change',async ev=>{
+  const t=ev.target;
+  if(t.id==='fpos'){S.pos=t.value;refreshRows()}
+  else if(t.id==='fst'){S.st=t.value;refreshRows()}
+  else if(t.id==='c_file'&&t.files[0]){const src=await readFile(t.files[0]);TMP.doc=src;showPrev(src,true)}
+  else if(t.id==='c_list'&&t.files[0]){TMP.list=true;$('c_listname').textContent='Đã chọn: '+t.files[0].name}
+  else if(t.id==='s_file'&&t.files[0]){
+    const src=await readFile(t.files[0]);SIGTMP=await removeBg(src);
+    $('s_pic').innerHTML=`<img src="${SIGTMP}" alt="Chữ ký đã tách nền">`;
+  }
+  else if(t.id==='id_files'&&t.files.length){readIdImages(t.files)}
+  else if(t.id==='x_sig'){X.sig=t.value;$('paperHost').innerHTML=paper(emp(S.id))}
+  else if(t.id==='x_date'&&t.value){X.date=t.value;$('paperHost').innerHTML=paper(emp(S.id))}
+  else if(t.id==='x_scans'){X.scans=t.checked;$('scanHost').innerHTML=scanPages(emp(S.id))}
+});
+render();
+</script>
+</body>
+</html>
