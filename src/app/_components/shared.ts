@@ -5,7 +5,7 @@ import type { OcrFormField } from "../../modules/ocr/applyOcrToForm";
 
 export type App = ReturnType<typeof createHrApp>;
 export type PageView = "employees" | "alerts" | "signatures" | "settings" | "reports";
-export type SetNotice = (message: string) => void;
+export type { Notify as SetNotice } from "./Toast";
 export type SignatureRow = { id: string; name: string; role: string; isDefault: boolean };
 export type ExpiringCertificateRow = { id: string; employeeId: string; employeeName?: string; employeeCode?: string; number: string; expiryDate: string; reminderSendDate: string; reminderSent: boolean; reminderSentDate?: string | null; type: string; displayName?: string; daysLeft: number; group: string };
 

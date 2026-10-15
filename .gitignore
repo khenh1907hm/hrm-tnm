@@ -42,3 +42,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Mẫu hồ sơ khách hàng (có logo, chữ ký, con dấu) — không đưa lên git
+/public/templates/

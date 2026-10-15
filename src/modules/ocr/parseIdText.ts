@@ -3,6 +3,7 @@ import { isValidISODate } from "../../lib/dates";
 import { validateCccd } from "../../lib/vietnam/cccd";
 import { correctVietnameseNameTones, validateName } from "../../lib/vietnam/name";
 import { validatePhone } from "../../lib/vietnam/phone";
+import { restoreAddressDiacritics } from "../../lib/vietnam/restoreDiacritics";
 
 export type ParsedId = {
   cccd: string | null;
@@ -65,8 +66,25 @@ function cleanAddress(val: string | null): string | null {
     // 2. Loại bỏ các ký tự rác đơn lẻ hoặc cặp rác OCR ở đầu: "ì ", "i ", "l ", "I ", "1 ", "| ", "S] ", "S ] ", "s] ", "s ) "
     cleaned = cleaned.replace(/^(?:[iìíIl!1|]|[SscCjJ]\s*[\]\)\}])(?:\s+|$)/gi, "").trim();
   }
-  return cleaned || null;
+  return cleaned ? restoreAddressDiacritics(cleaned) : null;
 }
+
+/** Nhãn ở mặt sau CCCD có thể dính ngay sau địa chỉ trên cùng một dòng. */
+const TRAILING_LABELS = [["dac", "diem"], ["nhan", "dang"], ["personal", "identification"], ["ngay", "thang", "nam"], ["date", "month"], ["co", "gia", "tri"], ["date", "of", "expiry"], ["cuc", "truong"], ["ngon", "tro"]];
+
+function cutAtTrailingLabel(line: string): string {
+  const words = line.split(/\s+/);
+  const normalized = words.map((word) => normalizeText(word).replace(/[^a-z0-9]/g, ""));
+  const cut = normalized.findIndex((_, index) => TRAILING_LABELS.some((label) => label.every((part, offset) => normalized[index + offset] === part)));
+  return cut < 0 ? line : words.slice(0, cut).join(" ");
+}
+
+/** Nhãn viết liền, bỏ dấu; "ð" là chữ "ở" bị OCR đọc nhầm. */
+const labelKey = (line: string) => normalizeText(line).replace(/ð/g, "o").replace(/[^a-z0-9]/g, "");
+const NEXT_LABEL = /^.{0,2}(?:hovaten|hochudemvaten|fullname|ngaysinh|ngaythangnamsinh|dateofbirth|gioitinh|sex|socccd|cccd|sodinhdanh|sothuebao|dangkytaikhoan|dienthoai|phone|nguyenquan|quequan|noisinh|noidangkykhaisinh|dantoc|tongiao|noithuongtru|thuongtru|noitamtru|tamtru|noicutru|cho[o06d]?hientai|noi[o06d]?hientai|diachihientai|ngaycap|nhommau|nghenghiep|diachithudientu|thongtin|capnhat|dacdiem|nhandang|personalidentification|ngaythangnam|datemonth|cogiatri|dateofexpiry|cuctruong|ngontro|leftindex|rightindex|sochungminh|quoctich|nationality)/;
+
+/** Dòng MRZ ở mặt sau, ví dụ IDVNM0950123456<<... */
+const isMrzLine = (line: string) => line.includes("<<") || /^[A-Z0-9<]{20,}$/.test(line.replace(/\s/g, ""));
 
 function stripLabelFromLine(line: string, pattern: RegExp): string {
   const colonIdx = line.search(/[:：]/);
@@ -95,16 +113,23 @@ export function parseIdText(text: string): ParsedId {
     return sameLine || lines[index + 1]?.trim() || null;
   };
 
-  const getAddressAfter = (pattern: RegExp): string | null => {
-    const labelLine = lines.find((line) => pattern.test(normalizeText(line)));
-    if (!labelLine) return null;
-    const index = lines.indexOf(labelLine);
-    const sameLine = stripLabelFromLine(labelLine, pattern);
-    const values = sameLine ? [sameLine] : [];
-    const nextLabel = /^(ho va ten|full name|ngay sinh|date of birth|gioi tinh|sex|so cccd|cccd|so thue bao|dang ky tai khoan|dien thoai|phone|nguyen quan|que quan|noi sinh|noi dang ky khai sinh|dan toc|ton giao|noi thuong tru|thuong tru|noi tam tru|tam tru|noi cu tru|cu tru|cho o hien tai|noi [o06] hien tai|dia chi hien tai|ngay cap|nhom mau|nghe nghiep|dia chi thu dien tu|thong tin|cap nhat)\b/i;
+  /** Tìm nhãn theo dạng viết liền không dấu, vì OCR hay dính chữ ("Nơiðhiệntại"). */
+  const getAddressAfter = (label: RegExp): string | null => {
+    const matcher = new RegExp(`^.{0,2}(?:${label.source})`);
+    const index = lines.findIndex((line) => matcher.test(labelKey(line)));
+    if (index < 0) return null;
+    const labelLine = lines[index]!;
+    const colon = labelLine.search(/[:：]/);
+    // Không có dấu hai chấm: bỏ số từ ít nhất tạo thành nhãn ("Nơi ở hiện tại Số 12…").
+    const words = labelLine.split(/\s+/);
+    const labelWords = words.findIndex((_, count) => matcher.test(labelKey(words.slice(0, count + 1).join(" "))));
+    const sameLine = colon >= 0 ? labelLine.slice(colon + 1).trim() : words.slice(labelWords + 1).join(" ");
+    const values = sameLine ? [cutAtTrailingLabel(sameLine)] : [];
     for (const line of lines.slice(index + 1)) {
-      if (nextLabel.test(normalizeText(line))) break;
-      values.push(line);
+      if (NEXT_LABEL.test(labelKey(line)) || isMrzLine(line)) break;
+      const kept = cutAtTrailingLabel(line);
+      if (kept) values.push(kept);
+      if (kept !== line) break;
     }
     return cleanAddress(values.length ? values.join(" ") : null);
   };
@@ -227,9 +252,10 @@ export function parseIdText(text: string): ParsedId {
   }
 
   // 5. Địa chỉ
-  result.home = getAddressAfter(/nguyen quan|que quan/);
-  result.addr = getAddressAfter(/noi thuong tru|thuong tru/);
-  result.currentAddr = getAddressAfter(/noi [o06] hien tai|cho [o06] hien tai|dia chi hien tai|noi tam tru|tam tru|noi cu tru|cu tru/);
+  result.home = getAddressAfter(/nguyenquan|quequan/);
+  result.addr = getAddressAfter(/noithuongtru|thuongtru/);
+  // Ưu tiên "Nơi ở hiện tại"; chỉ dùng "Nơi tạm trú" khi không có.
+  result.currentAddr = getAddressAfter(/noi[o06d]?hientai|cho[o06d]?hientai|diachihientai|noicutru/) ?? getAddressAfter(/noitamtru|tamtru/);
 
   // 6. Số điện thoại
   const phoneText = getAfter(/so thue bao|dien thoai|phone|dang ky tai khoan dinh danh/);
@@ -238,7 +264,7 @@ export function parseIdText(text: string): ParsedId {
   if (phoneCandidate && validatePhone(phoneCandidate).issues.length === 0) result.phone = phoneCandidate;
 
   // Quê quán fallback
-  if (!result.home) result.home = getAddressAfter(/que quan/);
+  if (!result.home) result.home = getAddressAfter(/quequan/);
 
   return result;
 }

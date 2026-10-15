@@ -1,11 +1,15 @@
 "use client";
-
+import { Download, FileText, Settings } from "lucide-react";
 import { useState } from "react";
 import type { Employee } from "../modules/employees/types";
 import type { ExcelReportTemplate } from "../modules/excel-template/types";
 import { mapEmployeeToExcelData } from "../modules/excel-template/types";
 import { base64ToUint8Array } from "../modules/excel-template/templateStorage";
 import { populateExcelTemplate } from "../modules/excel-template/populateTemplate";
+import type { Actor } from "../modules/auth/permissions";
+import type { Certificate } from "../modules/certificates/types";
+import { ProfileExportForm } from "./_components/ProfileExportForm";
+import type { App } from "./_components/shared";
 
 interface ExportExcelModalProps {
   employee: Employee;
@@ -13,6 +17,10 @@ interface ExportExcelModalProps {
   onClose: () => void;
   setNotice: (msg: string) => void;
   onGoToTemplatesConfig: () => void;
+  app: App;
+  actor: Actor;
+  certificates: readonly Certificate[];
+  sessionFiles: Readonly<Record<string, File>>;
 }
 
 export function ExportExcelModal({
@@ -21,6 +29,10 @@ export function ExportExcelModal({
   onClose,
   setNotice,
   onGoToTemplatesConfig,
+  app,
+  actor,
+  certificates,
+  sessionFiles,
 }: ExportExcelModalProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
@@ -65,7 +77,7 @@ export function ExportExcelModal({
 
   return (
     <div className="modal-backdrop" role="presentation">
-      <div className="modal-card" style={{ maxWidth: "600px" }}>
+      <div className="modal-card" style={{ maxWidth: activeTemplate?.profile ? "820px" : "600px" }}>
         <header>
           <h2>Xuất báo cáo Excel theo mẫu</h2>
           <button type="button" className="close" onClick={onClose}>
@@ -93,17 +105,19 @@ export function ExportExcelModal({
               >
                 {templates.map((tpl) => (
                   <option key={tpl.id} value={tpl.id}>
-                    {tpl.name} ({tpl.mappings.length} ô quy định)
+                    {tpl.profile ? `${tpl.name} (mẫu hồ sơ)` : `${tpl.name} (${tpl.mappings.length} ô quy định)`}
                   </option>
                 ))}
               </select>
             </label>
           </div>
 
-          {activeTemplate ? (
+          {activeTemplate?.profile ? (
+            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} />
+          ) : activeTemplate ? (
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "12px", borderRadius: "6px", fontSize: "13px", marginBottom: "16px" }}>
               <div style={{ fontWeight: "bold", color: "#166534", marginBottom: "6px" }}>
-                📄 {activeTemplate.name}
+                <FileText className="ico" size={16} aria-hidden="true" /> {activeTemplate.name}
               </div>
               <div style={{ color: "#15803d", marginBottom: "8px" }}>
                 {activeTemplate.description || "Mẫu báo cáo tự động điền dữ liệu."}
@@ -128,7 +142,7 @@ export function ExportExcelModal({
                 onGoToTemplatesConfig();
               }}
             >
-              ⚙️ Quản lý &amp; Cài đặt mẫu khác
+              <Settings className="ico" size={16} aria-hidden="true" /> Quản lý &amp; Cài đặt mẫu khác
             </button>
           </div>
         </div>
@@ -140,11 +154,12 @@ export function ExportExcelModal({
           <button
             type="button"
             className="button primary"
-            style={{ background: "#059669", borderColor: "#059669" }}
+           
             onClick={() => void handleExport()}
             disabled={busy || !activeTemplate}
+            hidden={Boolean(activeTemplate?.profile)}
           >
-            {busy ? "Đang tạo tệp Excel…" : "📥 Tải tệp Excel (.xlsx)"}
+            {busy ? "Đang tạo tệp Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải tệp Excel (.xlsx)</>}
           </button>
         </footer>
       </div>

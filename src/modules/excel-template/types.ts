@@ -42,7 +42,35 @@ export interface ExcelCellMapping {
   field: ExcelFieldKey;
 }
 
+export type ProfileCustomFieldKind = "text" | "date" | "checkbox";
+export interface ProfileCustomField {
+  key: string;
+  label: string;
+  kind: ProfileCustomFieldKind;
+  /** Giá trị dùng chung (ISO yyyy-mm-dd với kiểu ngày, "true"/"" với ô đánh dấu); sửa được khi xuất. */
+  defaultValue: string;
+}
+export interface ProfileImageSlot {
+  field: string;
+  range: string;
+  /** "cover" cắt ảnh cho kín khung (ảnh 3×4); "contain" co vừa khung. */
+  fit: "contain" | "cover";
+}
+/** Cấu hình "Mẫu hồ sơ": file thiết kế có ô {{trường}}, vùng ảnh và chứng chỉ đính kèm. */
+export interface ProfileTemplateConfig {
+  sheetName: string;
+  printArea: string;
+  placeholders: string[];
+  customFields: ProfileCustomField[];
+  imageSlots: ProfileImageSlot[];
+  slotAspect: Record<string, number>;
+  /** Loại chứng chỉ đính kèm, theo thứ tự in. */
+  attachments: string[];
+}
+
 export interface ExcelReportTemplate {
+  /** Có cấu hình này thì là "Mẫu hồ sơ" (điền bằng ô {{trường}}); không có là mẫu gán tọa độ ô kiểu cũ. */
+  profile?: ProfileTemplateConfig;
   id: string;
   name: string;
   description?: string;

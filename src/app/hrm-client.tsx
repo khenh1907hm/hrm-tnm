@@ -25,6 +25,7 @@ import { SignatureFormModal } from "./_components/SignatureFormModal";
 import { SignaturesView } from "./_components/SignaturesView";
 import { emptyEmployee, issueText, type App, type ExpiringCertificateRow, type PageView, type SignatureRow } from "./_components/shared";
 import { useReportTemplates } from "./_components/useReportTemplates";
+import { useToast } from "./_components/Toast";
 
 const DEMO_NOW = "2026-10-12T09:00:00+07:00";
 
@@ -36,7 +37,7 @@ export default function HrmClient() {
   const [employeeCertificateHealth, setEmployeeCertificateHealth] = useState<Record<string, CertificateChecklistSummary>>({});
   const [filters, setFilters] = useState<EmployeeFilters>({ query: "", positionFilter: "", missingRequiredCertificate: false, includeArchived: false });
   const [selected, setSelected] = useState<Employee | null>(null);
-  const [notice, setNotice] = useState("");
+  const setNotice = useToast();
   const [certRows, setCertRows] = useState<ExpiringCertificateRow[]>([]);
   const [signatureRows, setSignatureRows] = useState<SignatureRow[]>([]);
   const [employeeCertificates, setEmployeeCertificates] = useState<Certificate[]>([]);
@@ -211,7 +212,6 @@ export default function HrmClient() {
     <div className="app-shell">
       <SideNav view={view} onNavigate={(key) => { setView(key); setSelected(null); }} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
       <main className="main-content">
-        {notice && <div className="notice" role="status"><span>{notice}</span><button onClick={() => setNotice("")}>×</button></div>}
         {view === "employees" && !selected && <EmployeeListView actor={actor} rows={activeRows} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} onCreate={openCreate} onOpen={(employee) => void openDetail(employee)} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && selected && <EmployeeDetailView
           app={app}
@@ -236,7 +236,7 @@ export default function HrmClient() {
         />}
         {view === "alerts" && <AlertsView app={app} actor={actor} certRows={certRows} onCertRowsChange={setCertRows} onOpenEmployee={(employeeId) => void openEmployeeById(employeeId)} setNotice={setNotice} />}
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} onAdd={() => setShowSignatureForm(true)} setNotice={setNotice} />}
-        {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} />}
+        {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} />}
         {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => setShowSignatureForm(true)} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal
@@ -290,6 +290,10 @@ export default function HrmClient() {
         <ExportExcelModal
           employee={selected}
           templates={templates}
+          app={app}
+          actor={actor}
+          certificates={employeeCertificates}
+          sessionFiles={sessionFiles}
           onClose={() => setShowExcelModal(false)}
           setNotice={setNotice}
           onGoToTemplatesConfig={() => {

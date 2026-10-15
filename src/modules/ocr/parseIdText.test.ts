@@ -216,9 +216,57 @@ Giới tính: Nam`);
     expect(parsed1.addr).toBe("Thôn Ka Đê, Xã Quảng Lập, Tỉnh Lâm Đồng");
 
     const parsed2 = parseIdText(`Nơi ở hiện tại: S ] 566/72/91B Nguyên Thái Sơn - Khu Phố 13, Phường 5, Gò Vấp`);
-    expect(parsed2.currentAddr).toBe("566/72/91B Nguyên Thái Sơn - Khu Phố 13, Phường 5, Gò Vấp");
+    expect(parsed2.currentAddr).toBe("566/72/91B Nguyễn Thái Sơn - Khu Phố 13, Phường 5, Gò Vấp");
 
     const parsed3 = parseIdText(`Nơi thường trú: [ ] Số 10 Phố Huế, Hoàn Kiếm, Hà Nội`);
     expect(parsed3.addr).toBe("Số 10 Phố Huế, Hoàn Kiếm, Hà Nội");
   });
 });
+
+describe("parseIdText back side of CCCD", () => {
+  it("stops the address before identifying features, issue date and MRZ lines OCRUI_04", () => {
+    const back = parseIdText(`Nơi cư trú / Place of residence: 12 Lê Lợi, Phường Bến Nghé,
+Thành phố Hồ Chí Minh Đặc điểm nhân dạng: Nốt ruồi C:1,3cm trên sau cánh mũi phải
+Ngày, tháng, năm / Date, month, year: 12/06/2021
+IDVNM0950123456001095123456<<6`);
+    expect(back.currentAddr).toBe("12 Lê Lợi, Phường Bến Nghé, Thành phố Hồ Chí Minh");
+    const separate = parseIdText(`Nơi thường trú: Thôn Ka Đê, Xã Quảng Lập
+Tỉnh Lâm Đồng
+Đặc điểm nhân dạng / Personal identification:
+Nốt ruồi C:1,3cm trên sau cánh mũi phải
+IDVNM0950123456<<<<<<<<<<<<`);
+    expect(separate.addr).toBe("Thôn Ka Đê, Xã Quảng Lập Tỉnh Lâm Đồng");
+  });
+
+  it("restores missing tones in names and addresses read without diacritics OCRUI_04", () => {
+    const parsed = parseIdText(`Ho va ten / Full name: TRAN THI HUONG
+Noi thuong tru: Xa Hoang Phu, Tinh Thanh Hoa`);
+    expect(parsed.name).toBe("Trần Thị Hương");
+    expect(parsed.addr).toBe("Xã Hoang Phu, Tỉnh Thanh Hóa");
+  });
+});
+
+describe("parseIdText VNeID screenshots", () => {
+  it("reads the glued 'Nơi ở hiện tại' label and fixes wrong tones from the real sample OCRUI_04", () => {
+    const parsed = parseIdText(`Nơi thường trú:
+Thôn Ka Đê, Xã Quảng Lập, Tỉnh Lâm Đông
+Nơi tạm trú:
+566/72/91B Nguyên Thái Sơn - Khu Phô 13, Phường An
+Nhơn, Thành phô Hô Chí Minh
+Nơiðhiệntại: 566/72/91B Nguyên Thái Sơn, Khu Phô 9, Phưỡng An Nhơn,
+Thành phô Hô Chí Minh
+Đặc điểm nhân dạng: Nốt ruồi C:1,3cm trên sau cánh mũi
+phải
+Ngày cấp Căn cước công dân gần nhất: 12/06/2021`);
+    expect(parsed.addr).toBe("Thôn Ka Đê, Xã Quảng Lập, Tỉnh Lâm Đồng");
+    expect(parsed.currentAddr).toBe("566/72/91B Nguyễn Thái Sơn, Khu Phố 9, Phường An Nhơn, Thành phố Hồ Chí Minh");
+  });
+
+  it("falls back to the temporary residence when there is no current address OCRUI_04", () => {
+    const parsed = parseIdText(`Nơi tạm trú:
+566/72/91B Nguyên Thái Sơn - Khu Phô 13, Phường An
+Nhơn, Thành phô Hô Chí Minh`);
+    expect(parsed.currentAddr).toBe("566/72/91B Nguyễn Thái Sơn - Khu Phố 13, Phường An Nhơn, Thành phố Hồ Chí Minh");
+  });
+});
+

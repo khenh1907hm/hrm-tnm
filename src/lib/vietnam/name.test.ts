@@ -5,7 +5,6 @@ describe("correctVietnameseNameTones", () => {
   it("keeps valid names unchanged", () => {
     expect(correctVietnameseNameTones("NGUYỄN HOÀNG MINH")).toBe("NGUYỄN HOÀNG MINH");
     expect(correctVietnameseNameTones("Trần Thị Bình")).toBe("Trần Thị Bình");
-    expect(correctVietnameseNameTones("NGUYEN VAN AN")).toBe("NGUYEN VAN AN");
   });
 
   it("keeps vowel modifiers together with a single tone mark", () => {

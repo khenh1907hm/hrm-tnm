@@ -1,5 +1,10 @@
 import HrmClient from "./hrm-client";
+import { ToastProvider } from "./_components/Toast";
 
 export default function Home() {
-  return <HrmClient />;
+  return (
+    <ToastProvider>
+      <HrmClient />
+    </ToastProvider>
+  );
 }

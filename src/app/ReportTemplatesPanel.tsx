@@ -1,6 +1,12 @@
 "use client";
-
-import { useState } from "react";
+import { Download, FileText, Lightbulb, Pencil, Play, Plus, Settings, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { Actor } from "../modules/auth/permissions";
+import { profileConfigFromScan } from "../modules/excel-template/engine/profileConfig";
+import { parseRange } from "../modules/excel-template/engine/fillWorkbook";
+import { scanTemplate } from "../modules/excel-template/engine/scanTemplate";
+import { ProfileTemplateEditor } from "./_components/ProfileTemplateEditor";
+import type { App } from "./_components/shared";
 import type { Employee } from "../modules/employees/types";
 import {
   AVAILABLE_REPORT_FIELDS,
@@ -10,6 +16,7 @@ import {
   type ExcelCellMapping,
   type ExcelFieldKey,
   type ExcelReportTemplate,
+  type ProfileTemplateConfig,
 } from "../modules/excel-template/types";
 import {
   base64ToUint8Array,
@@ -26,6 +33,8 @@ interface ReportTemplatesPanelProps {
   onTemplatesChange: (updated: ExcelReportTemplate[]) => void;
   employees: Employee[];
   setNotice: (msg: string) => void;
+  app: App;
+  actor: Actor;
 }
 
 export function ReportTemplatesPanel({
@@ -33,6 +42,8 @@ export function ReportTemplatesPanel({
   onTemplatesChange,
   employees,
   setNotice,
+  app,
+  actor,
 }: ReportTemplatesPanelProps) {
   const [editingTemplate, setEditingTemplate] = useState<ExcelReportTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -44,6 +55,15 @@ export function ReportTemplatesPanel({
   const [formFileBase64, setFormFileBase64] = useState("");
   const [formMappings, setFormMappings] = useState<ExcelCellMapping[]>([]);
   const [formError, setFormError] = useState("");
+  /** Có giá trị khi file tải lên chứa ô {{trường}} → "Mẫu hồ sơ". */
+  const [formProfile, setFormProfile] = useState<ProfileTemplateConfig | null>(null);
+  const [certificateTypes, setCertificateTypes] = useState<{ key: string; name: string }[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void app.certificateTypes.list(actor).then((result) => { if (active && result.ok) setCertificateTypes(result.value.map((type) => ({ key: type.key, name: type.name }))); });
+    return () => { active = false; };
+  }, [app, actor]);
 
   // Test export state
   const [testingTemplateId, setTestingTemplateId] = useState<string | null>(null);
@@ -56,6 +76,7 @@ export function ReportTemplatesPanel({
     setFormDesc("");
     setFormFileName("");
     setFormFileBase64("");
+    setFormProfile(null);
     setFormMappings([
       { cell: "C5", field: "code" },
       { cell: "E5", field: "position" },
@@ -82,6 +103,7 @@ export function ReportTemplatesPanel({
     setFormFileName(tpl.fileName);
     setFormFileBase64(tpl.fileBase64);
     setFormMappings(tpl.mappings.map((m) => ({ ...m })));
+    setFormProfile(tpl.profile ?? null);
     setFormError("");
   };
 
@@ -93,12 +115,15 @@ export function ReportTemplatesPanel({
       return;
     }
     try {
-      const buffer = await file.arrayBuffer();
-      const b64 = uint8ArrayToBase64(new Uint8Array(buffer));
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const scan = await scanTemplate(bytes);
+      const profile = scan.placeholders.length ? profileConfigFromScan(scan, formProfile ?? undefined) : null;
       setFormFileName(file.name);
-      setFormFileBase64(b64);
+      setFormFileBase64(uint8ArrayToBase64(bytes));
+      setFormProfile(profile);
+      if (profile && !formName.trim()) setFormName(file.name.replace(/\.xlsx$/i, ""));
       setFormError("");
-      setNotice(`Đã nạp tệp mẫu "${file.name}".`);
+      setNotice(profile ? `Đã nhận diện "${file.name}" là mẫu hồ sơ: ${scan.placeholders.length} trường, ${scan.imageSlots.length} vùng ảnh.` : `Đã nạp tệp mẫu "${file.name}".`);
     } catch {
       setFormError("Không đọc được tệp Excel. Vui lòng thử lại.");
     }
@@ -152,15 +177,22 @@ export function ReportTemplatesPanel({
       return;
     }
 
+    if (formProfile) {
+      for (const slot of formProfile.imageSlots) {
+        try { parseRange(slot.range); } catch { setFormError(`Vùng ảnh "${slot.range || "(trống)"}" không hợp lệ. Ví dụ đúng: E8:K16.`); return; }
+      }
+      try { parseRange(formProfile.printArea); } catch { setFormError(`Vùng in "${formProfile.printArea}" không hợp lệ. Ví dụ đúng: B1:AZ73.`); return; }
+    }
+
     // Validate cell addresses
-    for (const mapping of formMappings) {
+    for (const mapping of formProfile ? [] : formMappings) {
       if (mapping.cell && !isValidCellAddress(mapping.cell)) {
         setFormError(`Tọa độ ô "${mapping.cell}" không hợp lệ. Ví dụ đúng: C5, E10, B2.`);
         return;
       }
     }
 
-    const cleanMappings = formMappings
+    const cleanMappings = (formProfile ? [] : formMappings)
       .filter((m) => m.cell.trim() !== "")
       .map((m) => ({ cell: normalizeCellAddress(m.cell), field: m.field }));
 
@@ -177,6 +209,7 @@ export function ReportTemplatesPanel({
               fileName: formFileName || tpl.fileName,
               fileBase64: formFileBase64 || tpl.fileBase64,
               mappings: cleanMappings,
+              ...(formProfile ? { profile: formProfile, sheetName: formProfile.sheetName } : {}),
               updatedAt: now,
             }
           : tpl,
@@ -190,6 +223,7 @@ export function ReportTemplatesPanel({
         fileName: formFileName || "template.xlsx",
         fileBase64: formFileBase64,
         mappings: cleanMappings,
+        ...(formProfile ? { profile: formProfile, sheetName: formProfile.sheetName } : {}),
         createdAt: now,
         updatedAt: now,
       };
@@ -289,10 +323,10 @@ export function ReportTemplatesPanel({
         </div>
         <div className="button-row">
           <button className="button" onClick={() => void downloadStarterSystemFile()}>
-            📥 Tải file mẫu chuẩn (.xlsx)
+            <Download className="ico" size={16} aria-hidden="true" /> Tải file mẫu chuẩn (.xlsx)
           </button>
           <button className="button primary" onClick={() => void openCreate()}>
-            ＋ Thêm mẫu báo cáo mới
+            <Plus className="ico" size={16} aria-hidden="true" /> Thêm mẫu báo cáo mới
           </button>
         </div>
       </div>
@@ -304,34 +338,39 @@ export function ReportTemplatesPanel({
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                 <h3 style={{ margin: 0, fontSize: "17px", color: "var(--foreground, #0f172a)" }}>{tpl.name}</h3>
-                <span className="pill ok" style={{ fontSize: "11px" }}>{tpl.mappings.length} ô map</span>
+                <span className="pill ok" style={{ fontSize: "11px" }}>{tpl.profile ? "Mẫu hồ sơ" : `${tpl.mappings.length} ô map`}</span>
               </div>
               <p style={{ margin: "4px 0 12px", color: "var(--muted, #64748b)", fontSize: "13px" }}>
                 {tpl.description || "Chưa có mô tả cho mẫu này."}
               </p>
               <div style={{ background: "#f8fafc", padding: "10px", borderRadius: "6px", fontSize: "12px", border: "1px solid #e2e8f0", marginBottom: "14px" }}>
-                <div><b>Tệp mẫu:</b> 📄 {tpl.fileName}</div>
-                <div style={{ marginTop: "4px", color: "#64748b" }}>
+                <div><b>Tệp mẫu:</b> <FileText className="ico" size={14} aria-hidden="true" /> {tpl.fileName}</div>
+                {tpl.profile ? (
+                  <div style={{ marginTop: "4px", color: "#64748b" }}>
+                    <b>{tpl.profile.placeholders.length}</b> trường · <b>{tpl.profile.imageSlots.length}</b> vùng ảnh · <b>{tpl.profile.attachments.length}</b> loại chứng chỉ đính kèm
+                    <div style={{ marginTop: "4px" }}>Xuất tại hồ sơ nhân sự → “Xuất Excel theo mẫu”.</div>
+                  </div>
+                ) : <div style={{ marginTop: "4px", color: "#64748b" }}>
                   <b>Các ô cấu hình:</b>{" "}
                   {tpl.mappings.slice(0, 5).map((m) => `${m.cell} (${m.field})`).join(", ")}
                   {tpl.mappings.length > 5 ? ` và ${tpl.mappings.length - 5} ô khác...` : ""}
-                </div>
+                </div>}
               </div>
             </div>
 
             <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", borderTop: "1px solid #e2e8f0", paddingTop: "12px" }}>
               <button className="button" style={{ fontSize: "12px", padding: "6px 10px" }} onClick={() => downloadRawTemplate(tpl)}>
-                📥 Tải file mẫu
+                <Download className="ico" size={16} aria-hidden="true" /> Tải file mẫu
               </button>
-              <button
+              {!tpl.profile && <button
                 className="button primary"
-                style={{ fontSize: "12px", padding: "6px 10px", background: "#059669", borderColor: "#059669" }}
+                style={{ fontSize: "12px", padding: "6px 10px" }}
                 onClick={() => setTestingTemplateId(tpl.id)}
               >
-                ⚡ Thử xuất với nhân viên
-              </button>
+                <Play className="ico" size={16} aria-hidden="true" /> Thử xuất với nhân viên
+              </button>}
               <button className="button" style={{ fontSize: "12px", padding: "6px 10px" }} onClick={() => openEdit(tpl)}>
-                ✏️ Sửa ô
+                {tpl.profile ? <><Settings className="ico" size={16} aria-hidden="true" /> Cài đặt mẫu</> : <><Pencil className="ico" size={16} aria-hidden="true" /> Sửa ô</>}
               </button>
               <button className="button danger" style={{ fontSize: "12px", padding: "6px 10px" }} onClick={() => deleteTemplate(tpl.id, tpl.name)}>
                 Xóa
@@ -356,7 +395,7 @@ export function ReportTemplatesPanel({
                   ))}
                 </select>
                 <div style={{ display: "flex", gap: "8px" }}>
-                  <button className="button primary" style={{ background: "#059669", fontSize: "12px" }} onClick={() => void executeTestExport(tpl)}>
+                  <button className="button primary" style={{ fontSize: "12px" }} onClick={() => void executeTestExport(tpl)}>
                     Tải file kết quả ngay
                   </button>
                   <button className="button" style={{ fontSize: "12px" }} onClick={() => setTestingTemplateId(null)}>
@@ -372,7 +411,7 @@ export function ReportTemplatesPanel({
           <div className="panel empty" style={{ gridColumn: "1 / -1", padding: "32px", textAlign: "center" }}>
             <p>Chưa có mẫu báo cáo nào được tạo.</p>
             <button className="button primary" onClick={() => void openCreate()}>
-              ＋ Tạo mẫu báo cáo đầu tiên
+              <Plus className="ico" size={16} aria-hidden="true" /> Tạo mẫu báo cáo đầu tiên
             </button>
           </div>
         )}
@@ -381,7 +420,7 @@ export function ReportTemplatesPanel({
       {/* Modal / Form thêm & sửa template */}
       {(isCreating || editingTemplate) && (
         <div className="modal-backdrop" role="presentation">
-          <div className="modal-card" style={{ maxWidth: "780px", maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="modal-card" style={{ maxWidth: formProfile ? "920px" : "780px", maxHeight: "90vh", overflowY: "auto" }}>
             <header>
               <h2>{editingTemplate ? `Sửa mẫu: ${editingTemplate.name}` : "Tạo mẫu báo cáo Excel mới"}</h2>
               <button
@@ -441,7 +480,7 @@ export function ReportTemplatesPanel({
                 >
                   {formFileName ? (
                     <div>
-                      <div style={{ fontWeight: "bold", color: "#1d4ed8" }}>📄 Đã chọn: {formFileName}</div>
+                      <div style={{ fontWeight: "bold", color: "#1d4ed8" }}><FileText className="ico" size={16} aria-hidden="true" /> Đã chọn: {formFileName}</div>
                       <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
                         Bạn có thể chọn tệp khác để thay thế nếu muốn
                       </div>
@@ -472,8 +511,10 @@ export function ReportTemplatesPanel({
                 </div>
               </div>
 
+              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} certificateTypes={certificateTypes} />}
+
               {/* Bảng định nghĩa ô nào thêm trường nào */}
-              <div style={{ marginBottom: "20px" }}>
+              {!formProfile && <><div style={{ marginBottom: "20px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
                   <div>
                     <h3 style={{ margin: 0, fontSize: "15px" }}>Định nghĩa vị trí ô cần thêm dữ liệu (Cell Mapping)</h3>
@@ -482,7 +523,7 @@ export function ReportTemplatesPanel({
                     </small>
                   </div>
                   <button type="button" className="button" style={{ fontSize: "12px" }} onClick={addMappingRow}>
-                    ＋ Thêm ô khác
+                    <Plus className="ico" size={16} aria-hidden="true" /> Thêm ô khác
                   </button>
                 </div>
 
@@ -546,7 +587,7 @@ export function ReportTemplatesPanel({
                                 onClick={() => removeMappingRow(idx)}
                                 title="Xóa ô này"
                               >
-                                ✕
+                                <X size={16} aria-hidden="true" />
                               </button>
                             </td>
                           </tr>
@@ -555,7 +596,7 @@ export function ReportTemplatesPanel({
                       {!formMappings.length && (
                         <tr>
                           <td colSpan={4} style={{ padding: "16px", textAlign: "center", color: "#94a3b8" }}>
-                            Chưa có ô nào được định nghĩa. Hãy bấm &quot;＋ Thêm ô khác&quot; để gán trường.
+                            Chưa có ô nào được định nghĩa. Hãy bấm &quot;Thêm ô khác&quot; để gán trường.
                           </td>
                         </tr>
                       )}
@@ -566,14 +607,14 @@ export function ReportTemplatesPanel({
 
               {/* Hướng dẫn nâng cao: Dùng thẻ trực tiếp trong Excel */}
               <div style={{ background: "#f8fafc", padding: "12px", borderRadius: "6px", border: "1px solid #e2e8f0", fontSize: "12px" }}>
-                <b>💡 Mẹo tiện lợi:</b> Ngoài việc gán ô C5, D10 ở trên, bạn cũng có thể mở file Excel và gõ trực tiếp
+                <b><Lightbulb className="ico" size={16} aria-hidden="true" /> Mẹo tiện lợi:</b> Ngoài việc gán ô C5, D10 ở trên, bạn cũng có thể mở file Excel và gõ trực tiếp
                 các mã sau vào bất kỳ ô nào:{" "}
                 <code style={{ background: "#e2e8f0", padding: "2px 4px", borderRadius: "3px" }}>{"{{name}}"}</code> (Họ tên),{" "}
                 <code style={{ background: "#e2e8f0", padding: "2px 4px", borderRadius: "3px" }}>{"{{cccd}}"}</code> (CCCD),{" "}
                 <code style={{ background: "#e2e8f0", padding: "2px 4px", borderRadius: "3px" }}>{"{{dob}}"}</code> (Ngày sinh),{" "}
                 <code style={{ background: "#e2e8f0", padding: "2px 4px", borderRadius: "3px" }}>{"{{phone}}"}</code> (Điện thoại),{" "}
                 <code style={{ background: "#e2e8f0", padding: "2px 4px", borderRadius: "3px" }}>{"{{currentAddress}}"}</code> (Địa chỉ hiện tại)... Hệ thống sẽ tự động tìm và thay thế giá trị tương ứng!
-              </div>
+              </div></>}
             </div>
 
             <footer>
