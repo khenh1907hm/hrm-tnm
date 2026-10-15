@@ -5,7 +5,6 @@ import type { CertificateTypeRecord } from "../modules/certificate-types/types";
 import type { Commander } from "../modules/commanders/types";
 import type { HrSettings } from "../modules/settings/types";
 import type { Signature } from "../modules/signatures/types";
-import type { Project } from "../modules/projects/types";
 
 export interface Repository<T extends { id: string; version: number }> {
   get(id: string): Promise<T | null>;
@@ -19,7 +18,6 @@ export type CertificateRepository = Repository<Certificate> & {
 };
 export type CertificateTypeRepository = Repository<CertificateTypeRecord>;
 export type CommanderRepository = Repository<Commander>;
-export type ProjectRepository = Repository<Project>;
 export interface AuditRepository {
   append(event: AuditEvent): Promise<void>;
   list(): Promise<AuditEvent[]>;

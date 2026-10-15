@@ -15,6 +15,8 @@ const DEMO_NOW = "2026-10-12T09:00:00+07:00";
 export type Backend =
   | { status: "loading" }
   | { status: "signedOut"; signIn: (email: string, password: string) => Promise<string | null> }
+  /** Đã đăng nhập nhưng chưa được admin cấp quyền (vai trò pending / không có hồ sơ). */
+  | { status: "pending"; email: string | null; signOut: () => Promise<void> }
   | { status: "ready"; mode: "demo" | "live"; app: App; actor: Actor; setActor: (actor: Actor) => void; email: string | null; fileStore: FileStore | null; signOut: () => Promise<void> };
 
 /**
@@ -24,7 +26,7 @@ export type Backend =
 export function useBackend(): Backend {
   const client = getSupabaseClient();
   const [session, setSession] = useState<Session | null | undefined>(client ? undefined : null);
-  const [role, setRole] = useState<Role | null>(null);
+  const [role, setRole] = useState<Role | "pending" | null>(null);
   const [demoApp, setDemoApp] = useState<App | null>(null);
   const [demoActor, setDemoActor] = useState<Actor>({ id: "demo-admin", role: "admin" });
   const [liveApp, setLiveApp] = useState<App | null>(null);
@@ -53,8 +55,10 @@ export function useBackend(): Backend {
     let active = true;
     void client.from("profiles").select("role").eq("id", session.user.id).single().then(({ data }) => {
       if (!active) return;
-      setRole(data?.role === "admin" ? "admin" : "hr");
-      setLiveApp(createHrApp({ clock: systemClock, ids: randomIds(), repositories: createSupabaseRepositories(client) }));
+      // Chỉ admin/hr mới vào được app; vai trò khác (pending, không có hồ sơ) → màn chờ cấp quyền
+      const granted = data?.role === "admin" || data?.role === "hr" ? data.role as Role : "pending";
+      setRole(granted);
+      if (granted !== "pending") setLiveApp(createHrApp({ clock: systemClock, ids: randomIds(), repositories: createSupabaseRepositories(client) }));
     });
     return () => { active = false; };
   }, [client, session]);
@@ -74,6 +78,7 @@ export function useBackend(): Backend {
   if (!client) return demoApp ? { status: "ready", mode: "demo", app: demoApp, actor: demoActor, setActor: setDemoActor, email: null, fileStore: null, signOut: async () => undefined } : { status: "loading" };
   if (session === undefined) return { status: "loading" };
   if (session === null) return { status: "signedOut", signIn };
+  if (role === "pending") return { status: "pending", email: session.user.email ?? null, signOut };
   if (!liveApp || !role) return { status: "loading" };
   return { status: "ready", mode: "live", app: liveApp, actor: { id: session.user.id, role }, setActor: () => undefined, email: session.user.email ?? null, fileStore: createStorageFileStore(client), signOut };
 }

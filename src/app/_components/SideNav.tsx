@@ -1,10 +1,9 @@
-import { BellRing, Briefcase, FileSpreadsheet, LogOut, PenLine, Settings, Users, type LucideIcon } from "lucide-react";
+import { BellRing, FileSpreadsheet, LogOut, PenLine, Settings, Users, type LucideIcon } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import type { PageView } from "./shared";
 
 const NAV_ITEMS: readonly (readonly [PageView, string, LucideIcon])[] = [
   ["employees", "Nhân sự", Users],
-  ["projects", "Dự án", Briefcase],
   ["alerts", "Chứng chỉ sắp hết hạn", BellRing],
   ["signatures", "Thư viện chữ ký", PenLine],
   ["reports", "FORM Báo cáo (Excel)", FileSpreadsheet],

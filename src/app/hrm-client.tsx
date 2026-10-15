@@ -24,14 +24,11 @@ import { useReportTemplates } from "./_components/useReportTemplates";
 import { useToast } from "./_components/Toast";
 import { EmployeeExtraPanel } from "./_components/EmployeeExtraPanel";
 import { ReasonDialog } from "./_components/ReasonDialog";
-import { ProjectsView } from "./_components/ProjectsView";
-import type { Project } from "../modules/projects/types";
-import type { ContactChoice } from "./_components/ContactPicker";
 import { downloadXlsx } from "./_components/profileExport";
 import { buildEmployeeRosterWorkbook } from "../modules/exports/employeeRoster";
 import { useBackend, type Backend } from "./_components/useBackend";
 import { getSupabaseClient } from "../lib/supabase/client";
-import { LoginScreen } from "./_components/LoginScreen";
+import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import type { FileFolder } from "./_components/fileStore";
 
 /** Chọn màn hình theo trạng thái: đang tải, đăng nhập (chế độ thật) hoặc vào app. */
@@ -39,6 +36,7 @@ export default function HrmClient() {
   const backend = useBackend();
   if (backend.status === "loading") return <div className="loading">Đang tải dữ liệu…</div>;
   if (backend.status === "signedOut") return <LoginScreen onSignIn={backend.signIn} />;
+  if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
   return <HrmWorkspace backend={backend} />;
 }
 
@@ -53,8 +51,6 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [rosterBusy, setRosterBusy] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchEmployees, setBatchEmployees] = useState<Employee[] | null>(null);
-  const [batchPreset, setBatchPreset] = useState<{ title: string; templateId: string | null; contact: ContactChoice; values: Record<string, string> } | undefined>(undefined);
-  const [projectDraft, setProjectDraft] = useState<string[] | null>(null);
   const [listTypes, setListTypes] = useState<{ key: string; name: string }[]>([]);
   const [selected, setSelected] = useState<Employee | null>(null);
   const setNotice = useToast();
@@ -255,10 +251,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   };
 
   /** Xuất Excel toàn bộ thông tin các nhân sự đã chọn (mỗi người một dòng + sheet chứng chỉ). */
-  const exportRoster = async (employeeIds: readonly string[] = selectedIds) => {
+  const exportRoster = async () => {
     setRosterBusy(true);
     try {
-      const result = await app.exports.employeeRoster(actor, { employeeIds });
+      const result = await app.exports.employeeRoster(actor, { employeeIds: selectedIds });
       if (!result.ok) { setNotice(issueText(result.errors[0]?.code ?? "EXPORT_SELECTION_INVALID"), "error"); return; }
       const bytes = await buildEmployeeRosterWorkbook(result.value);
       downloadXlsx(bytes, `DanhSachNhanSu_${result.value.employees.length}nguoi_${result.value.today.replaceAll("-", "")}.xlsx`);
@@ -266,15 +262,6 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không tạo được file Excel.", "error");
     } finally { setRosterBusy(false); }
-  };
-
-  /** Xuất hồ sơ cả đoàn của dự án: mở hộp xuất với FORM, chỉ huy trưởng, giá trị đã lưu. */
-  const exportProject = async (project: Project) => {
-    const results = await Promise.all(project.memberIds.map((id) => app.employees.get(actor, id)));
-    const members = results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []);
-    if (!members.length) { setNotice("Dự án chưa có nhân sự đang hoạt động.", "warning"); return; }
-    setBatchPreset({ title: project.name, templateId: project.templateId, contact: { employeeId: project.commanderId ?? "", relation: project.commanderRelation }, values: project.exportValues });
-    setBatchEmployees(members);
   };
 
   /** Chọn mọi nhân sự khớp bộ lọc (qua tất cả các trang). */
@@ -294,7 +281,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     <div className="app-shell">
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => { setView(key); setSelected(null); }} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
       <main className="main-content">
-        {view === "employees" && !selected && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} onCreateProject={() => { setProjectDraft([...selectedIds]); setView("projects"); }} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onOpen={(employee) => void openDetail(employee)} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && !selected && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onOpen={(employee) => void openDetail(employee)} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && selected && <EmployeeDetailView
           app={app}
           actor={actor}
@@ -328,7 +315,6 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onSaved={(employee, files) => { setSelected(employee); setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("employees", files); setNotice("Đã lưu thông tin bổ sung."); }}
         />}
         {view === "alerts" && <AlertsView app={app} actor={actor} certRows={certRows} onCertRowsChange={setCertRows} onOpenEmployee={(employeeId) => void openEmployeeById(employeeId)} setNotice={setNotice} />}
-        {view === "projects" && <ProjectsView app={app} actor={actor} templates={templates} setNotice={setNotice} draftMemberIds={projectDraft} onDraftConsumed={() => setProjectDraft(null)} onExport={(project) => void exportProject(project)} onExportRoster={(ids) => void exportRoster(ids)} />}
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
         {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} />}
         {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => setView("signatures")} sessionFiles={sessionFiles} />}
@@ -386,7 +372,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       />}
 
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
-      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} {...(batchPreset ? { preset: batchPreset } : {})} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => { setBatchEmployees(null); setBatchPreset(undefined); }} onGoToTemplates={() => { setBatchEmployees(null); setBatchPreset(undefined); setView("reports"); }} />}
+      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); setView("reports"); }} />}
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}

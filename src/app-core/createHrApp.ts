@@ -14,7 +14,6 @@ import { createExportUseCases } from "./use-cases/exports";
 import { createReminderUseCases } from "./use-cases/reminders";
 import { createSettingsUseCases } from "./use-cases/settings";
 import { createSignatureUseCases } from "./use-cases/signatures";
-import { createProjectUseCases } from "./use-cases/projects";
 
 export type { HrAppDeps, HrRepositories, Mailer } from "./context";
 export type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeListResult, EmployeeSort } from "./use-cases/employees";
@@ -31,7 +30,6 @@ export function createHrApp(deps: HrAppDeps) {
     certificates: certificateUseCases,
     certificateTypes: createCertificateTypeUseCases(ctx),
     signatures: createSignatureUseCases(ctx),
-    projects: createProjectUseCases(ctx),
     settings: createSettingsUseCases(ctx),
     exports: createExportUseCases(ctx),
     reminders: createReminderUseCases(ctx),

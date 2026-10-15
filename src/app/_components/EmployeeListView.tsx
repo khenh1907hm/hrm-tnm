@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowDownAZ, Briefcase, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, PenLine, Plus, Search, ShieldCheck, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, PenLine, Plus, Search, ShieldCheck, Users, X } from "lucide-react";
 import type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeSort } from "../../app-core/createHrApp";
 import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistSummary } from "../../modules/certificates/checklist";
@@ -114,7 +114,6 @@ export function EmployeeListView(props: {
   onExportRoster: () => void;
   rosterBusy: boolean;
   onExportSelected: () => void;
-  onCreateProject: () => void;
   onCreate: () => void;
   onOpen: (employee: Employee) => void;
   onRestore: (employee: Employee) => void;
@@ -203,7 +202,6 @@ export function EmployeeListView(props: {
           <span className="selection-actions">
             <button type="button" className="button success" disabled={props.rosterBusy} onClick={props.onExportRoster}><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> {props.rosterBusy ? "Đang tạo Excel…" : "Xuất Excel thông tin"}</button>
             <button type="button" className="button" onClick={props.onExportSelected}><FileDown className="ico" size={16} aria-hidden="true" /> Xuất hồ sơ theo mẫu</button>
-            <button type="button" className="button" onClick={props.onCreateProject}><Briefcase className="ico" size={16} aria-hidden="true" /> Tạo dự án</button>
             <button type="button" className="button ghost" onClick={() => onSelectedIdsChange([])}>Bỏ chọn</button>
           </span>
         </div>

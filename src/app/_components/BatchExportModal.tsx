@@ -18,20 +18,17 @@ type PersonResult = { employee: Employee; warnings: string[]; error?: string };
  * Xuất "Mẫu hồ sơ" cho một hoặc nhiều nhân sự: giá trị chung nhập một lần, sửa riêng cho người khác biệt;
  * một người → tệp .xlsx, nhiều người → một tệp .zip.
  */
-export function BatchExportModal(props: { app: App; actor: Actor; employees: readonly Employee[]; templates: readonly ExcelReportTemplate[]; sessionFiles: Readonly<Record<string, File>>; ensureFiles?: (certificates: readonly Certificate[], employee: Employee) => Promise<Readonly<Record<string, File>>>; onClose: () => void; onGoToTemplates: () => void; setNotice: SetNotice;
-  /** Thiết lập sẵn từ dự án: mẫu, chỉ huy trưởng, giá trị trường nhập khi xuất. */
-  preset?: { title: string; templateId: string | null; contact: ContactChoice; values: Record<string, string> } }) {
+export function BatchExportModal(props: { app: App; actor: Actor; employees: readonly Employee[]; templates: readonly ExcelReportTemplate[]; sessionFiles: Readonly<Record<string, File>>; ensureFiles?: (certificates: readonly Certificate[], employee: Employee) => Promise<Readonly<Record<string, File>>>; onClose: () => void; onGoToTemplates: () => void; setNotice: SetNotice }) {
   const { app, actor, employees, sessionFiles, setNotice } = props;
   const profileTemplates = useMemo(() => props.templates.filter((template): template is ProfileTemplate => Boolean(template.profile)), [props.templates]);
   const defaultsOf = (item: ProfileTemplate | undefined) => Object.fromEntries((item?.profile.customFields ?? []).map((field) => [field.key, field.defaultValue]));
-  const presetTemplate = profileTemplates.find((item) => item.id === props.preset?.templateId);
-  const [templateId, setTemplateId] = useState(presetTemplate?.id ?? profileTemplates[0]?.id ?? "");
+  const [templateId, setTemplateId] = useState(profileTemplates[0]?.id ?? "");
   const template = profileTemplates.find((item) => item.id === templateId);
   const exportDate = todayVN(systemClock);
-  const [shared, setShared] = useState<Record<string, string>>(() => ({ ...defaultsOf(presetTemplate ?? profileTemplates[0]), ...(presetTemplate ? props.preset?.values : {}) }));
+  const [shared, setShared] = useState<Record<string, string>>(() => defaultsOf(profileTemplates[0]));
   const [perPerson, setPerPerson] = useState<Record<string, Record<string, string>>>({});
   const [includeAttachments, setIncludeAttachments] = useState(true);
-  const [contactChoice, setContactChoice] = useState<ContactChoice>(props.preset?.contact ?? EMPTY_CONTACT);
+  const [contactChoice, setContactChoice] = useState<ContactChoice>(EMPTY_CONTACT);
   const [contact, setContact] = useState<Commander | null>(null);
   const employeeIds = useMemo(() => employees.map((employee) => employee.id), [employees]);
   const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
@@ -82,7 +79,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
       else if (output.length > 1) {
         const zip = new JSZip();
         for (const file of output) zip.file(file.name, file.bytes);
-        downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), zipFileName(props.preset?.title ?? template.name, exportDate, output.length));
+        downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), zipFileName(template.name, exportDate, output.length));
       }
       setResults(outcomes);
       const failed = outcomes.filter((item) => item.error).length;
@@ -95,7 +92,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
     <div className="modal-backdrop" role="presentation">
       <section className="modal-card batch-export" role="dialog" aria-modal="true" aria-labelledby="batch-export-title">
         <header>
-          <h2 id="batch-export-title">{props.preset ? `Xuất hồ sơ dự án · ${props.preset.title}` : "Xuất hồ sơ"} · {employees.length} nhân sự</h2>
+          <h2 id="batch-export-title">Xuất hồ sơ · {employees.length} nhân sự</h2>
           <button type="button" className="close" aria-label="Đóng" onClick={props.onClose}><X size={20} aria-hidden="true" /></button>
         </header>
         <div className="batch-export-body">

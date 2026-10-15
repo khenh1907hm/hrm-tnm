@@ -157,7 +157,8 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const result = certificates.flatMap((certificate) => {
         if (certificate.state !== "current") return [];
         const employee = employees.find((item) => item.id === certificate.employeeId);
-        if (!employee || employee.archivedAt !== null) return [];
+        // Người đã nghỉ việc hoặc đã lưu trữ không cần nhắc hạn (khớp với phần gửi email nhắc hạn)
+        if (!employee || employee.archivedAt !== null || employee.status === "resigned") return [];
         const daysLeft = diffDays(today(), certificate.expiryDate);
         if (daysLeft > 60) return [];
         const group: "expired" | "d30" | "d60" = daysLeft < 0 ? "expired" : daysLeft <= 30 ? "d30" : "d60";

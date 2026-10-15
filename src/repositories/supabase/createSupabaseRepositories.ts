@@ -6,7 +6,6 @@ import type { Commander } from "../../modules/commanders/types";
 import type { Employee } from "../../modules/employees/types";
 import type { HrSettings } from "../../modules/settings/types";
 import type { Signature } from "../../modules/signatures/types";
-import type { Project } from "../../modules/projects/types";
 import type { AuditRepository, ReminderLogEntry, ReminderLogRepository, Repository, SettingsRepository } from "../interfaces";
 
 type Versioned = { id: string; version: number };
@@ -115,6 +114,5 @@ export function createSupabaseRepositories(client: SupabaseClient) {
     signatures: new SupabaseDocRepository<Signature>(client, "signatures"),
     settings: new SupabaseSettingsRepository(client),
     reminders: new SupabaseReminderLogRepository(client),
-    projects: new SupabaseDocRepository<Project>(client, "projects", (value) => ({ name: value.name, archived_at: value.archivedAt })),
   };
 }

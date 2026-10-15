@@ -6,6 +6,7 @@ import type { Commander } from "../../modules/commanders/types";
 import { POSITIONS, type Position } from "../../modules/employees/types";
 import { reminderEmail } from "../../modules/reminders/email";
 import { issueText, type App, type SetNotice } from "./shared";
+import { ReasonDialog } from "./ReasonDialog";
 
 export function SettingsPanel(props: { app: App; actor: Actor; setNotice: SetNotice; onAddSignature: () => void; sessionFiles: Record<string, File> }) {
   const [section, setSection] = useState<"types" | "signatures" | "emails" | "commanders">("types");
@@ -16,6 +17,7 @@ export function SettingsPanel(props: { app: App; actor: Actor; setNotice: SetNot
   const [cmdForm, setCmdForm] = useState<{ name: string; role: string; phone: string; address: string }>({ name: "", role: "Chỉ huy trưởng công trường", phone: "", address: "" });
   const [cmdError, setCmdError] = useState("");
   const [types, setTypes] = useState<CertificateTypeRecord[]>([]);
+  const [hidingType, setHidingType] = useState<CertificateTypeRecord | null>(null);
   const [includeHidden, setIncludeHidden] = useState(false);
   const [editingType, setEditingType] = useState<CertificateTypeRecord | null>(null);
   const [typeFormOpen, setTypeFormOpen] = useState(false);
@@ -105,12 +107,14 @@ export function SettingsPanel(props: { app: App; actor: Actor; setNotice: SetNot
     if (!updatedOther.ok) { props.setNotice(issueText(updatedOther.errors[0]?.code ?? "CONFLICT")); return; }
     await refreshTypes();
   };
-  const hideType = async (type: CertificateTypeRecord) => {
-    const reason = window.prompt("Nhập lý do ẩn loại chứng chỉ:");
-    if (reason === null) return;
+  const hideType = (type: CertificateTypeRecord) => setHidingType(type);
+  const confirmHideType = async (type: CertificateTypeRecord, reason: string): Promise<string | null> => {
     const result = await props.app.certificateTypes.archive(props.actor, { id: type.id, expectedVersion: type.version, reason });
-    props.setNotice(result.ok ? "Đã ẩn loại chứng chỉ." : issueText(result.errors[0]?.code ?? "CTYPE_HAS_CURRENT_CERTIFICATES"));
+    if (!result.ok) return issueText(result.errors[0]?.code ?? "CTYPE_HAS_CURRENT_CERTIFICATES");
+    setHidingType(null);
+    props.setNotice("Đã ẩn loại chứng chỉ.", "success");
     await refreshTypes();
+    return null;
   };
   const saveSettings = async () => {
     const result = await props.app.settings.update(props.actor, { reminderEmails: emails, sendExpiredNotice, expectedVersion: settingsVersion });
@@ -149,5 +153,6 @@ export function SettingsPanel(props: { app: App; actor: Actor; setNotice: SetNot
     {section === "signatures" && <section className="panel detail-panel"><div className="page-head"><h2>Thư viện chữ ký</h2>{props.actor.role === "admin" && <button className="button primary" onClick={props.onAddSignature}>Thêm chữ ký</button>}</div><div className="signature-grid">{signatures.map((signature) => <div className="panel signature-card checkerboard" key={signature.id}>{signatureUrls[signature.id] ? <Image className="signature-image" src={signatureUrls[signature.id] ?? ""} width={300} height={110} unoptimized alt={`Chữ ký của ${signature.name}`} /> : <div className="signature-sample">Chưa có ảnh trong phiên này</div>}<b>{signature.name}</b><span>{signature.role}</span>{signature.isDefault && <span className="pill ok">Mặc định</span>}{props.actor.role === "admin" && <div className="button-row">{!signature.isDefault && <button className="button" onClick={async () => { const result = await props.app.signatures.setDefault(props.actor, signature.id); if (!result.ok) props.setNotice(issueText(result.errors[0]?.code ?? "SIGNATURE_NOT_FOUND")); await refreshSignatures(); }}>Đặt mặc định</button>}<button className="button danger" onClick={async () => { const result = await props.app.signatures.remove(props.actor, signature.id); props.setNotice(result.ok ? "Đã xóa chữ ký." : issueText(result.errors[0]?.code ?? "SIGNATURE_LAST")); await refreshSignatures(); }}>Xóa</button></div>}</div>)}</div></section>}
     {section === "commanders" && <section className="panel detail-panel"><div className="page-head"><h2>Chỉ huy trưởng công trường</h2>{props.actor.role === "admin" && <button className="button primary" onClick={() => { setEditingCmd(null); setCmdForm({ name: "", role: "Chỉ huy trưởng công trường", phone: "", address: "" }); setCmdError(""); setCmdFormOpen(true); }}>Thêm chỉ huy trưởng</button>}</div>{props.actor.role === "admin" && <label className="check-field"><input type="checkbox" checked={cmdIncludeHidden} onChange={(e) => setCmdIncludeHidden(e.target.checked)} /> Hiện chỉ huy đã ẩn</label>}<div className="table-scroll"><table><thead><tr><th>Họ và tên</th><th>Chức vụ</th><th>Điện thoại</th><th>Địa chỉ</th><th>Tình trạng</th><th>Thao tác</th></tr></thead><tbody>{cmdList.map((cmd) => <tr key={cmd.id}><td>{cmd.name}</td><td>{cmd.role}</td><td>{cmd.phone}</td><td>{cmd.address}</td><td>{cmd.archived ? <span className="pill bad">Đã ẩn</span> : <span className="pill ok">Đang dùng</span>}</td><td>{props.actor.role === "admin" && !cmd.archived && <><button className="button" onClick={() => { setEditingCmd(cmd); setCmdForm({ name: cmd.name, role: cmd.role, phone: cmd.phone, address: cmd.address }); setCmdError(""); setCmdFormOpen(true); }}>Sửa</button><button className="button danger" onClick={() => void archiveCommander(cmd)}>Ẩn</button></>}</td></tr>)}</tbody></table></div>{cmdFormOpen && props.actor.role === "admin" && <div className="type-edit-form"><label className="field"><span>Họ và tên</span><input value={cmdForm.name} onChange={(e) => setCmdForm({ ...cmdForm, name: e.target.value })} /></label><label className="field"><span>Chức vụ</span><input value={cmdForm.role} onChange={(e) => setCmdForm({ ...cmdForm, role: e.target.value })} /></label><label className="field"><span>Số điện thoại</span><input value={cmdForm.phone} onChange={(e) => setCmdForm({ ...cmdForm, phone: e.target.value })} /></label><label className="field"><span>Địa chỉ</span><input value={cmdForm.address} onChange={(e) => setCmdForm({ ...cmdForm, address: e.target.value })} /></label>{cmdError && <p className="form-error">{cmdError}</p>}<button className="button primary" onClick={() => void saveCommander()}>Lưu chỉ huy trưởng</button><button className="button" onClick={() => { setCmdFormOpen(false); setEditingCmd(null); }}>Hủy</button></div>}</section>}
     {section === "emails" && <section className="panel detail-panel"><h2>Địa chỉ nhận nhắc hạn</h2><div className="email-entry"><input aria-label="Địa chỉ email mới" value={emailDraft} disabled={props.actor.role !== "admin"} onChange={(event) => setEmailDraft(event.target.value)} /><button className="button" onClick={addEmail} disabled={props.actor.role !== "admin"}>Thêm địa chỉ</button></div>{emailError && <small className="form-error">{emailError}</small>}{emails.map((email) => <div className="email-entry" key={email}><span>{email}</span>{props.actor.role === "admin" && <button className="button" onClick={() => setEmails((current) => current.filter((item) => item !== email))}>Xóa</button>}</div>)}<p className="muted">Nhắc trước 30 ngày</p><details><summary>Xem trước email nhắc hạn</summary>{sample ? <><h3>{sample.subject}</h3><pre>{sample.text}</pre></> : <p>Chưa có chứng chỉ nhắc hạn để tạo email mẫu.</p>}</details>{props.actor.role === "admin" && <button className="button primary" onClick={() => void saveSettings()}>Lưu cài đặt</button>}</section>}
+    {hidingType && <ReasonDialog title={`Ẩn loại chứng chỉ “${hidingType.name}”`} description="Loại chứng chỉ sẽ không còn hiện khi thêm chứng chỉ mới. Không ẩn được nếu còn chứng chỉ hiện hành thuộc loại này." confirmLabel="Ẩn loại chứng chỉ" onConfirm={(reason) => confirmHideType(hidingType, reason)} onClose={() => setHidingType(null)} />}
   </>;
 }

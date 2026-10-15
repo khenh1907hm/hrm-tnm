@@ -5,8 +5,7 @@ import { failure, issue, type Result } from "../lib/result";
 import { maskCccd } from "../lib/vietnam/cccd";
 import type { Actor, Permission } from "../modules/auth/permissions";
 import { can } from "../modules/auth/permissions";
-import type { AuditRepository, CertificateRepository, CertificateTypeRepository, CommanderRepository, EmployeeRepository, ProjectRepository, ReminderLogRepository, SettingsRepository, SignatureRepository } from "../repositories/interfaces";
-import type { Project } from "../modules/projects/types";
+import type { AuditRepository, CertificateRepository, CertificateTypeRepository, CommanderRepository, EmployeeRepository, ReminderLogRepository, SettingsRepository, SignatureRepository } from "../repositories/interfaces";
 import { MemoryReminderLogRepository, MemoryRepository, MemorySettingsRepository } from "../repositories/memory/repository";
 import type { Signature } from "../modules/signatures/types";
 
@@ -14,7 +13,7 @@ export interface Mailer { send(message: { to: string[]; subject: string; text: s
 export interface HrRepositories {
   employees: EmployeeRepository; certificates: CertificateRepository; certificateTypes: CertificateTypeRepository; commanders: CommanderRepository; audit: AuditRepository;
   /** Không truyền thì dùng bản lưu trong bộ nhớ. */
-  signatures?: SignatureRepository; settings?: SettingsRepository; reminders?: ReminderLogRepository; projects?: ProjectRepository;
+  signatures?: SignatureRepository; settings?: SettingsRepository; reminders?: ReminderLogRepository;
 }
 export type HrAppDeps = { clock: Clock; ids: IdGenerator; repositories?: HrRepositories; mailer?: Mailer; profileBaseUrl?: string; commanderIds?: string[] };
 
@@ -33,7 +32,6 @@ export function createHrAppContext(deps: HrAppDeps, given: HrRepositories) {
     signatures: given.signatures ?? new MemoryRepository<Signature>(),
     settings: given.settings ?? new MemorySettingsRepository(),
     reminders: given.reminders ?? new MemoryReminderLogRepository(),
-    projects: given.projects ?? new MemoryRepository<Project>(),
   };
   const nowDate = () => deps.clock.now();
   const today = () => todayVN(deps.clock);
