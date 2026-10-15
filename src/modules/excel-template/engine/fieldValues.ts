@@ -1,4 +1,5 @@
 import { formatDate, formatTenure, monthsBetween } from "../../../lib/dates";
+import { currentSafetyGroups, formatSafetyGroups } from "../../certificates/safetyGroup";
 import type { Certificate } from "../../certificates/types";
 import type { Commander } from "../../commanders/types";
 import type { Employee } from "../../employees/types";
@@ -57,6 +58,7 @@ export type FieldValueSource = {
 export function buildSystemValues(source: FieldValueSource): Record<string, string> {
   const { employee, commander, exportDate } = source;
   const months = monthsBetween(employee.startDate, exportDate);
+  const safetyGroups = currentSafetyGroups(employee, source.certificates, exportDate);
   const values: Record<string, string> = {
     code: employee.code,
     fullName: employee.name,
@@ -72,7 +74,7 @@ export function buildSystemValues(source: FieldValueSource): Record<string, stri
     currentAddress: employee.currentAddress ?? "",
     position: employee.position,
     startDate: formatDate(employee.startDate),
-    safetyGroup: employee.group === null ? "" : `Nhóm ${employee.group}`,
+    safetyGroup: formatSafetyGroups(safetyGroups),
     age: String(ageOn(employee.dob, exportDate)),
     experience: months === null ? "" : formatTenure(months),
     exportDate: formatDate(exportDate),

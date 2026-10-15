@@ -42,13 +42,19 @@ export interface ExcelCellMapping {
   field: ExcelFieldKey;
 }
 
-export type ProfileCustomFieldKind = "text" | "date" | "checkbox";
+export type ProfileCustomFieldKind = "text" | "date" | "checkbox" | "image";
+/** Giá trị lấy từ đâu: cố định theo mẫu, nhập khi xuất, hoặc lưu trong hồ sơ từng nhân sự. */
+export type ProfileFieldScope = "template" | "export" | "employee";
 export interface ProfileCustomField {
   key: string;
   label: string;
   kind: ProfileCustomFieldKind;
-  /** Giá trị dùng chung (ISO yyyy-mm-dd với kiểu ngày, "true"/"" với ô đánh dấu); sửa được khi xuất. */
+  /** Giá trị dùng chung (ISO yyyy-mm-dd với kiểu ngày, "true"/"" với ô đánh dấu, data URL với ảnh cố định); sửa được khi xuất. */
   defaultValue: string;
+  /** Ô (vd "B12") hoặc vùng ô cho ảnh (vd "C19:Z33") — app ghi thẳng vào đây, không cần {{mã}} trong Excel. */
+  target?: string;
+  /** Mặc định "export" (trường đến từ {{mã}} trong Excel). */
+  scope?: ProfileFieldScope;
 }
 export interface ProfileImageSlot {
   field: string;

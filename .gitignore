@@ -45,3 +45,6 @@ next-env.d.ts
 
 # Mẫu hồ sơ khách hàng (có logo, chữ ký, con dấu) — không đưa lên git
 /public/templates/
+
+# Ghi chú triển khai chỉ lưu trên máy
+*.local.md

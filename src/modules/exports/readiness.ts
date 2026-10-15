@@ -8,7 +8,7 @@ export function checkWorkerProfileReadiness(employee: Employee, signDate: string
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   if (employee.archivedAt !== null) errors.push(issue("EMP_NOT_READY", "employeeId"));
-  for (const field of ["name", "dob", "gender", "home", "address", "phone", "startDate", "emergencyContactId"] as const) {
+  for (const field of ["name", "dob", "gender", "home", "address", "phone", "startDate"] as const) {
     if (!employee[field]) errors.push(issue("EXPORT_FIELD_REQUIRED", field));
   }
   if (!isValidISODate(signDate)) errors.push(issue("SIGN_DATE_INVALID", "signDate"));

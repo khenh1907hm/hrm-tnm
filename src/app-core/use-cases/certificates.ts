@@ -7,10 +7,11 @@ import { getCertificateChecklist } from "../../modules/certificates/checklist";
 import { certificateDisplayName, displayCertificateTitle, hasCertificateNumberConflict, hasCurrentTitleConflict, normalizeCertificateTitle, validateCertificate, validateCertificateAttachments, type CertificateInput } from "../../modules/certificates/rules";
 import { certificateInputSchema } from "../../modules/certificates/schema";
 import type { Certificate, FileRef, SupplementaryFile } from "../../modules/certificates/types";
+import { certificateTitleFor, normalizeSafetyGroup } from "../../modules/certificates/safetyGroup";
 import { err, type HrAppContext } from "../context";
 
 export function createCertificateUseCases(ctx: HrAppContext) {
-  const { deps, repositories, state: { sentReminderKeys, sentReminderDates }, today, has, writeAudit, getEmployee, getCertificate } = ctx;
+  const { deps, repositories, today, has, writeAudit, getEmployee, getCertificate, sentReminders } = ctx;
 
   const certificateUseCases = {
     add: async (actor: Actor, input: CertificateInput & { employeeId: string }): Promise<Result<Certificate>> => {
@@ -22,7 +23,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const all = await repositories.certificates.list();
       const allTypes = await repositories.certificateTypes.list();
       const availableTypes = allTypes.filter((type) => !type.archived);
-      const title = displayCertificateTitle(shape.data.title);
+      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup));
       const sameTypeCurrent = all.some((item) => item.employeeId === input.employeeId && item.type === input.type && item.state === "current");
       if (hasCertificateNumberConflict(input.employeeId, input.type, input.number, all)) return err("CERT_DUPLICATE_NUMBER", "number");
       const candidate = { id: "", employeeId: input.employeeId, type: input.type, title, state: "current" as const };
@@ -33,7 +34,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
       const document = normalizedInput.document;
       if (!document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
-      const value: Certificate = { id: deps.ids.next(), employeeId: input.employeeId, type: input.type, title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, state: "current", version: 1, replacedBy: null, archiveReason: null };
+      const value: Certificate = { id: deps.ids.next(), employeeId: input.employeeId, type: input.type, title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, state: "current", version: 1, replacedBy: null, archiveReason: null, safetyGroup: normalizeSafetyGroup(input.type, shape.data.safetyGroup) };
       await repositories.certificates.insert(value);
       await writeAudit(actor, "certificate.add", "certificate", value.id, null, value);
       const warnings = [...validation.warnings];
@@ -48,7 +49,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       if (!before) return err("CERT_NOT_FOUND");
       if (before.version !== input.expectedVersion) return err("CONFLICT");
       if (before.state !== "current") return err("CERT_NOT_CURRENT");
-      if (!hasValidRenewalIdentity(before.type, before.title, input.type, shape.data.title)) return err("CERT_RENEW_TITLE_INVALID", "title");
+      if (!hasValidRenewalIdentity(before.type, before.title, input.type, certificateTitleFor(before.type, shape.data.title, shape.data.safetyGroup ?? before.safetyGroup))) return err("CERT_RENEW_TITLE_INVALID", "title");
       if (input.expiryDate <= before.expiryDate || (input.issueDate && before.issueDate && input.issueDate < before.issueDate)) return err("CERT_RENEW_DATE_INVALID", "expiryDate");
       const employee = await getEmployee(before.employeeId);
       if (!employee) return err("EMP_NOT_FOUND");
@@ -62,7 +63,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const document = normalizedInput.document;
       if (!document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
       const replacementId = deps.ids.next();
-      const replacement: Certificate = { id: replacementId, employeeId: before.employeeId, type: before.type, title: before.title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, state: "current", version: 1, replacedBy: null, archiveReason: null };
+      const replacement: Certificate = { id: replacementId, employeeId: before.employeeId, type: before.type, title: before.title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, state: "current", version: 1, replacedBy: null, archiveReason: null, safetyGroup: normalizeSafetyGroup(before.type, shape.data.safetyGroup ?? before.safetyGroup) };
       const old = { ...before, state: "replaced" as const, replacedBy: replacement.id, version: before.version + 1 };
       if (!await repositories.certificates.replaceAndInsert(old, replacement, input.expectedVersion)) return err("CONFLICT");
       await writeAudit(actor, "certificate.renew", "certificate", replacement.id, before, replacement);
@@ -80,7 +81,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const employee = await getEmployee(before.employeeId);
       if (!employee) return err("EMP_NOT_FOUND");
       const all = await repositories.certificates.list();
-      const title = displayCertificateTitle(shape.data.title);
+      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup));
       const otherCurrentSameType = all.some((item) => item.id !== before.id && item.employeeId === before.employeeId && item.type === before.type && item.state === "current");
       if (otherCurrentSameType && !title) return err("CERT_TITLE_REQUIRED", "title");
       if (hasCertificateNumberConflict(before.employeeId, before.type, input.number, all, before.id)) return err("CERT_DUPLICATE_NUMBER", "number");
@@ -92,7 +93,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
       const document = normalizedInput.document;
       if (!document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
-      const value: Certificate = { ...before, type: input.type, title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, version: before.version + 1 };
+      const value: Certificate = { ...before, type: input.type, title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, version: before.version + 1, safetyGroup: normalizeSafetyGroup(input.type, shape.data.safetyGroup === undefined ? before.safetyGroup : shape.data.safetyGroup) };
       if (!await repositories.certificates.replace(value, input.expectedVersion)) return err("CONFLICT");
       await writeAudit(actor, "certificate.update", "certificate", value.id, before, value);
       return success(value, validation.warnings);
@@ -152,6 +153,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const employees = await repositories.employees.list();
       const certificates = await repositories.certificates.list();
       const certificateTypes = await repositories.certificateTypes.list();
+      const { keys: sentReminderKeys, dates: sentReminderDates } = await sentReminders();
       const result = certificates.flatMap((certificate) => {
         if (certificate.state !== "current") return [];
         const employee = employees.find((item) => item.id === certificate.employeeId);
@@ -180,7 +182,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const all = await repositories.certificates.list();
       const allTypes = await repositories.certificateTypes.list();
       const availableTypes = allTypes.filter((type) => !type.archived);
-      const title = displayCertificateTitle(shape.data.title);
+      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup));
       const sameTypeCurrent = all.some((item) => item.id !== input.id && item.employeeId === input.employeeId && item.type === input.type && item.state === "current");
       if (hasCertificateNumberConflict(input.employeeId, input.type, input.number, all, input.id)) return err("CERT_DUPLICATE_NUMBER", "number");
       const candidate = { id: input.id ?? "", employeeId: input.employeeId, type: input.type, title, state: "current" as const };

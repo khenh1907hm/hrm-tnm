@@ -348,7 +348,7 @@ export function ReportTemplatesPanel({
                 {tpl.profile ? (
                   <div style={{ marginTop: "4px", color: "#64748b" }}>
                     <b>{tpl.profile.placeholders.length}</b> trường · <b>{tpl.profile.imageSlots.length}</b> vùng ảnh · <b>{tpl.profile.attachments.length}</b> loại chứng chỉ đính kèm
-                    <div style={{ marginTop: "4px" }}>Xuất tại hồ sơ nhân sự → “Xuất Excel theo mẫu”.</div>
+                    <div style={{ marginTop: "4px" }}>Xuất tại hồ sơ nhân sự → “Xuất hồ sơ theo mẫu”.</div>
                   </div>
                 ) : <div style={{ marginTop: "4px", color: "#64748b" }}>
                   <b>Các ô cấu hình:</b>{" "}

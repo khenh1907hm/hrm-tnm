@@ -1,5 +1,6 @@
-import type { Repository, AuditRepository } from "../interfaces";
+import type { Repository, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
 import type { AuditEvent } from "../../modules/audit/types";
+import type { HrSettings } from "../../modules/settings/types";
 
 export class MemoryRepository<T extends { id: string; version: number }> implements Repository<T> {
   private readonly records = new Map<string, T>();
@@ -14,6 +15,7 @@ export class MemoryRepository<T extends { id: string; version: number }> impleme
     if (!current || current.version !== expectedVersion) return false;
     this.records.set(value.id, structuredClone(value)); return true;
   }
+  async remove(id: string): Promise<boolean> { return this.records.delete(id); }
   async replaceAndInsert(before: T, after: T, expectedVersion: number): Promise<boolean> {
     const current = this.records.get(before.id);
     if (!current || current.version !== expectedVersion || this.records.has(after.id)) return false;
@@ -28,3 +30,21 @@ export class MemoryAuditRepository implements AuditRepository {
   async append(event: AuditEvent): Promise<void> { this.events.push(structuredClone(event)); }
   async list(): Promise<AuditEvent[]> { return this.events.map((event) => structuredClone(event)); }
 }
+
+export const DEFAULT_SETTINGS: HrSettings = { reminderEmails: [], sendExpiredNotice: false, reminderDays: 30, version: 0 };
+
+export class MemorySettingsRepository implements SettingsRepository {
+  private value: HrSettings = structuredClone(DEFAULT_SETTINGS);
+  async get(): Promise<HrSettings> { return structuredClone(this.value); }
+  async replace(value: HrSettings, expectedVersion: number): Promise<boolean> {
+    if (this.value.version !== expectedVersion) return false;
+    this.value = structuredClone(value); return true;
+  }
+}
+
+export class MemoryReminderLogRepository implements ReminderLogRepository {
+  private readonly entries: ReminderLogEntry[] = [];
+  async list(): Promise<ReminderLogEntry[]> { return this.entries.map((entry) => ({ ...entry })); }
+  async add(entry: ReminderLogEntry): Promise<void> { this.entries.push({ ...entry }); }
+}
+

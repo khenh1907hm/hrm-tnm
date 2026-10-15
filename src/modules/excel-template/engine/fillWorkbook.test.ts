@@ -125,6 +125,21 @@ describe("fillWorkbook", () => {
     expect(sheet.getImages()).toHaveLength(2);
   });
 
+  it("writes custom field values straight into target cells, keeping their format", async () => {
+    const template = await buildTemplate();
+    const { bytes, warnings } = await fillWorkbook({
+      template, sheetName: "Phieu", printArea: "A1:F20", values: { fullNameUpper: "A", exportDate: "B", "cert:atld": "☑", missingField: "x" },
+      imageSlots: [], images: {}, attachments: [],
+      cellValues: [{ address: "C9", field: "contractor", value: "Thiên Nhật Minh" }, { address: "B10", field: "badgeNo", value: "" }, { address: "E4", field: "merged", value: "Gộp" }],
+    });
+    const before = await open(template);
+    const after = await open(bytes);
+    expect(after.getCell("C9").value).toBe("Thiên Nhật Minh");
+    expect(styleOf(after.getCell("C9"))).toBe(styleOf(before.getCell("C9")));
+    expect(after.getCell("D4").value).toBe("Gộp");
+    expect(warnings).toEqual([{ location: "B10", field: "badgeNo" }]);
+  });
+
   it("rejects a template without any sheet", async () => {
     const empty = new ExcelJS.Workbook();
     await expect(fillWorkbook({ template: new Uint8Array(await empty.xlsx.writeBuffer()), printArea: "A1:B2", values: {}, imageSlots: [], images: {}, attachments: [] })).rejects.toThrow("không có sheet");

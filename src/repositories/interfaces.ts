@@ -3,6 +3,9 @@ import type { Certificate } from "../modules/certificates/types";
 import type { AuditEvent } from "../modules/audit/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
 import type { Commander } from "../modules/commanders/types";
+import type { HrSettings } from "../modules/settings/types";
+import type { Signature } from "../modules/signatures/types";
+import type { Project } from "../modules/projects/types";
 
 export interface Repository<T extends { id: string; version: number }> {
   get(id: string): Promise<T | null>;
@@ -16,7 +19,22 @@ export type CertificateRepository = Repository<Certificate> & {
 };
 export type CertificateTypeRepository = Repository<CertificateTypeRecord>;
 export type CommanderRepository = Repository<Commander>;
+export type ProjectRepository = Repository<Project>;
 export interface AuditRepository {
   append(event: AuditEvent): Promise<void>;
   list(): Promise<AuditEvent[]>;
 }
+export type SignatureRepository = Repository<Signature> & {
+  /** Xóa hẳn chữ ký; trả về false nếu không tồn tại. */
+  remove(id: string): Promise<boolean>;
+};
+export interface SettingsRepository {
+  get(): Promise<HrSettings>;
+  replace(value: HrSettings, expectedVersion: number): Promise<boolean>;
+}
+export type ReminderLogEntry = { identity: string; certificateId: string; sentOn: string };
+export interface ReminderLogRepository {
+  list(): Promise<ReminderLogEntry[]>;
+  add(entry: ReminderLogEntry): Promise<void>;
+}
+

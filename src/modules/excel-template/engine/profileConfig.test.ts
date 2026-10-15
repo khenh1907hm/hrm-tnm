@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileTemplateConfig } from "../types";
-import { certificateTypeOf, customValues, fieldLabel, isCertificateKey, isCustomKey, profileConfigFromScan } from "./profileConfig";
+import { certificateTypeOf, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, profileConfigFromScan, targetCellValues } from "./profileConfig";
 import type { TemplateScan } from "./scanTemplate";
 
 const scan: TemplateScan = {
@@ -59,5 +59,35 @@ describe("field helpers", () => {
     ] };
     expect(customValues(fields)).toEqual({ projectStartDate: "20/10/2026", contractorName: "TNM", hasBadge: "☑" });
     expect(customValues(fields, { projectStartDate: "2026-11-01", hasBadge: "" })).toEqual({ projectStartDate: "01/11/2026", contractorName: "TNM", hasBadge: "☐" });
+  });
+});
+
+describe("user-defined fields", () => {
+  const fields = { customFields: [
+    { key: "badgeNo", label: "Số thẻ công trường", kind: "text" as const, defaultValue: "", target: "b12", scope: "employee" as const },
+    { key: "badgeDate", label: "Ngày cấp thẻ", kind: "date" as const, defaultValue: "", target: "C12", scope: "employee" as const },
+    { key: "contractorLogo", label: "Logo nhà thầu", kind: "image" as const, defaultValue: "data:image/png;base64,AA==", target: "ad54:ay62", scope: "template" as const },
+    { key: "badgePhoto", label: "Ảnh thẻ ra vào", kind: "image" as const, defaultValue: "", scope: "employee" as const },
+    { key: "projectStartDate", label: "Ngày bắt đầu", kind: "date" as const, defaultValue: "2026-10-20" },
+  ] };
+
+  it("reads employee-scoped values from the employee record and skips images", () => {
+    expect(customValues(fields, { projectStartDate: "2026-11-01", badgeNo: "bỏ qua" }, { badgeNo: "TK-0099", badgeDate: "2026-09-01" })).toEqual({ badgeNo: "TK-0099", badgeDate: "01/09/2026", projectStartDate: "01/11/2026" });
+    expect(customValues(fields)).toEqual({ badgeNo: "", badgeDate: "", projectStartDate: "20/10/2026" });
+  });
+
+  it("maps target cells and image ranges", () => {
+    expect(targetCellValues(fields, { badgeNo: "TK-0099", badgeDate: "01/09/2026" })).toEqual({ B12: "TK-0099", C12: "01/09/2026" });
+    expect(targetCellValues(fields, {})).toEqual({ B12: "", C12: "" });
+    expect(customImageSlots(fields)).toEqual([{ field: "contractorLogo", range: "AD54:AY62" }]);
+  });
+
+  it("builds readable unique keys from labels and keeps added fields when the file is uploaded again", () => {
+    expect(fieldKeyFromLabel("Logo nhà thầu", [])).toBe("logoNhaThau");
+    expect(fieldKeyFromLabel("Logo nhà thầu", ["logoNhaThau"])).toBe("logoNhaThau2");
+    expect(fieldKeyFromLabel("123 !!!", [])).toBe("truong");
+    expect(fieldKeyFromLabel("2 Ảnh thẻ", [])).toBe("anhThe");
+    const previous = { ...profileConfigFromScan(scan), customFields: [...profileConfigFromScan(scan).customFields, fields.customFields[0]!] };
+    expect(profileConfigFromScan(scan, previous).customFields.map((field) => field.key)).toEqual(["projectStartDate", "contractorName", "badgeNo"]);
   });
 });

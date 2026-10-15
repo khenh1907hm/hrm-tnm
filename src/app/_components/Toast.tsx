@@ -46,7 +46,8 @@ function ToastView({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
       <Icon className="toast-icon" size={20} aria-hidden="true" />
       <p className="toast-message"><span className="sr-only">{LABELS[toast.variant]}: </span>{toast.message}</p>
       <button type="button" className="toast-close" aria-label="Đóng thông báo" onClick={() => onDismiss(toast.id)}><X size={16} aria-hidden="true" /></button>
-      <span className="toast-progress" aria-hidden="true" />
+      {/* Viền đếm giờ chạy quanh khung; pathLength=100 để thời lượng không phụ thuộc kích thước */}
+      <svg className="toast-ring" aria-hidden="true" focusable="false"><rect pathLength={100} /></svg>
     </div>
   );
 }

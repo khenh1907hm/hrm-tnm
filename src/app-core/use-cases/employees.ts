@@ -5,10 +5,24 @@ import { maskCccd } from "../../lib/vietnam/cccd";
 import type { Actor } from "../../modules/auth/permissions";
 import { employeeInputSchema } from "../../modules/employees/schema";
 import { validateEmployee } from "../../modules/employees/rules";
-import type { Employee, EmployeeInput } from "../../modules/employees/types";
+import type { Employee, EmployeeInput, EmploymentStatus } from "../../modules/employees/types";
+import type { FileRef } from "../../modules/certificates/types";
 import { err, type HrAppContext } from "../context";
 
-export type EmployeeListInput = { includeArchived?: boolean; page?: number; pageSize?: number; query?: string; position?: string; status?: Employee["status"]; missingRequiredCertificate?: boolean; expiringCertificates?: boolean; expiredCertificates?: boolean };
+/** Tình trạng chứng chỉ của một nhân sự (dùng cho bộ lọc nhiều lựa chọn). */
+export type CertificateHealth = "ok" | "missing" | "expiring" | "expired";
+export type EmployeeSort = "code" | "name" | "startDate";
+export type EmployeeListInput = {
+  includeArchived?: boolean; page?: number; pageSize?: number; query?: string;
+  /** Lọc một giá trị (giữ để tương thích). */
+  position?: string; status?: Employee["status"]; missingRequiredCertificate?: boolean; expiringCertificates?: boolean; expiredCertificates?: boolean; certificateType?: string;
+  /** Lọc nhiều giá trị: trong một nhóm là "hoặc", giữa các nhóm là "và". */
+  positions?: readonly string[]; statuses?: readonly EmploymentStatus[]; certificateHealth?: readonly CertificateHealth[];
+  certificateTypes?: readonly string[]; certificateTypeMode?: "any" | "all";
+  sort?: EmployeeSort; sortDir?: "asc" | "desc";
+};
+export type EmployeeFacets = { positions: Record<string, number>; statuses: Record<string, number>; certificateHealth: Record<CertificateHealth, number>; certificateTypes: Record<string, number> };
+export type EmployeeListResult = { items: Employee[]; page: number; pageSize: number; total: number; pageCount: number; facets: EmployeeFacets };
 
 export function createEmployeeUseCases(ctx: HrAppContext) {
   const { deps, repositories, today, nowDate, has, writeAudit, getEmployee, getCommanderIds } = ctx;
@@ -83,32 +97,83 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       if (!employee) return err("EMP_NOT_FOUND");
       return success({ ...employee, cccd: maskCccd(employee.cccd) });
     },
-    list: async (actor: Actor, input: EmployeeListInput = {}): Promise<Result<{ items: Employee[]; page: number; pageSize: number; total: number }>> => {
+    list: async (actor: Actor, input: EmployeeListInput = {}): Promise<Result<EmployeeListResult>> => {
       if (!has(actor, "employeeRead")) return err("FORBIDDEN");
-      const page = Math.max(1, Math.floor(input.page ?? 1));
       const pageSize = Math.min(100, Math.max(1, Math.floor(input.pageSize ?? 20)));
-      const query = normalizeText(input.query ?? "");
-      const tokens = query.split(/\s+/).filter(Boolean);
+      const tokens = normalizeText(input.query ?? "").split(/\s+/).filter(Boolean);
       const [allEmployees, types, certificates] = await Promise.all([repositories.employees.list(), repositories.certificateTypes.list(), repositories.certificates.list()]);
-      const matches = allEmployees.filter((employee) => {
-        if (!input.includeArchived && employee.archivedAt !== null) return false;
-        if (input.position && employee.position !== input.position) return false;
-        if (input.status && employee.status !== input.status) return false;
-        if (input.missingRequiredCertificate && !types.some((type) => !type.archived && type.requiredForPositions.includes(employee.position) && !certificates.some((certificate) => certificate.employeeId === employee.id && certificate.type === type.key && certificate.state === "current"))) return false;
-        const currentCertificates = certificates.filter((certificate) => certificate.employeeId === employee.id && certificate.state === "current");
-        if (input.expiringCertificates && !currentCertificates.some((certificate) => {
-          const daysLeft = diffDays(today(), certificate.expiryDate);
-          return daysLeft >= 0 && daysLeft <= 30;
-        })) return false;
-        if (input.expiredCertificates && !currentCertificates.some((certificate) => diffDays(today(), certificate.expiryDate) < 0)) return false;
-        const searchable = [normalizeText(employee.name), normalizeText(employee.code), employee.phone, employee.cccd].join(" ");
-        return tokens.every((token) => searchable.includes(token));
-      });
-      matches.sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }));
+      const todayValue = today();
+      const positions = [...(input.positions ?? []), ...(input.position ? [input.position] : [])];
+      const statuses = [...(input.statuses ?? []), ...(input.status ? [input.status] : [])];
+      const healthFilter = input.certificateHealth ?? [];
+      // Cờ cũ: phải thỏa đồng thời (và)
+      const requiredHealth: CertificateHealth[] = [...(input.missingRequiredCertificate ? ["missing" as const] : []), ...(input.expiringCertificates ? ["expiring" as const] : []), ...(input.expiredCertificates ? ["expired" as const] : [])];
+      const typeFilter = [...(input.certificateTypes ?? []), ...(input.certificateType ? [input.certificateType] : [])];
+      const typeMode = input.certificateTypeMode ?? "any";
+
+      // Tính sẵn cho từng người: tình trạng chứng chỉ và các loại còn hạn
+      type Row = { employee: Employee; health: Set<CertificateHealth>; validTypes: Set<string> };
+      const rows: Row[] = allEmployees
+        .filter((employee) => (input.includeArchived || employee.archivedAt === null) && tokens.every((token) => [normalizeText(employee.name), normalizeText(employee.code), employee.phone, employee.cccd].join(" ").includes(token)))
+        .map((employee) => {
+          const current = certificates.filter((certificate) => certificate.employeeId === employee.id && certificate.state === "current");
+          const health = new Set<CertificateHealth>();
+          if (types.some((type) => !type.archived && type.requiredForPositions.includes(employee.position) && !current.some((certificate) => certificate.type === type.key))) health.add("missing");
+          for (const certificate of current) {
+            const daysLeft = diffDays(todayValue, certificate.expiryDate);
+            if (daysLeft < 0) health.add("expired"); else if (daysLeft <= 30) health.add("expiring");
+          }
+          if (!health.size) health.add("ok");
+          return { employee, health, validTypes: new Set(current.filter((certificate) => certificate.expiryDate >= todayValue).map((certificate) => certificate.type)) };
+        });
+
+      type Group = "positions" | "statuses" | "certificateHealth" | "certificateTypes";
+      const tests: Record<Group, (row: Row) => boolean> = {
+        positions: (row) => !positions.length || positions.includes(row.employee.position),
+        statuses: (row) => !statuses.length || statuses.includes(row.employee.status),
+        certificateHealth: (row) => (!healthFilter.length || healthFilter.some((value) => row.health.has(value))) && requiredHealth.every((value) => row.health.has(value)),
+        certificateTypes: (row) => !typeFilter.length || (typeMode === "all" ? typeFilter.every((type) => row.validTypes.has(type)) : typeFilter.some((type) => row.validTypes.has(type))),
+      };
+      const groups = Object.keys(tests) as Group[];
+      const passesExcept = (row: Row, skip: Group | null) => groups.every((group) => group === skip || tests[group](row));
+
+      // Số đếm cạnh mỗi ô tick: áp dụng mọi nhóm lọc khác, trừ chính nhóm đó
+      const facets: EmployeeFacets = { positions: {}, statuses: {}, certificateHealth: { ok: 0, missing: 0, expiring: 0, expired: 0 }, certificateTypes: {} };
+      const bump = (bucket: Record<string, number>, key: string) => { bucket[key] = (bucket[key] ?? 0) + 1; };
+      for (const row of rows) {
+        if (passesExcept(row, "positions")) bump(facets.positions, row.employee.position);
+        if (passesExcept(row, "statuses")) bump(facets.statuses, row.employee.status);
+        if (passesExcept(row, "certificateHealth")) for (const value of row.health) bump(facets.certificateHealth, value);
+        if (passesExcept(row, "certificateTypes")) for (const type of row.validTypes) bump(facets.certificateTypes, type);
+      }
+
+      const direction = input.sortDir === "desc" ? -1 : 1;
+      const sortKey = input.sort ?? "code";
+      const compare = (a: Employee, b: Employee) => sortKey === "name" ? a.name.localeCompare(b.name, "vi") : sortKey === "startDate" ? a.startDate.localeCompare(b.startDate) : 0;
+      const matches = rows.filter((row) => passesExcept(row, null)).map((row) => row.employee)
+        .sort((a, b) => (compare(a, b) || a.code.localeCompare(b.code, "en", { numeric: true })) * direction);
+      const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
+      const page = Math.min(pageCount, Math.max(1, Math.floor(input.page ?? 1)));
       const items = matches.slice((page - 1) * pageSize, page * pageSize).map((employee) => ({ ...employee, cccd: maskCccd(employee.cccd) }));
-      return success({ items, page, pageSize, total: matches.length });
+      return success({ items, page, pageSize, total: matches.length, pageCount, facets });
     },
-    search: async (actor: Actor, input: EmployeeListInput): Promise<Result<{ items: Employee[]; page: number; pageSize: number; total: number }>> => employeeUseCases.list(actor, input),
+    search: async (actor: Actor, input: EmployeeListInput): Promise<Result<EmployeeListResult>> => employeeUseCases.list(actor, input),
+    /** Lưu giá trị trường tùy chỉnh theo nhân sự; `files[key] = null` là xóa ảnh. */
+    updateExtra: async (actor: Actor, input: { id: string; expectedVersion: number; fields: Record<string, string>; files: Record<string, FileRef | null> }): Promise<Result<Employee>> => {
+      if (!has(actor, "employeeWrite")) return err("FORBIDDEN");
+      const before = await getEmployee(input.id);
+      if (!before) return err("EMP_NOT_FOUND");
+      if (before.version !== input.expectedVersion) return err("CONFLICT");
+      const keyPattern = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+      const keys = [...Object.keys(input.fields), ...Object.keys(input.files)];
+      if (keys.some((key) => !keyPattern.test(key)) || Object.values(input.fields).some((value) => value.length > 500)) return err("EMP_EXTRA_INVALID");
+      const fields = Object.fromEntries(Object.entries({ ...before.extraFields, ...input.fields }).filter(([, value]) => value !== ""));
+      const files = Object.fromEntries(Object.entries({ ...before.extraFiles, ...input.files }).filter((entry): entry is [string, FileRef] => entry[1] !== null));
+      const value: Employee = { ...before, extraFields: fields, extraFiles: files, version: before.version + 1 };
+      if (!await repositories.employees.replace(value, input.expectedVersion)) return err("CONFLICT");
+      await writeAudit(actor, "employee.extra.update", "employee", value.id, before, value);
+      return success({ ...value, cccd: maskCccd(value.cccd) });
+    },
     revealCccd: async (actor: Actor, id: string): Promise<Result<string>> => {
       if (!has(actor, "employeeReveal")) return err("FORBIDDEN");
       const employee = await getEmployee(id);

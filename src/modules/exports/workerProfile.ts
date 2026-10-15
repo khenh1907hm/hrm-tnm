@@ -2,6 +2,7 @@ import { formatDate, formatTenure, monthsBetween } from "../../lib/dates";
 import { compareCodePoint, compareNormalizedText } from "../../lib/text";
 import { certificateDisplayName } from "../certificates/rules";
 import type { Certificate, FileRef } from "../certificates/types";
+import { currentSafetyGroups } from "../certificates/safetyGroup";
 import { SYSTEM_CERTIFICATE_TYPES, type CertificateTypeRecord } from "../certificate-types/types";
 import type { Employee } from "../employees/types";
 import type { Signature } from "../signatures/types";
@@ -69,7 +70,7 @@ export function buildWorkerProfileData(
       type: type.key, displayName: certificateDisplayName(type, certificate?.title ?? ""), ticked,
       note: current.length > 0 && !ticked ? "đã hết hạn" : null,
       number: certificate?.number ?? null, document: certificate?.document ?? null,
-      supplementaryFiles: certificate?.supplementaryFiles ?? [], group: type.key === "atld" && ticked ? employee.group : null,
+      supplementaryFiles: certificate?.supplementaryFiles ?? [], group: type.key === "atld" && ticked ? currentSafetyGroups(employee, certificates, signDate).join(", ") || null : null,
       selectedCertificateId: certificate?.id ?? null,
     };
   });

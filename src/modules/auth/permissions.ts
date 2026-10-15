@@ -4,18 +4,20 @@ export const PERMISSIONS = {
   employeeRead: ["admin", "hr"], employeeWrite: ["admin"], employeeArchive: ["admin"], employeeReveal: ["admin", "hr"],
   certificateRead: ["admin", "hr"], certificateWrite: ["admin"], certificateTypeRead: ["admin", "hr"], certificateTypeWrite: ["admin"], signatureRead: ["admin", "hr"], signatureWrite: ["admin"],
   settingsRead: ["admin", "hr"], settingsWrite: ["admin"], commanderRead: ["admin", "hr"], commanderWrite: ["admin"], export: ["admin", "hr"], reminderRun: ["admin"], auditRead: ["admin"], ocr: ["admin", "hr"],
+  projectRead: ["admin", "hr"], projectWrite: ["admin", "hr"],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 export function can(actor: Actor, permission: Permission): boolean { return PERMISSIONS[permission].some((role) => role === actor.role); }
 
 export const FACADE_USE_CASE_PERMISSIONS = {
-  employees: { validate: "employeeWrite", create: "employeeWrite", update: "employeeWrite", archive: "employeeArchive", restore: "employeeArchive", get: "employeeRead", list: "employeeRead", search: "employeeRead", revealCccd: "employeeReveal" },
+  employees: { validate: "employeeWrite", create: "employeeWrite", update: "employeeWrite", archive: "employeeArchive", restore: "employeeArchive", get: "employeeRead", list: "employeeRead", search: "employeeRead", revealCccd: "employeeReveal", updateExtra: "employeeWrite" },
   certificates: { add: "certificateWrite", renew: "certificateWrite", update: "certificateWrite", updateAttachments: "certificateWrite", archive: "certificateWrite", restore: "certificateWrite", listByEmployee: "certificateRead", listExpiring: "certificateRead" },
   certificateTypes: { list: "certificateTypeRead", create: "certificateTypeWrite", update: "certificateTypeWrite", archive: "certificateTypeWrite" },
-  signatures: { add: "signatureWrite", setDefault: "signatureWrite", remove: "signatureWrite", list: "signatureRead" },
+  signatures: { add: "signatureWrite", update: "signatureWrite", setDefault: "signatureWrite", remove: "signatureWrite", list: "signatureRead" },
   settings: { get: "settingsRead", update: "settingsWrite" },
+  projects: { list: "projectRead", get: "projectRead", create: "projectWrite", update: "projectWrite", archive: "projectWrite", restore: "projectWrite" },
   commanders: { list: "commanderRead", create: "commanderWrite", update: "commanderWrite", archive: "commanderWrite" },
-  exports: { checkReadiness: "export", buildWorkerProfile: "export" },
+  exports: { checkReadiness: "export", buildWorkerProfile: "export", employeeRoster: "export" },
   reminders: { computeDue: "reminderRun", run: "reminderRun" },
   ocr: { parseIdText: "ocr", mergeParsed: null },
   audit: { list: "auditRead" },

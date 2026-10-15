@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { profileConfigFromScan } from "../../modules/excel-template/engine/profileConfig";
 import { scanTemplate } from "../../modules/excel-template/engine/scanTemplate";
 import type { ExcelReportTemplate, ProfileCustomField } from "../../modules/excel-template/types";
@@ -35,21 +36,57 @@ async function loadSeedTemplates(existingIds: ReadonlySet<string>): Promise<Exce
   }
 }
 
-/** Mẫu báo cáo lưu trong localStorage; lần đầu tạo sẵn một mẫu demo và nạp các mẫu hồ sơ đặt sẵn. */
-export function useReportTemplates() {
+/** Nơi lưu mẫu: bảng report_templates (chế độ thật) hoặc localStorage (chế độ demo). */
+function templateStore(client: SupabaseClient | null) {
+  return {
+    async load(): Promise<ExcelReportTemplate[]> {
+      if (!client) return loadTemplates();
+      const { data, error } = await client.from("report_templates").select("doc").order("created_at", { ascending: true });
+      if (error) throw new Error(error.message);
+      return (data ?? []).map((row: { doc: unknown }) => row.doc as ExcelReportTemplate);
+    },
+    async save(next: ExcelReportTemplate[], previous: readonly ExcelReportTemplate[]): Promise<void> {
+      if (!client) { saveTemplates(next); return; }
+      const removed = previous.filter((item) => !next.some((candidate) => candidate.id === item.id)).map((item) => item.id);
+      const changed = next.filter((item) => previous.find((candidate) => candidate.id === item.id)?.updatedAt !== item.updatedAt);
+      if (changed.length) {
+        const { error } = await client.from("report_templates").upsert(changed.map((item) => ({ id: item.id, doc: item })));
+        if (error) throw new Error(error.message);
+      }
+      if (removed.length) {
+        const { error } = await client.from("report_templates").delete().in("id", removed);
+        if (error) throw new Error(error.message);
+      }
+    },
+  };
+}
+
+/** Mẫu báo cáo; lần đầu tạo sẵn mẫu demo (chế độ demo) và nạp các mẫu hồ sơ đặt sẵn trên máy. */
+export function useReportTemplates(client: SupabaseClient | null = null, onError: (message: string) => void = () => undefined) {
   const [templates, setTemplates] = useState<ExcelReportTemplate[]>([]);
+  const current = useRef<ExcelReportTemplate[]>([]);
+  const store = useRef(templateStore(client));
+
   useEffect(() => {
     let active = true;
-    const saved = loadTemplates();
-    const ready = (saved.length > 0 ? Promise.resolve(saved) : createDefaultDemoTemplate().then((demoTpl) => [demoTpl]))
-      .then(async (list) => {
-        const seeds = await loadSeedTemplates(new Set(list.map((item) => item.id)));
-        const merged = [...seeds, ...list];
-        if (seeds.length || !saved.length) saveTemplates(merged);
-        return merged;
-      });
-    void ready.then((list) => { if (active) setTemplates(list); });
+    const run = async () => {
+      const saved = await store.current.load();
+      const base = saved.length > 0 || client ? saved : [await createDefaultDemoTemplate()];
+      const seeds = await loadSeedTemplates(new Set(base.map((item) => item.id)));
+      const merged = [...seeds, ...base];
+      if (seeds.length || (!saved.length && !client)) await store.current.save(merged, saved);
+      return merged;
+    };
+    void run().then((list) => { if (active) { current.current = list; setTemplates(list); } }).catch((error: unknown) => onError(error instanceof Error ? `Không tải được mẫu báo cáo: ${error.message}` : "Không tải được mẫu báo cáo."));
     return () => { active = false; };
-  }, []);
-  return [templates, setTemplates] as const;
+  }, [client, onError]);
+
+  const update = useCallback((next: ExcelReportTemplate[]) => {
+    const previous = current.current;
+    current.current = next;
+    setTemplates(next);
+    void store.current.save(next, previous).catch((error: unknown) => onError(error instanceof Error ? `Không lưu được mẫu báo cáo: ${error.message}` : "Không lưu được mẫu báo cáo."));
+  }, [onError]);
+
+  return [templates, update] as const;
 }

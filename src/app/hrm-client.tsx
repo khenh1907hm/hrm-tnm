@@ -1,41 +1,61 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createHrApp } from "../app-core/createHrApp";
-import { fixedClock, systemClock } from "../lib/clock";
-import { sequentialIds } from "../lib/ids";
 import type { Actor } from "../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../modules/certificates/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
 import type { Employee, EmployeeInput } from "../modules/employees/types";
-import { createDemoRepositories } from "../repositories/memory/seedDemo";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
 import { CertificateFormModal, type CertificateFormMode } from "./_components/CertificateFormModal";
 import { EmployeeDetailView } from "./_components/EmployeeDetailView";
 import { EmployeeFormModal } from "./_components/EmployeeFormModal";
-import { EmployeeListView, type EmployeeFilters } from "./_components/EmployeeListView";
+import { DEFAULT_EMPLOYEE_FILTERS, EMPTY_PAGE_INFO, EmployeeListView, toListInput, type EmployeeFilters, type EmployeePageInfo } from "./_components/EmployeeListView";
+import { BatchExportModal } from "./_components/BatchExportModal";
 import { ExportPdfDialog, prepareExportDialog, type ExportDialogInit } from "./_components/ExportPdfDialog";
 import { FilePreviewModal, type PreviewFile } from "./_components/FilePreviewModal";
 import { SettingsPanel } from "./_components/SettingsPanel";
 import { SideNav } from "./_components/SideNav";
-import { SignatureFormModal } from "./_components/SignatureFormModal";
 import { SignaturesView } from "./_components/SignaturesView";
 import { emptyEmployee, issueText, type App, type ExpiringCertificateRow, type PageView, type SignatureRow } from "./_components/shared";
 import { useReportTemplates } from "./_components/useReportTemplates";
 import { useToast } from "./_components/Toast";
+import { EmployeeExtraPanel } from "./_components/EmployeeExtraPanel";
+import { ReasonDialog } from "./_components/ReasonDialog";
+import { ProjectsView } from "./_components/ProjectsView";
+import type { Project } from "../modules/projects/types";
+import type { ContactChoice } from "./_components/ContactPicker";
+import { downloadXlsx } from "./_components/profileExport";
+import { buildEmployeeRosterWorkbook } from "../modules/exports/employeeRoster";
+import { useBackend, type Backend } from "./_components/useBackend";
+import { getSupabaseClient } from "../lib/supabase/client";
+import { LoginScreen } from "./_components/LoginScreen";
+import type { FileFolder } from "./_components/fileStore";
 
-const DEMO_NOW = "2026-10-12T09:00:00+07:00";
-
+/** Chọn màn hình theo trạng thái: đang tải, đăng nhập (chế độ thật) hoặc vào app. */
 export default function HrmClient() {
-  const [app, setApp] = useState<App | null>(null);
-  const [actor, setActor] = useState<Actor>({ id: "demo-admin", role: "admin" });
+  const backend = useBackend();
+  if (backend.status === "loading") return <div className="loading">Đang tải dữ liệu…</div>;
+  if (backend.status === "signedOut") return <LoginScreen onSignIn={backend.signIn} />;
+  return <HrmWorkspace backend={backend} />;
+}
+
+function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready" }> }) {
+  const { app, actor, setActor, fileStore } = backend;
   const [view, setView] = useState<PageView>("employees");
   const [rows, setRows] = useState<Employee[]>([]);
   const [employeeCertificateHealth, setEmployeeCertificateHealth] = useState<Record<string, CertificateChecklistSummary>>({});
-  const [filters, setFilters] = useState<EmployeeFilters>({ query: "", positionFilter: "", missingRequiredCertificate: false, includeArchived: false });
+  const [filters, setFilters] = useState<EmployeeFilters>(DEFAULT_EMPLOYEE_FILTERS);
+  const [pageInfo, setPageInfo] = useState<EmployeePageInfo>(EMPTY_PAGE_INFO);
+  const [loadedListKey, setLoadedListKey] = useState("");
+  const [rosterBusy, setRosterBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [batchEmployees, setBatchEmployees] = useState<Employee[] | null>(null);
+  const [batchPreset, setBatchPreset] = useState<{ title: string; templateId: string | null; contact: ContactChoice; values: Record<string, string> } | undefined>(undefined);
+  const [projectDraft, setProjectDraft] = useState<string[] | null>(null);
+  const [listTypes, setListTypes] = useState<{ key: string; name: string }[]>([]);
   const [selected, setSelected] = useState<Employee | null>(null);
   const setNotice = useToast();
   const [certRows, setCertRows] = useState<ExpiringCertificateRow[]>([]);
@@ -49,37 +69,54 @@ export default function HrmClient() {
   const [employeeForm, setEmployeeForm] = useState<{ editing: Employee | null; initial: EmployeeInput } | null>(null);
   const [certificateForm, setCertificateForm] = useState<CertificateFormMode | null>(null);
   const [exportInit, setExportInit] = useState<ExportDialogInit | null>(null);
-  const [showSignatureForm, setShowSignatureForm] = useState(false);
+  const [reasonDialog, setReasonDialog] = useState<{ kind: "employee" } | { kind: "certificate"; certificate: Certificate } | null>(null);
   const [showExcelModal, setShowExcelModal] = useState(false);
-  const [templates, setTemplates] = useReportTemplates();
-  const { query, includeArchived, missingRequiredCertificate, positionFilter } = filters;
+  const templateError = useCallback((message: string) => setNotice(message, "error"), [setNotice]);
+  const [templates, setTemplates] = useReportTemplates(backend.mode === "live" ? getSupabaseClient() : null, templateError);
+  const listInput = useMemo(() => toListInput(filters), [filters]);
+
+  /** Chế độ thật: đẩy tệp vừa chọn lên kho lưu trữ (lỗi thì báo, tệp vẫn dùng được trong phiên). */
+  const storeFiles = useCallback(async (folder: FileFolder, files: Record<string, File>) => {
+    if (!fileStore) return;
+    try { await Promise.all(Object.entries(files).map(([id, file]) => fileStore.put(folder, id, file))); }
+    catch (error) { setNotice(error instanceof Error ? error.message : "Không tải được tệp lên kho lưu trữ.", "error"); }
+  }, [fileStore, setNotice]);
+
+  /** Tải về những tệp chưa có trong phiên; trả về bộ tệp đầy đủ để dùng ngay. */
+  const ensureFiles = useCallback(async (refs: readonly { id: string; name: string; folder: FileFolder }[]) => {
+    const missing = refs.filter((ref) => !sessionFiles[ref.id]);
+    if (!fileStore || !missing.length) return sessionFiles;
+    const loaded = await Promise.all(missing.map(async (ref) => [ref.id, await fileStore.get(ref.folder, ref.id, ref.name)] as const));
+    const found = Object.fromEntries(loaded.filter((entry): entry is readonly [string, File] => entry[1] !== null));
+    const merged = { ...sessionFiles, ...found };
+    setSessionFiles(merged);
+    return merged;
+  }, [fileStore, sessionFiles]);
+
+  const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
+  const extraFileRefs = (employee: Employee) => Object.values(employee.extraFiles ?? {}).map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
+  const signatureFileRefs = async () => { const listed = await app.signatures.list(actor); return listed.ok ? listed.value.map((signature) => ({ id: signature.file.id, name: signature.file.name, folder: "signatures" as const })) : []; };
 
   const refresh = useCallback(async (instance: App, currentActor: Actor) => {
-    const listed = await instance.employees.list(currentActor, { query, includeArchived, missingRequiredCertificate, ...(positionFilter ? { position: positionFilter } : {}) });
-    if (listed.ok) setRows(listed.value.items);
+    const listed = await instance.employees.list(currentActor, listInput);
+    if (listed.ok) { setRows(listed.value.items); setPageInfo(listed.value); }
     const certs = await instance.certificates.listExpiring(currentActor);
     if (certs.ok) setCertRows(certs.value);
     const signatures = await instance.signatures.list(currentActor);
     if (signatures.ok) setSignatureRows(signatures.value);
-  }, [query, includeArchived, missingRequiredCertificate, positionFilter]);
+  }, [listInput]);
 
-  useEffect(() => {
-    let active = true;
-    void createDemoRepositories(fixedClock(DEMO_NOW), sequentialIds("demo")).then((repositories) => {
-      if (!active) return;
-      const mailLog: string[] = [];
-      const instance = createHrApp({ clock: systemClock, ids: sequentialIds("new"), repositories, mailer: { send: async (message) => { mailLog.push(message.subject); } } });
-      setApp(instance);
-    });
-    return () => { active = false; };
-  }, []);
 
   useEffect(() => {
     if (!app) return;
     let current = true;
-    void app.employees.list(actor, { query, includeArchived, missingRequiredCertificate, ...(positionFilter ? { position: positionFilter } : {}) }).then(async (result) => {
-      if (!current || !result.ok) return;
+    const key = JSON.stringify(listInput);
+    void app.employees.list(actor, listInput).then(async (result) => {
+      if (!current) return;
+      setLoadedListKey(key);
+      if (!result.ok) return;
       setRows(result.value.items);
+      setPageInfo(result.value);
       const health = await Promise.all(result.value.items.map(async (employee) => {
         const checklist = await app.certificates.checklist(actor, employee.id);
         return checklist.ok ? [employee.id, checklist.value.summary] as const : null;
@@ -89,7 +126,14 @@ export default function HrmClient() {
     void app.certificates.listExpiring(actor).then((result) => { if (current && result.ok) setCertRows(result.value); });
     void app.signatures.list(actor).then((result) => { if (current && result.ok) setSignatureRows(result.value); });
     return () => { current = false; };
-  }, [app, actor, query, includeArchived, missingRequiredCertificate, positionFilter]);
+  }, [app, actor, listInput]);
+
+  useEffect(() => {
+    if (!app) return;
+    let current = true;
+    void app.certificateTypes.list(actor).then((result) => { if (current && result.ok) setListTypes(result.value.map((type) => ({ key: type.key, name: type.name }))); });
+    return () => { current = false; };
+  }, [app, actor]);
 
   useEffect(() => () => { if (previewFile) URL.revokeObjectURL(previewFile.url); }, [previewFile]);
 
@@ -149,14 +193,16 @@ export default function HrmClient() {
     });
   };
 
-  const archiveCertificate = async (certificate: Certificate) => {
-    if (!app || !selected) return;
-    const reason = window.prompt("Nhập lý do ẩn chứng chỉ:");
-    if (reason === null) return;
+  const archiveCertificate = (certificate: Certificate) => setReasonDialog({ kind: "certificate", certificate });
+  const confirmArchiveCertificate = async (certificate: Certificate, reason: string): Promise<string | null> => {
+    if (!selected) return null;
     const result = await app.certificates.archive(actor, { id: certificate.id, expectedVersion: certificate.version, reason });
-    setNotice(result.ok ? "Đã lưu trữ chứng chỉ." : issueText(result.errors[0]?.code ?? "CERT_ARCHIVE_REASON"));
+    if (!result.ok) return issueText(result.errors[0]?.code ?? "CERT_ARCHIVE_REASON");
+    setReasonDialog(null);
+    setNotice("Đã ẩn chứng chỉ.");
     await reloadEmployeeCertificates(app, selected.id);
     await refresh(app, actor);
+    return null;
   };
 
   const restoreCertificate = async (certificate: Certificate) => {
@@ -167,20 +213,22 @@ export default function HrmClient() {
     await refresh(app, actor);
   };
 
-  const showFile = (file: FileRef) => {
-    const binary = sessionFiles[file.id];
+  const showFile = async (file: FileRef) => {
+    const binary = (await ensureFiles([{ id: file.id, name: file.name, folder: "certificates" }]))[file.id];
     if (!binary) { setNotice("Tệp mẫu không có dữ liệu xem trước trong phiên này."); return; }
     if (previewFile) URL.revokeObjectURL(previewFile.url);
     setPreviewFile({ name: file.name, mime: file.mime, url: URL.createObjectURL(binary) });
   };
 
-  const archiveSelected = async () => {
-    if (!app || !selected) return;
-    const reason = window.prompt("Nhập lý do lưu trữ (tối thiểu 3 ký tự):");
-    if (reason === null) return;
+  const archiveSelected = () => setReasonDialog({ kind: "employee" });
+  const confirmArchiveSelected = async (reason: string): Promise<string | null> => {
+    if (!selected) return null;
     const result = await app.employees.archive(actor, { id: selected.id, expectedVersion: selected.version, reason });
-    if (!result.ok) { setNotice(issueText(result.errors[0]?.code ?? "EMP_ARCHIVE_REASON")); return; }
-    setSelected(null); await refresh(app, actor); setNotice("Đã lưu trữ hồ sơ.");
+    if (!result.ok) return issueText(result.errors[0]?.code ?? "EMP_ARCHIVE_REASON");
+    setReasonDialog(null);
+    setSelectedIds((current) => current.filter((id) => id !== selected.id));
+    setSelected(null); await refresh(app, actor); setNotice("Đã lưu trữ hồ sơ. Admin có thể khôi phục bằng bộ lọc “Hiện hồ sơ đã lưu trữ”.");
+    return null;
   };
 
   const restoreSelected = async () => {
@@ -199,20 +247,54 @@ export default function HrmClient() {
 
   const openExportDialog = async () => {
     if (!app || !selected) return;
+    await ensureFiles([...certificateFileRefs(employeeCertificates), ...await signatureFileRefs()]);
     const prepared = await prepareExportDialog(app, actor, selected, employeeCertificates);
     if (!prepared.ok) { setNotice(prepared.message); return; }
     setCertificateTypes(prepared.init.certificateTypes);
     setExportInit(prepared.init);
   };
 
-  const activeRows = useMemo(() => includeArchived ? rows : rows.filter((employee) => employee.archivedAt === null), [includeArchived, rows]);
+  /** Xuất Excel toàn bộ thông tin các nhân sự đã chọn (mỗi người một dòng + sheet chứng chỉ). */
+  const exportRoster = async (employeeIds: readonly string[] = selectedIds) => {
+    setRosterBusy(true);
+    try {
+      const result = await app.exports.employeeRoster(actor, { employeeIds });
+      if (!result.ok) { setNotice(issueText(result.errors[0]?.code ?? "EXPORT_SELECTION_INVALID"), "error"); return; }
+      const bytes = await buildEmployeeRosterWorkbook(result.value);
+      downloadXlsx(bytes, `DanhSachNhanSu_${result.value.employees.length}nguoi_${result.value.today.replaceAll("-", "")}.xlsx`);
+      setNotice(`Đã xuất Excel thông tin ${result.value.employees.length} nhân sự.`, "success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Không tạo được file Excel.", "error");
+    } finally { setRosterBusy(false); }
+  };
+
+  /** Xuất hồ sơ cả đoàn của dự án: mở hộp xuất với FORM, chỉ huy trưởng, giá trị đã lưu. */
+  const exportProject = async (project: Project) => {
+    const results = await Promise.all(project.memberIds.map((id) => app.employees.get(actor, id)));
+    const members = results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []);
+    if (!members.length) { setNotice("Dự án chưa có nhân sự đang hoạt động.", "warning"); return; }
+    setBatchPreset({ title: project.name, templateId: project.templateId, contact: { employeeId: project.commanderId ?? "", relation: project.commanderRelation }, values: project.exportValues });
+    setBatchEmployees(members);
+  };
+
+  /** Chọn mọi nhân sự khớp bộ lọc (qua tất cả các trang). */
+  const selectAllMatching = async () => {
+    const ids: string[] = [];
+    for (let page = 1; ; page++) {
+      const result = await app.employees.list(actor, { ...listInput, page, pageSize: 100 });
+      if (!result.ok) break;
+      ids.push(...result.value.items.filter((employee) => !employee.archivedAt).map((employee) => employee.id));
+      if (page >= result.value.pageCount) break;
+    }
+    setSelectedIds((current) => Array.from(new Set([...current, ...ids])));
+  };
   if (!app) return <div className="loading">Đang nạp dữ liệu mẫu…</div>;
 
   return (
     <div className="app-shell">
-      <SideNav view={view} onNavigate={(key) => { setView(key); setSelected(null); }} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
+      <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => { setView(key); setSelected(null); }} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
       <main className="main-content">
-        {view === "employees" && !selected && <EmployeeListView actor={actor} rows={activeRows} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} onCreate={openCreate} onOpen={(employee) => void openDetail(employee)} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && !selected && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} onCreateProject={() => { setProjectDraft([...selectedIds]); setView("projects"); }} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onOpen={(employee) => void openDetail(employee)} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && selected && <EmployeeDetailView
           app={app}
           actor={actor}
@@ -224,20 +306,32 @@ export default function HrmClient() {
           setNotice={setNotice}
           onBack={() => setSelected(null)}
           onEdit={() => void openEdit()}
-          onArchive={() => void archiveSelected()}
+          onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
-          onExportExcel={() => setShowExcelModal(true)}
+          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(selected)]).then(() => setShowExcelModal(true))}
           onExportPdf={() => void openExportDialog()}
-          onShowFile={showFile}
+          onShowFile={(file) => void showFile(file)}
           onCertificateForm={(type, certificate) => setCertificateForm({ type, editing: certificate ?? null, renewing: null })}
           onRenewCertificate={(certificate) => setCertificateForm({ type: certificate.type, editing: null, renewing: certificate })}
-          onArchiveCertificate={(certificate) => void archiveCertificate(certificate)}
+          onArchiveCertificate={archiveCertificate}
           onRestoreCertificate={(certificate) => void restoreCertificate(certificate)}
         />}
+        {view === "employees" && selected && <EmployeeExtraPanel
+          key={`${selected.id}:${selected.version}`}
+          app={app}
+          actor={actor}
+          employee={selected}
+          templates={templates}
+          sessionFiles={sessionFiles}
+          ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "employees" as const })))}
+          setNotice={setNotice}
+          onSaved={(employee, files) => { setSelected(employee); setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("employees", files); setNotice("Đã lưu thông tin bổ sung."); }}
+        />}
         {view === "alerts" && <AlertsView app={app} actor={actor} certRows={certRows} onCertRowsChange={setCertRows} onOpenEmployee={(employeeId) => void openEmployeeById(employeeId)} setNotice={setNotice} />}
-        {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} onAdd={() => setShowSignatureForm(true)} setNotice={setNotice} />}
+        {view === "projects" && <ProjectsView app={app} actor={actor} templates={templates} setNotice={setNotice} draftMemberIds={projectDraft} onDraftConsumed={() => setProjectDraft(null)} onExport={(project) => void exportProject(project)} onExportRoster={(ids) => void exportRoster(ids)} />}
+        {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
         {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} />}
-        {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => setShowSignatureForm(true)} sessionFiles={sessionFiles} />}
+        {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => setView("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal
         app={app}
@@ -246,18 +340,20 @@ export default function HrmClient() {
         initial={employeeForm.initial}
         setNotice={setNotice}
         onClose={() => setEmployeeForm(null)}
-        onSaved={(employee) => { setEmployeeForm(null); setSelected(employee); setNotice("Đã lưu hồ sơ nhân sự."); void refresh(app, actor); }}
+        onSaved={(employee) => { setEmployeeForm(null); setNotice("Đã lưu hồ sơ nhân sự."); void openDetail(employee); void refresh(app, actor); }}
       />}
       {certificateForm && selected && <CertificateFormModal
         app={app}
         actor={actor}
         employee={selected}
         certificateTypes={certificateTypes}
+        existingCertificates={employeeCertificates}
         mode={certificateForm}
         setNotice={setNotice}
         onClose={() => setCertificateForm(null)}
         onSaved={(files, message) => {
           setSessionFiles((current) => ({ ...current, ...files }));
+          void storeFiles("certificates", files);
           setCertificateForm(null); setNotice(message);
           void reloadEmployeeCertificates(app, selected.id).then(() => refresh(app, actor));
         }}
@@ -274,18 +370,23 @@ export default function HrmClient() {
         onClose={() => setExportInit(null)}
         onEditProfile={() => { setExportInit(null); void openEdit(); }}
       />}
-      {showSignatureForm && <SignatureFormModal
-        app={app}
-        actor={actor}
-        setNotice={setNotice}
-        onClose={() => setShowSignatureForm(false)}
-        onSaved={(fileId, file) => {
-          setSessionFiles((current) => ({ ...current, [fileId]: file }));
-          setShowSignatureForm(false); setNotice("Đã thêm chữ ký với nền đã được tách.");
-          void app.signatures.list(actor).then((signatures) => { if (signatures.ok) setSignatureRows(signatures.value); });
-        }}
+      {reasonDialog?.kind === "employee" && selected && <ReasonDialog
+        title={`Lưu trữ hồ sơ ${selected.name}`}
+        description="Hồ sơ sẽ bị ẩn khỏi danh sách và không xuất được nữa. Dữ liệu vẫn được giữ lại, admin có thể khôi phục bất cứ lúc nào."
+        confirmLabel="Lưu trữ hồ sơ"
+        onConfirm={confirmArchiveSelected}
+        onClose={() => setReasonDialog(null)}
       />}
+      {reasonDialog?.kind === "certificate" && <ReasonDialog
+        title="Ẩn chứng chỉ"
+        description={`Chứng chỉ số ${reasonDialog.certificate.number} sẽ không còn tính là hiện hành. Có thể khôi phục sau.`}
+        confirmLabel="Ẩn chứng chỉ"
+        onConfirm={(reason) => confirmArchiveCertificate(reasonDialog.certificate, reason)}
+        onClose={() => setReasonDialog(null)}
+      />}
+
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
+      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} {...(batchPreset ? { preset: batchPreset } : {})} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => { setBatchEmployees(null); setBatchPreset(undefined); }} onGoToTemplates={() => { setBatchEmployees(null); setBatchPreset(undefined); setView("reports"); }} />}
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}

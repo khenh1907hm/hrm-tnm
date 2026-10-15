@@ -79,7 +79,7 @@ export function ExportExcelModal({
     <div className="modal-backdrop" role="presentation">
       <div className="modal-card" style={{ maxWidth: activeTemplate?.profile ? "820px" : "600px" }}>
         <header>
-          <h2>Xuất báo cáo Excel theo mẫu</h2>
+          <h2>Xuất hồ sơ theo mẫu (Excel / PDF gộp)</h2>
           <button type="button" className="close" onClick={onClose}>
             ×
           </button>

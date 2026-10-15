@@ -1,4 +1,5 @@
 import { addMonths, isValidISODate } from "../../lib/dates";
+import { isSafetyCertificateType, isValidSafetyGroup } from "./safetyGroup";
 import { issue, type Issue } from "../../lib/result";
 import { normalizeText } from "../../lib/text";
 import type { Certificate, FileRef, SupplementaryFile } from "./types";
@@ -7,6 +8,7 @@ import { SYSTEM_CERTIFICATE_TYPES, type CertificateTypeRecord } from "../certifi
 export type CertificateInput = {
   type: string; number: string; issueDate: string | null; expiryDate: string; document: FileRef | null;
   title?: string; supplementaryFiles?: SupplementaryFile[];
+  safetyGroup?: number | null | undefined;
 };
 const allowedMime = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -57,6 +59,7 @@ export function validateCertificate(
     if (!allowedMime.has(file.mime) || file.size <= 0 || file.size > MAX_FILE_SIZE) errors.push(issue("CERT_FILE_INVALID", field));
   };
   checkFile(input.document, "document", true);
+  if (isSafetyCertificateType(input.type) && input.safetyGroup !== undefined && input.safetyGroup !== null && !isValidSafetyGroup(input.safetyGroup)) errors.push(issue("CERT_SAFETY_GROUP_INVALID", "safetyGroup"));
   if (supplementaryFiles.length > 10) errors.push(issue("CERT_SUPPLEMENT_COUNT_INVALID", "supplementaryFiles"));
   supplementaryFiles.forEach((attachment, index) => {
     checkFile(attachment.file, `supplementaryFiles.${index}.file`, true);

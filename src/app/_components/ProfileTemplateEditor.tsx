@@ -1,7 +1,8 @@
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { SYSTEM_FIELDS } from "../../modules/excel-template/engine/fieldValues";
 import { IMAGE_FIELDS, isCertificateKey, isCustomKey } from "../../modules/excel-template/engine/profileConfig";
-import type { ProfileCustomField, ProfileImageSlot, ProfileTemplateConfig } from "../../modules/excel-template/types";
+import type { ProfileImageSlot, ProfileTemplateConfig } from "../../modules/excel-template/types";
+import { CustomFieldsEditor } from "./CustomFieldsEditor";
 
 type CertificateTypeOption = { key: string; name: string };
 
@@ -12,7 +13,6 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
   const certificateUsed = value.placeholders.filter(isCertificateKey);
   const typeName = (key: string) => certificateTypes.find((type) => type.key === key)?.name ?? key;
 
-  const updateField = (index: number, patch: Partial<ProfileCustomField>) => onChange({ ...value, customFields: value.customFields.map((field, i) => i === index ? { ...field, ...patch } : field) });
   const updateSlot = (index: number, patch: Partial<ProfileImageSlot>) => onChange({ ...value, imageSlots: value.imageSlots.map((slot, i) => i === index ? { ...slot, ...patch } : slot) });
   const moveAttachment = (index: number, direction: -1 | 1) => {
     const next = [...value.attachments];
@@ -34,32 +34,7 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
         </div>
       </section>
 
-      <section>
-        <h3>Trường tùy chỉnh (nhập giá trị dùng chung, sửa được khi xuất)</h3>
-        {value.customFields.length ? (
-          <table className="profile-table">
-            <thead><tr><th>Mã trong Excel</th><th>Tên hiển thị</th><th>Kiểu</th><th>Giá trị mặc định</th></tr></thead>
-            <tbody>
-              {value.customFields.map((field, index) => (
-                <tr key={field.key}>
-                  <td><code>{`{{${field.key}}}`}</code></td>
-                  <td><input aria-label={`Tên hiển thị ${field.key}`} value={field.label} onChange={(event) => updateField(index, { label: event.target.value })} /></td>
-                  <td>
-                    <select aria-label={`Kiểu ${field.key}`} value={field.kind} onChange={(event) => updateField(index, { kind: event.target.value === "date" ? "date" : event.target.value === "checkbox" ? "checkbox" : "text", defaultValue: "" })}>
-                      <option value="text">Chữ</option><option value="date">Ngày (dd/mm/yyyy)</option><option value="checkbox">Ô đánh dấu ☑/☐</option>
-                    </select>
-                  </td>
-                  <td>
-                    {field.kind === "checkbox"
-                      ? <input type="checkbox" aria-label={`Mặc định ${field.key}`} checked={field.defaultValue === "true"} onChange={(event) => updateField(index, { defaultValue: event.target.checked ? "true" : "" })} />
-                      : <input aria-label={`Mặc định ${field.key}`} type={field.kind === "date" ? "date" : "text"} value={field.defaultValue} onChange={(event) => updateField(index, { defaultValue: event.target.value })} />}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : <p className="muted">Mẫu chưa có trường tùy chỉnh. Gõ một mã mới, ví dụ <code>{"{{tenDuAn}}"}</code>, vào ô Excel rồi tải lại file.</p>}
-      </section>
+      <CustomFieldsEditor value={value} onChange={onChange} />
 
       <section>
         <h3>Vùng ảnh</h3>

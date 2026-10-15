@@ -16,6 +16,8 @@ export type FillWorkbookInput = {
   imageSlots: readonly ImageSlot[];
   images: Readonly<Record<string, TemplateImage | null | undefined>>;
   attachments: readonly AttachmentPage[];
+  /** Ghi thẳng giá trị vào ô (trường tự thêm, không có {{mã}} trong file); giữ nguyên định dạng ô. */
+  cellValues?: readonly { address: string; field: string; value: string }[];
 };
 
 const PLACEHOLDER = /\{\{([^{}]+)\}\}/g;
@@ -59,6 +61,13 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
       return value ?? "";
     });
   }));
+
+  for (const item of input.cellValues ?? []) {
+    const cell = sheet.getCell(item.address);
+    const target = cell.isMerged ? cell.master : cell;
+    target.value = item.value;
+    if (!item.value) warnings.push({ location: target.address, field: item.field });
+  }
 
   const columnPx = (col: number) => Math.round((sheet.getColumn(col).width ?? sheet.properties.defaultColWidth ?? 8.43) * 7 + 5);
   const rowPx = (row: number) => ((sheet.getRow(row).height ?? sheet.properties.defaultRowHeight ?? 15) * 96) / 72;
