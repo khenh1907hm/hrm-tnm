@@ -23,7 +23,7 @@ function buildDeps(): ReminderDeps {
       return data?.role ?? null;
     },
     runReminders: admin && mailer
-      ? (actor) => createHrApp({ clock: systemClock, ids: randomIds(), repositories: createSupabaseRepositories(admin), mailer, profileBaseUrl: `${appUrl}/#nhan-su/` }).reminders.run(actor)
+      ? (actor) => createHrApp({ clock: systemClock, ids: randomIds(), repositories: createSupabaseRepositories(admin), mailer, profileBaseUrl: `${appUrl}/nhan-su/` }).reminders.run(actor)
       : null,
   };
 }

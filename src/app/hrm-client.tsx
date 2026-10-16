@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import type { Actor } from "../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../modules/certificates/types";
@@ -30,19 +31,29 @@ import { useBackend, type Backend } from "./_components/useBackend";
 import { getSupabaseClient } from "../lib/supabase/client";
 import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import type { FileFolder } from "./_components/fileStore";
+import { parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
+import SkillsClient from "./skills/SkillsClient";
 
 /** Chọn màn hình theo trạng thái: đang tải, đăng nhập (chế độ thật) hoặc vào app. */
 export default function HrmClient() {
   const backend = useBackend();
+  const pathname = usePathname();
   if (backend.status === "loading") return <div className="loading">Đang tải dữ liệu…</div>;
-  if (backend.status === "signedOut") return <LoginScreen onSignIn={backend.signIn} />;
+  // Kho Skill xem công khai được, không bắt đăng nhập
+  if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
   if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
   return <HrmWorkspace backend={backend} />;
 }
 
 function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready" }> }) {
   const { app, actor, setActor, fileStore } = backend;
-  const [view, setView] = useState<PageView>("employees");
+  // Màn hình đang mở lấy từ URL: mỗi mục có đường dẫn riêng, tải lại trang hay mở link vẫn đúng chỗ
+  const route = parseRoute(usePathname()) ?? { view: "employees" as const, employeeId: null };
+  const view = route.view;
+  const navigate = useCallback((next: PageView, employeeId: string | null = null) => {
+    const path = routePath(next, employeeId);
+    if (path !== window.location.pathname) window.history.pushState(null, "", path);
+  }, []);
   const [rows, setRows] = useState<Employee[]>([]);
   const [employeeCertificateHealth, setEmployeeCertificateHealth] = useState<Record<string, CertificateChecklistSummary>>({});
   const [filters, setFilters] = useState<EmployeeFilters>(DEFAULT_EMPLOYEE_FILTERS);
@@ -142,24 +153,45 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
 
   const openCreate = () => { setSelected(null); setEmployeeForm({ editing: null, initial: emptyEmployee }); };
 
-  const openDetail = async (employee: Employee) => {
-    if (!app) return;
-    const full = await app.employees.get(actor, employee.id);
-    if (full.ok) setSelected(full.value);
-    const [certificates, checklist, types] = await Promise.all([app.certificates.listByEmployee(actor, employee.id), app.certificates.checklist(actor, employee.id), app.certificateTypes.list(actor, actor.role === "admin")]);
+  /** Tải hồ sơ + chứng chỉ của một người (chưa đụng tới state). */
+  const fetchDetail = async (employeeId: string) => {
+    const full = await app.employees.get(actor, employeeId);
+    if (!full.ok) return null;
+    const [certificates, checklist, types] = await Promise.all([app.certificates.listByEmployee(actor, employeeId), app.certificates.checklist(actor, employeeId), app.certificateTypes.list(actor, actor.role === "admin")]);
+    return { employee: full.value, certificates, checklist, types };
+  };
+  /** Đưa dữ liệu vào state cùng lúc, để không hiện chứng chỉ của người trước. */
+  const applyDetail = (data: Awaited<ReturnType<typeof fetchDetail>>) => {
+    if (!data) { setNotice("Không tìm thấy hồ sơ nhân sự này.", "error"); navigate("employees"); return; }
+    const { employee, certificates, checklist, types } = data;
     if (certificates.ok) setEmployeeCertificates(certificates.value);
     if (checklist.ok) { setChecklistRows(checklist.value.rows); setChecklistSummary(checklist.value.summary); }
     if (types.ok) setCertificateTypes(types.value);
+    setSelected(employee);
+  };
+  const loadDetail = async (employeeId: string) => applyDetail(await fetchDetail(employeeId));
+
+  /** Mở hồ sơ: đổi URL sang /nhan-su/<id>; đang ở đúng hồ sơ đó thì chỉ tải lại dữ liệu. */
+  const openDetail = (employee: Employee) => {
+    if (route.employeeId === employee.id) void loadDetail(employee.id);
+    else navigate("employees", employee.id);
   };
 
-  const openEmployeeById = async (employeeId: string) => {
-    if (!app) return;
-    const employee = rows.find((entry) => entry.id === employeeId);
-    setView("employees");
-    if (employee) { await openDetail(employee); return; }
-    const result = await app.employees.get(actor, employeeId);
-    if (result.ok) await openDetail(result.value);
-  };
+  const routeEmployeeId = route.employeeId;
+  const selectedId = selected?.id ?? null;
+  useEffect(() => {
+    if (!routeEmployeeId || routeEmployeeId === selectedId) return;
+    let current = true;
+    // Bấm qua lại nhanh giữa các hồ sơ: bỏ kết quả của lần tải cũ
+    void fetchDetail(routeEmployeeId).then((data) => { if (current) applyDetail(data); });
+    return () => { current = false; };
+    // Chỉ chạy khi URL đổi sang hồ sơ khác
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeEmployeeId]);
+  /** Hồ sơ đang hiển thị: chỉ khi URL trỏ đúng người đã tải xong. */
+  const detail = view === "employees" && routeEmployeeId && selected?.id === routeEmployeeId ? selected : null;
+  const pageTitle = `${detail ? detail.name : VIEW_TITLES[view]} · Thiên Nhật Minh`;
+  useEffect(() => { document.title = pageTitle; }, [pageTitle]);
 
   const openEdit = async () => {
     if (!selected || !app) return;
@@ -223,7 +255,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     if (!result.ok) return issueText(result.errors[0]?.code ?? "EMP_ARCHIVE_REASON");
     setReasonDialog(null);
     setSelectedIds((current) => current.filter((id) => id !== selected.id));
-    setSelected(null); await refresh(app, actor); setNotice("Đã lưu trữ hồ sơ. Admin có thể khôi phục bằng bộ lọc “Hiện hồ sơ đã lưu trữ”.");
+    setSelected(null); navigate("employees"); await refresh(app, actor); setNotice("Đã lưu trữ hồ sơ. Admin có thể khôi phục bằng bộ lọc “Hiện hồ sơ đã lưu trữ”.");
     return null;
   };
 
@@ -279,23 +311,24 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
 
   return (
     <div className="app-shell">
-      <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => { setView(key); setSelected(null); }} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
+      <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
       <main className="main-content">
-        {view === "employees" && !selected && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onOpen={(employee) => void openDetail(employee)} onRestore={(employee) => void restoreEmployee(employee)} />}
-        {view === "employees" && selected && <EmployeeDetailView
+        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
+        {detail && <EmployeeDetailView
           app={app}
           actor={actor}
-          employee={selected}
+          employee={detail}
           checklistRows={checklistRows}
           checklistSummary={checklistSummary}
           employeeCertificates={employeeCertificates}
           certificateTypes={certificateTypes}
           setNotice={setNotice}
-          onBack={() => setSelected(null)}
+          onBack={() => navigate("employees")}
           onEdit={() => void openEdit()}
           onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
-          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(selected)]).then(() => setShowExcelModal(true))}
+          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => setShowExcelModal(true))}
           onExportPdf={() => void openExportDialog()}
           onShowFile={(file) => void showFile(file)}
           onCertificateForm={(type, certificate) => setCertificateForm({ type, editing: certificate ?? null, renewing: null })}
@@ -303,21 +336,22 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onArchiveCertificate={archiveCertificate}
           onRestoreCertificate={(certificate) => void restoreCertificate(certificate)}
         />}
-        {view === "employees" && selected && <EmployeeExtraPanel
-          key={`${selected.id}:${selected.version}`}
+        {detail && <EmployeeExtraPanel
+          key={`${detail.id}:${detail.version}`}
           app={app}
           actor={actor}
-          employee={selected}
+          employee={detail}
           templates={templates}
           sessionFiles={sessionFiles}
           ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "employees" as const })))}
           setNotice={setNotice}
           onSaved={(employee, files) => { setSelected(employee); setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("employees", files); setNotice("Đã lưu thông tin bổ sung."); }}
         />}
-        {view === "alerts" && <AlertsView app={app} actor={actor} certRows={certRows} onCertRowsChange={setCertRows} onOpenEmployee={(employeeId) => void openEmployeeById(employeeId)} setNotice={setNotice} />}
+        {view === "alerts" && <AlertsView app={app} actor={actor} certRows={certRows} onCertRowsChange={setCertRows} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} setNotice={setNotice} />}
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
         {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} />}
-        {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => setView("signatures")} sessionFiles={sessionFiles} />}
+        {view === "skills" && <SkillsClient embedded />}
+        {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal
         app={app}
@@ -372,7 +406,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       />}
 
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
-      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); setView("reports"); }} />}
+      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}
@@ -385,7 +419,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           setNotice={setNotice}
           onGoToTemplatesConfig={() => {
             setShowExcelModal(false);
-            setView("reports");
+            navigate("reports");
           }}
         />
       )}

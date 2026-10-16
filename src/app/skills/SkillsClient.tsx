@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "../../lib/supabase/client";
+import "./skills.css";
 import { formatFileSize, imagePathsInHtml, isZipFile, safeZipName, SKILL_BUCKET, SKILL_IMAGE_TYPES, SKILL_MAX_BYTES } from "../../modules/skills/files";
 
 type SkillPost = {
@@ -93,7 +94,8 @@ function useAdmin(supabase: SupabaseClient | null) {
   return state;
 }
 
-export default function SkillsClient() {
+/** `embedded`: hiển thị trong khung app (đã có sidebar), bỏ liên kết quay lại. */
+export default function SkillsClient({ embedded = false }: { embedded?: boolean }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const { signedIn, admin } = useAdmin(supabase);
   const [posts, setPosts] = useState<SkillPost[] | null>(null);
@@ -141,10 +143,10 @@ export default function SkillsClient() {
   const zipUrl = (post: SkillPost) => supabase && post.zip_path ? supabase.storage.from(SKILL_BUCKET).getPublicUrl(post.zip_path, { download: post.zip_name ?? true }).data.publicUrl : "";
 
   return (
-    <div className="sk-wrap">
+    <div className={embedded ? "sk-wrap embedded" : "sk-wrap"}>
       <header className="sk-top">
         <div>
-          <Link className="sk-back" href="/">← Quản lý nhân sự</Link>
+          {!embedded && <Link className="sk-back" href="/">← Quản lý nhân sự</Link>}
           <h1>Kho Skill AI</h1>
           <p>Nơi lưu các gói skill (.zip) cho Claude, ChatGPT, Gemini, Codex, kèm ghi chú và ảnh minh họa cách dùng. Tải về rồi cài theo mục “Cách cài skill”.</p>
         </div>

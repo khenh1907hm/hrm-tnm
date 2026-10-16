@@ -106,3 +106,6 @@
   .sk-confirm{display:grid;grid-template-columns:1fr 1fr}.sk-confirm>span{grid-column:1/-1}
   .sk-tabs button{min-height:40px;font-size:14px}
 }
+
+/* Nằm trong khung app: .main-content đã có lề và giới hạn chiều rộng */
+.sk-wrap.embedded{max-width:none;margin:0;padding:0}
