@@ -11,6 +11,7 @@ import { mergeParsed, parseIdText } from "../../modules/ocr/parseIdText";
 import { readIdImages, type OcrProgress } from "../../modules/ocr/readIdImages";
 import { dataUrlToFile, newPhotoRef, preparePhoto, usePhotoUrl } from "./employeePhoto";
 import { Field } from "./Field";
+import { provinceOfCccd } from "../../lib/vietnam/provinceCodes";
 import { issueText, ocrFieldLabel, type App, type SetNotice } from "./shared";
 
 const CHATGPT_PHOTO_PROMPT = `Crop and format this photo into a standard professional 3:4 ID/passport portrait.
@@ -28,6 +29,14 @@ Strict requirements:
 
 Output only the final cropped portrait.`;
 const CHATGPT_PHOTO_URL = `https://chatgpt.com/?q=${encodeURIComponent(CHATGPT_PHOTO_PROMPT)}`;
+/** Dưới ô CCCD: tỉnh đăng ký khai sinh theo 3 số đầu (gợi ý), hoặc báo mã tỉnh không có (lỗi). */
+function cccdProvince(cccd: string): { hint: string | null; error: string | undefined } {
+  const digits = cccd.trim();
+  if (!/^\d{3}/.test(digits)) return { hint: null, error: undefined };
+  const province = provinceOfCccd(digits);
+  return province ? { hint: `Nơi đăng ký khai sinh: ${province}`, error: undefined } : { hint: null, error: `Mã tỉnh ${digits.slice(0, 3)} không có trong danh sách 63 tỉnh.` };
+}
+
 const EDIT_TOUCHED_FIELDS: OcrFormField[] = ["name", "dob", "cccd", "phone", "home", "address", "currentAddress"];
 
 /** Giá trị ban đầu của form: ảnh có thể còn là data URL kiểu cũ. */
@@ -223,7 +232,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
           )}
           <div className="form-grid">
             <Field label="Họ và tên" name="name" value={form.name} error={errors.name} fromOcr={ocrFilledFields.has("name")} onChange={(value) => { setForm({ ...form, name: value }); markOcrFieldTouched("name"); }} />
-            <Field label="Số căn cước công dân" name="cccd" value={form.cccd} error={errors.cccd} fromOcr={ocrFilledFields.has("cccd")} onChange={(value) => { setForm({ ...form, cccd: value }); markOcrFieldTouched("cccd"); }} />
+            <Field label="Số căn cước công dân" name="cccd" value={form.cccd} error={errors.cccd ?? cccdProvince(form.cccd).error} hint={cccdProvince(form.cccd).hint} fromOcr={ocrFilledFields.has("cccd")} onChange={(value) => { setForm({ ...form, cccd: value }); markOcrFieldTouched("cccd"); }} />
             <Field label="Ngày sinh" name="dob" type="date" value={form.dob} error={errors.dob} fromOcr={ocrFilledFields.has("dob")} onChange={(value) => { setForm({ ...form, dob: value }); markOcrFieldTouched("dob"); }} />
             <label className={ocrFilledFields.has("gender") ? "field ocr-filled" : "field"}>
               <span>Giới tính</span>

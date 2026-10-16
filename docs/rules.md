@@ -16,7 +16,7 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | PHONE-04 | Lưu dạng chỉ chữ số; formatPhone hiển thị dạng 0839 395 292. | Đã chốt | `PHONE_04` |
 | PHONE-05 | Trùng số giữa hai nhân sự chỉ cảnh báo, không chặn. | Đã chốt | `PHONE_05` |
 | CCCD-01 | Đúng 12 chữ số. Chuỗi 9 chữ số báo CCCD_IS_OLD_CMND (chứng minh nhân dân cũ, không chấp nhận). | Đã chốt | `CCCD_01` |
-| CCCD-02 | 3 số đầu là mã tỉnh, phải nằm trong 001 đến 096 (đặt trong file cấu hình provinceCodes.ts để thay bằng danh sách chính thức; ghi TODO). | Đã chốt | `CCCD_02` |
+| CCCD-02 | 3 số đầu là mã tỉnh, phải thuộc 63 mã chính thức theo Thông tư 07/2016/TT-BCA (src/lib/vietnam/provinceCodes.ts); form và hồ sơ hiện tên tỉnh đăng ký khai sinh. | Đã chốt | `CCCD_02` |
 | CCCD-03 | Số thứ 4 cho thế kỷ và giới tính: thế kỷ = 1900 + 100 * floor(d / 2), giới tính = chẵn là Nam, lẻ là Nữ. Số thứ 5 và 6 là hai số cuối năm sinh. Hàm decodeCccd trả {provinceCode, gender, birthYear}. | Đã chốt | `CCCD_03` |
 | CCCD-04 | Năm sinh giải mã phải khớp năm của ngày sinh đã nhập; giới tính giải mã phải khớp giới tính đã nhập. Sai thì lỗi CCCD_DOB_MISMATCH hoặc CCCD_GENDER_MISMATCH, trừ khi Admin cung cấp mismatchOverrideReason (từ 5 ký tự trở lên); khi đó cho lưu, kèm cảnh báo lưu trên hồ sơ và ghi vào nhật ký. | Giả định | `CCCD_04` |
 | CCCD-05 | Duy nhất trong toàn hệ thống kể cả nhân sự đã ẩn. Thông báo lỗi nêu mã nhân viên đang giữ số đó. | Đã chốt | `CCCD_05` |

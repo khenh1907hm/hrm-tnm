@@ -6,6 +6,7 @@ import type { Certificate, FileRef } from "../../modules/certificates/types";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
 import type { Employee } from "../../modules/employees/types";
 import { usePhotoUrl } from "./employeePhoto";
+import { provinceOfCccd } from "../../lib/vietnam/provinceCodes";
 import type { App, SetNotice } from "./shared";
 
 export function EmployeeDetailView(props: {
@@ -45,7 +46,7 @@ export function EmployeeDetailView(props: {
         )}
         <div style={{ flex: 1, minWidth: "260px" }}>
           <h2>Thông tin cá nhân</h2>
-          <dl>{[["Ngày sinh", selected.dob], ["Giới tính", selected.gender], ["CCCD", selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày nhận việc", selected.startDate]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+          <dl>{[["Ngày sinh", selected.dob], ["Giới tính", selected.gender], ["CCCD", provinceOfCccd(selected.cccd) ? `${selected.cccd} (${provinceOfCccd(selected.cccd)})` : selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày nhận việc", selected.startDate]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
           <button className="button" onClick={async () => { const result = await app.employees.revealCccd(actor, selected.id); if (result.ok) props.setNotice(`CCCD đầy đủ: ${result.value}`); }}>Hiện CCCD đầy đủ</button>
         </div>
       </div>
