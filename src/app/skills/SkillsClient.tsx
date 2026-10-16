@@ -17,6 +17,14 @@ type SkillPost = {
   updated_at: string;
 };
 
+type GuideTab = "web" | "code" | "gpt" | "codex";
+const GUIDE_TABS: { key: GuideTab; label: string }[] = [
+  { key: "web", label: "Claude" },
+  { key: "code", label: "Claude Code" },
+  { key: "gpt", label: "ChatGPT" },
+  { key: "codex", label: "Codex" },
+];
+
 type ZipState = { kind: "new"; file: File } | { kind: "keep"; path: string; name: string; size: number } | null;
 
 const publicPrefix = () => `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""}/storage/v1/object/public/${SKILL_BUCKET}/`;
@@ -93,7 +101,7 @@ export default function SkillsClient() {
   const [notice, setNotice] = useState("");
   const [composer, setComposer] = useState<{ editing: SkillPost | null } | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [guideTab, setGuideTab] = useState<"web" | "code">("web");
+  const [guideTab, setGuideTab] = useState<GuideTab>("web");
   const guideRef = useRef<HTMLDetailsElement>(null);
   const [version, setVersion] = useState(0);
   const load = useCallback(() => setVersion((value) => value + 1), []);
@@ -137,7 +145,7 @@ export default function SkillsClient() {
         <div>
           <Link className="sk-back" href="/">← Quản lý nhân sự</Link>
           <h1>Kho Skill AI</h1>
-          <p>Nơi lưu các gói skill (.zip) cho Claude, kèm ghi chú và ảnh minh họa cách dùng. Tải về rồi cài theo mục “Cách cài skill”.</p>
+          <p>Nơi lưu các gói skill (.zip) cho Claude, ChatGPT, Codex, kèm ghi chú và ảnh minh họa cách dùng. Tải về rồi cài theo mục “Cách cài skill”.</p>
         </div>
         <span className="sk-count">{posts ? `${posts.length} skill` : ""}</span>
       </header>
@@ -206,35 +214,55 @@ export default function SkillsClient() {
             <summary><h2 id="sk-guide-title">Cách cài skill</h2><span aria-hidden="true" /></summary>
             <div className="sk-guide-body">
               <div className="sk-tabs" role="tablist">
-                <button type="button" role="tab" aria-selected={guideTab === "web"} onClick={() => setGuideTab("web")}>Claude.ai / App</button>
-                <button type="button" role="tab" aria-selected={guideTab === "code"} onClick={() => setGuideTab("code")}>Claude Code</button>
+                {GUIDE_TABS.map((tab) => <button key={tab.key} type="button" role="tab" aria-selected={guideTab === tab.key} onClick={() => setGuideTab(tab.key)}>{tab.label}</button>)}
               </div>
-              {guideTab === "web" ? (
+              {guideTab === "web" && (
                 <ol className="sk-steps" role="tabpanel">
-                  <li>Bấm <b>Tải .zip</b> ở skill muốn dùng.</li>
-                  <li>Mở Claude, vào <b>Settings → Capabilities</b> (Cài đặt → Khả năng), bật <b>Code execution</b> nếu chưa bật.</li>
-                  <li>Ở mục <b>Skills</b>, bấm <b>Upload skill</b> và chọn file .zip vừa tải. Không cần giải nén.</li>
-                  <li>Bật công tắc của skill. Từ đó Claude tự dùng khi câu hỏi khớp mô tả của skill.</li>
-                </ol>
-              ) : (
-                <ol className="sk-steps" role="tabpanel">
-                  <li>Tải .zip, giải nén để có thư mục chứa <code>SKILL.md</code>.</li>
-                  <li>Chép thư mục đó vào <code>~/.claude/skills/</code> (dùng cho mọi dự án) hoặc <code>.claude/skills/</code> trong repo (chỉ dự án đó, commit để cả nhóm và phiên cloud cùng dùng).</li>
-                  <li>Mở phiên Claude Code mới, gõ <code>/</code> để thấy skill trong danh sách.</li>
+                  <li>Bấm <b>Tải .zip</b> ở skill muốn dùng. Không giải nén.</li>
+                  <li>Mở Claude (web hoặc app), vào <b>Customize → Skills</b>. Cần bật <b>Code execution</b>.</li>
+                  <li>Bấm <b>+</b> → <b>Create skill</b> → <b>Upload a skill</b>, chọn file .zip.</li>
+                  <li>Bật công tắc của skill. Claude tự dùng khi yêu cầu khớp <code>description</code>, hoặc nhắn “dùng skill ten-skill …”.</li>
                 </ol>
               )}
-              <div className="sk-label">Cấu trúc một gói skill</div>
+              {guideTab === "code" && (
+                <ol className="sk-steps" role="tabpanel">
+                  <li>Giải nén .zip để có thư mục chứa <code>SKILL.md</code>.</li>
+                  <li>Chép thư mục vào <code>~/.claude/skills/</code> (mọi dự án) hoặc <code>.claude/skills/</code> trong repo (commit để cả nhóm và phiên cloud cùng dùng).</li>
+                  <li>Mở phiên mới. Claude tự dùng khi khớp mô tả, hoặc gõ <code>/ten-skill</code> để chạy ngay.</li>
+                  <li>Script trong skill chạy bằng lệnh Bash nên Claude Code sẽ hỏi quyền lần đầu.</li>
+                </ol>
+              )}
+              {guideTab === "gpt" && (
+                <ol className="sk-steps" role="tabpanel">
+                  <li>Chỉ có ở gói ChatGPT <b>Business, Enterprise, Edu</b> (và tùy cài đặt workspace); admin có thể tắt tải lên.</li>
+                  <li>Vào <b>Skills</b> → <b>Create</b> → <b>Upload from your computer</b>, chọn file .zip. ChatGPT quét file trước khi cho dùng.</li>
+                  <li>Gọi bằng cách gõ <code>@</code> rồi chọn skill, hoặc để ChatGPT tự chọn khi khớp mô tả.</li>
+                </ol>
+              )}
+              {guideTab === "codex" && (
+                <ol className="sk-steps" role="tabpanel">
+                  <li>Giải nén, chép thư mục vào <code>.agents/skills/</code> trong repo hoặc <code>~/.agents/skills/</code> (mọi dự án).</li>
+                  <li>Codex tự dùng khi khớp mô tả, hoặc gõ <code>$ten-skill</code> / <code>/skills</code> để gọi.</li>
+                </ol>
+              )}
+              <div className="sk-label">Cấu trúc một gói skill (chung cho mọi AI)</div>
               <pre>{`ten-skill.zip
-└─ ten-skill/
+└─ ten-skill/        (tên thư mục = name)
    ├─ SKILL.md      (bắt buộc)
    ├─ scripts/      (tùy chọn)
-   └─ references/   (tùy chọn)`}</pre>
+   ├─ references/   (tùy chọn)
+   └─ assets/       (tùy chọn)`}</pre>
               <div className="sk-label">Đầu file SKILL.md</div>
               <pre>{`---
 name: ten-skill
 description: Làm gì và khi nào dùng
 ---
-Hướng dẫn chi tiết cho Claude…`}</pre>
+Hướng dẫn chi tiết cho AI…`}</pre>
+              <ul className="sk-steps">
+                <li><code>name</code>: chữ thường, số, dấu gạch ngang, tối đa 64 ký tự.</li>
+                <li><code>description</code>: tối đa 1.024 ký tự, nói rõ khi nào dùng.</li>
+                <li>Nén cả thư mục, không nén lẻ các file bên trong.</li>
+              </ul>
               <p>Chỉ cài skill từ nguồn bạn tin cậy: skill có thể chứa script chạy trên máy.</p>
             </div>
           </details>
