@@ -9,7 +9,7 @@ export type Permission = keyof typeof PERMISSIONS;
 export function can(actor: Actor, permission: Permission): boolean { return PERMISSIONS[permission].some((role) => role === actor.role); }
 
 export const FACADE_USE_CASE_PERMISSIONS = {
-  employees: { validate: "employeeWrite", create: "employeeWrite", update: "employeeWrite", archive: "employeeArchive", restore: "employeeArchive", get: "employeeRead", list: "employeeRead", search: "employeeRead", revealCccd: "employeeReveal", updateExtra: "employeeWrite" },
+  employees: { validate: "employeeWrite", create: "employeeWrite", importMany: "employeeWrite", update: "employeeWrite", archive: "employeeArchive", restore: "employeeArchive", get: "employeeRead", list: "employeeRead", search: "employeeRead", revealCccd: "employeeReveal", updateExtra: "employeeWrite" },
   certificates: { add: "certificateWrite", renew: "certificateWrite", update: "certificateWrite", updateAttachments: "certificateWrite", archive: "certificateWrite", restore: "certificateWrite", listByEmployee: "certificateRead", listExpiring: "certificateRead" },
   certificateTypes: { list: "certificateTypeRead", create: "certificateTypeWrite", update: "certificateTypeWrite", archive: "certificateTypeWrite" },
   signatures: { add: "signatureWrite", update: "signatureWrite", setDefault: "signatureWrite", remove: "signatureWrite", list: "signatureRead" },

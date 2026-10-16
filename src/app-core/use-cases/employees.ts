@@ -1,5 +1,5 @@
 import { diffDays } from "../../lib/dates";
-import { failure, issue, success, type Result } from "../../lib/result";
+import { failure, issue, success, type Issue, type Result } from "../../lib/result";
 import { normalizeText } from "../../lib/text";
 import { maskCccd } from "../../lib/vietnam/cccd";
 import type { Actor } from "../../modules/auth/permissions";
@@ -22,6 +22,8 @@ export type EmployeeListInput = {
   sort?: EmployeeSort; sortDir?: "asc" | "desc";
 };
 export type EmployeeFacets = { positions: Record<string, number>; statuses: Record<string, number>; certificateHealth: Record<CertificateHealth, number>; certificateTypes: Record<string, number> };
+/** Kết quả từng dòng khi nhập nhiều hồ sơ (cùng thứ tự với đầu vào). */
+export type EmployeeImportOutcome = { ok: true; employee: Employee | null; warnings: Issue[] } | { ok: false; errors: Issue[]; warnings: Issue[] };
 export type EmployeeListResult = { items: Employee[]; page: number; pageSize: number; total: number; pageCount: number; facets: EmployeeFacets };
 
 export function createEmployeeUseCases(ctx: HrAppContext) {
@@ -52,6 +54,36 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       await repositories.employees.insert(value);
       await writeAudit(actor, "employee.create", "employee", value.id, null, value);
       return success(value, validation.warnings);
+    },
+    /**
+     * Nhập nhiều hồ sơ (từ Excel). Đọc danh sách sẵn có một lần, kiểm tra từng dòng với dữ liệu cũ
+     * và các dòng phía trên (bắt trùng mã/CCCD ngay trong file). dryRun: chỉ kiểm tra, không lưu.
+     */
+    importMany: async (actor: Actor, input: { rows: readonly EmployeeInput[]; dryRun: boolean }): Promise<Result<EmployeeImportOutcome[]>> => {
+      if (!has(actor, "employeeWrite")) return err("FORBIDDEN");
+      // Mỗi bản ghi cần id: validateEmployee chỉ tính trùng với bản ghi có id khác bản đang kiểm tra
+      const known: { code: string; cccd: string; phone: string; id: string }[] = await repositories.employees.list();
+      const commanderIds = await getCommanderIds();
+      const outcomes: EmployeeImportOutcome[] = [];
+      for (const row of input.rows) {
+        const shape = employeeInputSchema.safeParse(row);
+        if (!shape.success) { outcomes.push({ ok: false, errors: shape.error.issues.map((item) => { const field = String(item.path[0] ?? "form"); return issue(field === "position" ? "EMP_POSITION_INVALID" : field === "group" ? "EMP_GROUP_INVALID" : "EMP_INPUT_INVALID", field); }), warnings: [] }); continue; }
+        // Nhập hàng loạt không cho ghi đè lệch CCCD: dòng lệch phải sửa trong file hoặc nhập tay
+        const validation = validateEmployee({ ...row, mismatchOverrideReason: "" }, today(), known, undefined, commanderIds);
+        if (validation.errors.length) { outcomes.push({ ok: false, errors: validation.errors, warnings: validation.warnings }); continue; }
+        known.push({ ...validation.value, id: `import-row-${outcomes.length}` });
+        if (input.dryRun) { outcomes.push({ ok: true, employee: null, warnings: validation.warnings }); continue; }
+        const value: Employee = { ...validation.value, id: deps.ids.next(), version: 1, archivedAt: null, archivedBy: null, archiveReason: null, cccdMismatchOverrideReason: null };
+        try {
+          await repositories.employees.insert(value);
+          await writeAudit(actor, "employee.import", "employee", value.id, null, value);
+          outcomes.push({ ok: true, employee: value, warnings: validation.warnings });
+        } catch {
+          known.pop();
+          outcomes.push({ ok: false, errors: [issue("EMP_IMPORT_SAVE_FAILED")], warnings: [] });
+        }
+      }
+      return success(outcomes);
     },
     update: async (actor: Actor, input: EmployeeInput & { id: string; expectedVersion: number }): Promise<Result<Employee>> => {
       if (!has(actor, "employeeWrite")) return err("FORBIDDEN");

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, PenLine, Plus, Search, ShieldCheck, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, FileUp, PenLine, Plus, Search, ShieldCheck, Users, X } from "lucide-react";
 import type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeSort } from "../../app-core/createHrApp";
 import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistSummary } from "../../modules/certificates/checklist";
@@ -115,6 +115,7 @@ export function EmployeeListView(props: {
   rosterBusy: boolean;
   onExportSelected: () => void;
   onCreate: () => void;
+  onImport: () => void;
   onOpen: (employee: Employee) => void;
   onRestore: (employee: Employee) => void;
 }) {
@@ -161,7 +162,10 @@ export function EmployeeListView(props: {
   return <>
     <div className="page-head">
       <div><h1>Nhân sự</h1><p>Quản lý hồ sơ và tình trạng nhân sự</p></div>
-      {actor.role === "admin" && <button className="button primary" onClick={props.onCreate}><Plus className="ico" size={16} aria-hidden="true" /> Thêm nhân sự</button>}
+      {actor.role === "admin" && <div className="button-row">
+        <button className="button" onClick={props.onImport}><FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel</button>
+        <button className="button primary" onClick={props.onCreate}><Plus className="ico" size={16} aria-hidden="true" /> Thêm nhân sự</button>
+      </div>}
     </div>
 
     <div className="stat-strip">

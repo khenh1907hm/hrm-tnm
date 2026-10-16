@@ -386,3 +386,19 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 
 .pill.none{background:var(--soft);color:var(--muted)}
 .side-nav a.nav-item{color:var(--nav-ink)}.side-nav a.nav-item:hover{color:var(--nav-ink-strong)}
+
+/* Nhập nhân sự từ Excel */
+.import-dialog{max-width:960px}
+.import-body{padding:18px 20px;display:grid;gap:14px}
+.import-body>p{margin:0}
+.import-pick{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.import-pick label.button{cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.import-sheet{display:flex;align-items:center;gap:6px;color:var(--muted)}.import-sheet select{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:#fff}
+.import-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:var(--muted)}
+.import-summary .check-field{display:flex;align-items:center;gap:6px;margin-left:auto}
+.import-table{max-height:52vh}
+.import-table td{vertical-align:top}.import-table tbody tr{cursor:default}
+.import-table ul{margin:6px 0 0;padding-left:18px;font-size:13px;color:var(--muted)}
+.import-table tr.import-error ul{color:var(--bad)}
+.import-progress progress{width:100%}
+.import-finished p{margin:0 0 6px}
