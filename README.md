@@ -42,10 +42,25 @@ public/fonts/BeVietnamPro-Bold.ttf
 
 Có thể tải phông Be Vietnam Pro từ [Google Fonts](https://fonts.google.com/specimen/Be+Vietnam+Pro). Bản xuất PDF báo lỗi rõ ràng khi thiếu một trong hai tệp, không thay bằng phông khác.
 
+## Email nhắc hạn
+
+Vercel Cron gọi `GET /api/reminders/run` lúc 01:00 UTC (8:00 giờ Việt Nam) mỗi ngày (`vercel.json`). Admin cũng có thể bấm "Xem email cần gửi" → "Gửi email ngay" ở màn hình cảnh báo. Mỗi chứng chỉ chỉ gửi một lần cho mỗi mốc (bảng `reminder_log`). Địa chỉ nhận đặt trong phần Cài đặt của app.
+
+Biến môi trường phía máy chủ (đặt trên Vercel, không dùng tiền tố `NEXT_PUBLIC_`):
+
+| Biến | Ý nghĩa |
+|---|---|
+| `SUPABASE_SECRET_KEY` | Khóa bí mật Supabase (Project Settings → API Keys → Secret key), để đọc dữ liệu khi chạy tự động |
+| `CRON_SECRET` | Chuỗi ngẫu nhiên dài; Vercel tự gửi kèm khi gọi lịch chạy |
+| `SMTP_HOST`, `SMTP_PORT` | Ví dụ Gmail: `smtp.gmail.com`, `465` |
+| `SMTP_USER`, `SMTP_PASS` | Tài khoản gửi; với Gmail dùng mật khẩu ứng dụng (App Password) |
+| `MAIL_FROM` | Tùy chọn, ví dụ `TNM HRM <hr@congty.vn>`; mặc định là `SMTP_USER` |
+| `APP_BASE_URL` | Địa chỉ app, dùng cho liên kết trong email |
+
 ## Giới hạn bản thử
 
 - Dữ liệu nhân sự, loại chứng chỉ, chữ ký và nhật ký chỉ tồn tại trong bộ nhớ phiên; tải lại trang sẽ tạo lại dữ liệu mẫu.
 - Chưa có đăng nhập thật; bộ chuyển vai trò Admin/HR chỉ phục vụ kiểm thử giao diện và facade.
-- Nhắc hạn chỉ chạy bằng Mailer giả. Không gửi email thật.
+- Chế độ demo (không có biến Supabase) chỉ giả lập nhắc hạn, không gửi email thật.
 - Tệp tải lên và ảnh nhận diện chỉ giữ trong bộ nhớ trang. Tệp mẫu có thể chỉ có metadata nên không có bản xem trước.
 - OCR phụ thuộc hai tệp ngôn ngữ cục bộ. PDF phụ thuộc hai tệp phông Be Vietnam Pro cục bộ.

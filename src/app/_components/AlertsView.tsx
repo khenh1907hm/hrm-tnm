@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
 import { reminderEmail } from "../../modules/reminders/email";
+import { getSupabaseClient } from "../../lib/supabase/client";
 import { issueText, type App, type ExpiringCertificateRow, type SetNotice } from "./shared";
 
 type AlertFilter = "all" | "expired" | "d30" | "d60";
@@ -9,6 +10,9 @@ export function AlertsView(props: { app: App; actor: Actor; certRows: ExpiringCe
   const { app, actor, certRows, setNotice } = props;
   const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
   const [reminderPreview, setReminderPreview] = useState<{ recipients: string[]; subject: string; text: string }[]>([]);
+  const [sending, setSending] = useState(false);
+  // Có Supabase thì gửi email thật qua máy chủ; chế độ demo chỉ giả lập
+  const live = getSupabaseClient() !== null;
 
   const runReminders = async () => {
     const [due, settings, types] = await Promise.all([app.reminders.computeDue(actor), app.settings.get(actor), app.certificateTypes.list(actor)]);
@@ -20,7 +24,28 @@ export function AlertsView(props: { app: App; actor: Actor; certRows: ExpiringCe
       return { recipients: settings.value.reminderEmails, ...reminderEmail(item.employee, item.certificate, item.daysLeft, `/nhan-su/${item.employee.id}`, category) };
     });
     setReminderPreview(messages);
-    setNotice(`Đã chuẩn bị ${messages.length} email giả lập. Chưa gửi email thật.`);
+    setNotice(live ? `Có ${messages.length} email nhắc hạn cần gửi. Kiểm tra rồi bấm "Gửi email ngay".` : `Đã chuẩn bị ${messages.length} email giả lập. Chưa gửi email thật.`);
+  };
+
+  const refreshRows = async () => {
+    const updated = await app.certificates.listExpiring(actor);
+    if (updated.ok) props.onCertRowsChange(updated.value);
+  };
+
+  const sendRemindersNow = async () => {
+    setSending(true);
+    try {
+      const session = await getSupabaseClient()?.auth.getSession();
+      const token = session?.data.session?.access_token;
+      const response = await fetch("/api/reminders/run", { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} });
+      const body = await response.json().catch(() => null) as { ok?: boolean; message?: string; sent?: string[]; failed?: unknown[]; skipped?: unknown[] } | null;
+      if (!response.ok || !body?.ok) { setNotice(body?.message ?? "Không gửi được email nhắc hạn."); return; }
+      const failed = body.failed?.length ?? 0;
+      setNotice(failed ? `Đã gửi ${body.sent?.length ?? 0} email, ${failed} email lỗi. Kiểm tra cấu hình SMTP.` : `Đã gửi ${body.sent?.length ?? 0} email nhắc hạn.`);
+      setReminderPreview([]);
+      await refreshRows();
+    } catch { setNotice("Không kết nối được máy chủ để gửi email."); }
+    finally { setSending(false); }
   };
 
   const markRemindersSent = async () => {
@@ -30,16 +55,17 @@ export function AlertsView(props: { app: App; actor: Actor; certRows: ExpiringCe
     if (!result.ok) { setNotice(issueText(result.errors[0]?.code ?? "FORBIDDEN")); return; }
     setNotice(`Đã đánh dấu ${result.value.sent.length} email là đã gửi giả lập. Chưa gửi email thật.`);
     setReminderPreview([]);
-    const updated = await app.certificates.listExpiring(actor);
-    if (updated.ok) props.onCertRowsChange(updated.value);
+    await refreshRows();
   };
 
   const visibleRows = certRows.filter((item) => alertFilter === "all" || (alertFilter === "expired" && item.group === "expired") || (alertFilter === "d30" && item.daysLeft >= 0 && item.daysLeft <= 30) || (alertFilter === "d60" && item.daysLeft >= 31 && item.daysLeft <= 60));
 
   return <>
-    <div className="page-head"><div><h1>Chứng chỉ hết hạn và sắp hết hạn</h1><p>Giả lập, chưa gửi email thật</p></div>{actor.role === "admin" && <button className="button primary" onClick={() => void runReminders()}>Chạy nhắc hạn thử</button>}</div>
+    <div className="page-head"><div><h1>Chứng chỉ hết hạn và sắp hết hạn</h1><p>{live ? "Email nhắc hạn tự gửi lúc 8:00 sáng mỗi ngày" : "Giả lập, chưa gửi email thật"}</p></div>{actor.role === "admin" && <button className="button primary" onClick={() => void runReminders()}>{live ? "Xem email cần gửi" : "Chạy nhắc hạn thử"}</button>}</div>
     <div className="alert-filters"><button className="button" onClick={() => setAlertFilter("all")}>Tất cả ({certRows.length})</button><button className="button" onClick={() => setAlertFilter("expired")}>Đã hết hạn ({certRows.filter((item) => item.group === "expired").length})</button><button className="button" onClick={() => setAlertFilter("d30")}>Trong 30 ngày ({certRows.filter((item) => item.daysLeft >= 0 && item.daysLeft <= 30).length})</button><button className="button" onClick={() => setAlertFilter("d60")}>31 đến 60 ngày ({certRows.filter((item) => item.daysLeft >= 31 && item.daysLeft <= 60).length})</button></div>
-    <div className="panel table-scroll"><table><thead><tr><th>Nhân sự</th><th>Chứng chỉ</th><th>Ngày hết hạn</th><th>Số ngày còn lại</th><th>Email nhắc</th></tr></thead><tbody>{visibleRows.map((item) => <tr key={item.id} onClick={() => props.onOpenEmployee(item.employeeId)}><td>{item.employeeName} ({item.employeeCode})</td><td>{item.displayName}</td><td>{item.expiryDate}</td><td><span className={item.daysLeft < 0 ? "pill bad" : item.daysLeft <= 30 ? "pill warn" : "pill ok"}>{item.daysLeft}</span></td><td>{item.reminderSent ? `Đã gửi giả lập ngày ${item.reminderSentDate ?? item.reminderSendDate}` : `Sẽ gửi ngày ${item.reminderSendDate}`}</td></tr>)}</tbody></table></div>
-    {reminderPreview.length > 0 && <section className="panel detail-panel"><h2>Email nhắc hạn dự kiến</h2>{reminderPreview.map((email, index) => <article className="email-preview" key={`${email.subject}-${index}`}><b>Người nhận: {email.recipients.join(", ")}</b><h3>{email.subject}</h3><pre>{email.text}</pre></article>)}{actor.role === "admin" && <button className="button primary" onClick={() => void markRemindersSent()}>Đánh dấu đã gửi (giả lập)</button>}</section>}
+    <div className="panel table-scroll"><table><thead><tr><th>Nhân sự</th><th>Chứng chỉ</th><th>Ngày hết hạn</th><th>Số ngày còn lại</th><th>Email nhắc</th></tr></thead><tbody>{visibleRows.map((item) => <tr key={item.id} onClick={() => props.onOpenEmployee(item.employeeId)}><td>{item.employeeName} ({item.employeeCode})</td><td>{item.displayName}</td><td>{item.expiryDate}</td><td><span className={item.daysLeft < 0 ? "pill bad" : item.daysLeft <= 30 ? "pill warn" : "pill ok"}>{item.daysLeft}</span></td><td>{item.reminderSent ? `${live ? "Đã gửi" : "Đã gửi giả lập"} ngày ${item.reminderSentDate ?? item.reminderSendDate}` : `Sẽ gửi ngày ${item.reminderSendDate}`}</td></tr>)}</tbody></table></div>
+    {reminderPreview.length > 0 && <section className="panel detail-panel"><h2>Email nhắc hạn dự kiến</h2>{reminderPreview.map((email, index) => <article className="email-preview" key={`${email.subject}-${index}`}><b>Người nhận: {email.recipients.join(", ")}</b><h3>{email.subject}</h3><pre>{email.text}</pre></article>)}{actor.role === "admin" && (live
+      ? <button className="button primary" disabled={sending} onClick={() => void sendRemindersNow()}>{sending ? "Đang gửi…" : "Gửi email ngay"}</button>
+      : <button className="button primary" onClick={() => void markRemindersSent()}>Đánh dấu đã gửi (giả lập)</button>)}</section>}
   </>;
 }
