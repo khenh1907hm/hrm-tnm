@@ -8,6 +8,7 @@ export const VIEW_PATHS: Record<PageView, string> = {
   reports: "/bao-cao",
   settings: "/cai-dat",
   skills: "/skills",
+  audit: "/nhat-ky",
 };
 
 /** Tiêu đề tab trình duyệt theo màn hình. */
@@ -18,6 +19,7 @@ export const VIEW_TITLES: Record<PageView, string> = {
   reports: "FORM Báo cáo",
   settings: "Cài đặt",
   skills: "Kho Skill AI",
+  audit: "Nhật ký thay đổi",
 };
 
 export type AppRoute = { view: PageView; employeeId: string | null };

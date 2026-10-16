@@ -1,4 +1,4 @@
-import { BellRing, FileSpreadsheet, LogOut, PenLine, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BellRing, FileSpreadsheet, History, LogOut, PenLine, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import { routePath } from "./routes";
 import type { PageView } from "./shared";
@@ -10,7 +10,10 @@ const NAV_ITEMS: readonly (readonly [PageView, string, LucideIcon])[] = [
   ["reports", "FORM Báo cáo (Excel)", FileSpreadsheet],
   ["settings", "Cài đặt email", Settings],
   ["skills", "Kho Skill AI", Sparkles],
+  ["audit", "Nhật ký thay đổi", History],
 ];
+/** Mục chỉ admin thấy. */
+const ADMIN_ONLY: ReadonlySet<PageView> = new Set(["audit"]);
 
 export function SideNav(props: { mode: "demo" | "live"; email: string | null; onSignOut: () => void; view: PageView; onNavigate: (view: PageView) => void; alertCount: number; actor: Actor; onActorChange: (actor: Actor) => void }) {
   const { view, onNavigate, alertCount, actor, onActorChange } = props;
@@ -18,7 +21,7 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
     <aside className="side-nav">
       <div className="brand"><div className="brand-mark">TNM</div><div><b>Thiên Nhật Minh</b><span>Quản lý nhân sự</span></div></div>
       <nav aria-label="Chức năng">
-        {NAV_ITEMS.map(([key, label, Icon]) => (
+        {NAV_ITEMS.filter(([key]) => actor.role === "admin" || !ADMIN_ONLY.has(key)).map(([key, label, Icon]) => (
           <a className={view === key ? "nav-item active" : "nav-item"} key={key} href={routePath(key)} aria-current={view === key ? "page" : undefined} onClick={(event) => {
             // Giữ Ctrl/Cmd/Shift hoặc chuột giữa thì để trình duyệt mở tab mới
             if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

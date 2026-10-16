@@ -10,6 +10,7 @@ import type { Employee } from "../modules/employees/types";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
+import { AuditLogView } from "./_components/AuditLogView";
 import { CertificateFormModal, type CertificateFormMode } from "./_components/CertificateFormModal";
 import { EmployeeDetailView } from "./_components/EmployeeDetailView";
 import { EmployeeFormModal, type EmployeeFormInitial } from "./_components/EmployeeFormModal";
@@ -367,6 +368,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
         {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} />}
         {view === "skills" && <SkillsClient embedded />}
+        {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
         {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal

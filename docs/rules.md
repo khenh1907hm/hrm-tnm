@@ -79,6 +79,8 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | AUD-01 | Mọi thao tác thay đổi dữ liệu thành công ghi một sự kiện {id, at, actorId, role, action, entityType, entityId, before, after}. Thao tác thất bại không ghi. | Đã chốt | `AUD_01` |
 | AUD-02 | Trong before và after, số CCCD được che bằng maskCccd. Việc hiện số CCCD đầy đủ cũng ghi sự kiện cccd.reveal. | Đã chốt | `AUD_02` |
 | AUD-03 | Nhật ký chỉ thêm, không sửa, không xóa. Chỉ Admin đọc được. | Đã chốt | `AUD_03` |
+| AUD-04 | Chuỗi data URL (ảnh base64) trong before và after được thay bằng dấu "đã lược bỏ" để nhật ký không phình theo ảnh. | Đã chốt | `AUD_04` |
+| AUD-05 | Màn hình Nhật ký đọc theo trang (mới nhất trước, tối đa 100 dòng mỗi trang), lọc được theo loại đối tượng và theo từng đối tượng; hiện tên thao tác, đối tượng và các trường đã đổi. | Đã chốt | `AUD_05` |
 | EXP-01 | checkReadiness(employee, signDate, signerId) trả danh sách lỗi chặn nếu thiếu bất kỳ trường nào trên phiếu: họ tên, ngày sinh, giới tính, nguyên quán, địa chỉ thường trú, số điện thoại, ngày nhận việc, người liên hệ khẩn cấp, người ký (có trong thư viện), ngày ký hợp lệ. Nhân sự đã ẩn thì chặn. Chưa có nhóm ATLĐ trong khi có chứng chỉ huấn luyện an toàn được tick thì chỉ cảnh báo. | Giả định | `EXP_01` |
 | EXP-02 | Ô tick hệ thống đúng khi có ít nhất một chứng chỉ hiện hành cùng loại còn hạn tại ngày ký; ghi chú hết hạn chỉ khi không còn chứng chỉ nào của loại đó hợp lệ. | Đã chốt | `EXP_02` |
 | EXP-03 | Kinh nghiệm tính từ ngày nhận việc đến ngày ký. Ngày nhận việc sau ngày ký thì hiển thị "0 tháng" kèm cảnh báo. | Đã chốt | `EXP_03` |

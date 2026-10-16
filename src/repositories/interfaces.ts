@@ -18,9 +18,12 @@ export type CertificateRepository = Repository<Certificate> & {
 };
 export type CertificateTypeRepository = Repository<CertificateTypeRecord>;
 export type CommanderRepository = Repository<Commander>;
+/** Đọc nhật ký theo trang, mới nhất trước; lọc theo loại/đối tượng nếu có. */
+export type AuditQuery = { offset: number; limit: number; entityType?: string; entityId?: string };
 export interface AuditRepository {
   append(event: AuditEvent): Promise<void>;
   list(): Promise<AuditEvent[]>;
+  page(query: AuditQuery): Promise<{ items: AuditEvent[]; total: number }>;
 }
 export type SignatureRepository = Repository<Signature> & {
   /** Xóa hẳn chữ ký; trả về false nếu không tồn tại. */

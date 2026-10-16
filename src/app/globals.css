@@ -402,3 +402,8 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .import-table tr.import-error ul{color:var(--bad)}
 .import-progress progress{width:100%}
 .import-finished p{margin:0 0 6px}
+/* Nhật ký thay đổi */
+.audit-filter{display:inline-flex;align-items:center;gap:8px;color:var(--muted);font-size:14px}.audit-filter select{min-height:34px;border:1px solid var(--line);border-radius:6px;padding:0 8px;background:var(--surface)}
+.audit-table .nowrap{white-space:nowrap}.audit-entity{display:block;font-size:12px}.audit-table tr.is-open>td{background:var(--soft)}
+.audit-detail>td{background:var(--soft);padding:4px 14px 14px}.audit-detail table{background:var(--surface);border:1px solid var(--line);border-radius:6px}.audit-detail th,.audit-detail td{padding:7px 12px;cursor:default}.audit-detail tbody tr:hover{background:transparent}
+.audit-before{color:var(--muted);text-decoration:line-through}.audit-after{font-weight:600}

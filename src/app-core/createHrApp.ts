@@ -19,6 +19,9 @@ export type { HrAppDeps, HrRepositories, Mailer } from "./context";
 export type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeListResult, EmployeeSort } from "./use-cases/employees";
 export type { ReminderRunResult } from "./use-cases/reminders";
 
+export type AuditPageInput = { page?: number; pageSize?: number; entityType?: string; entityId?: string };
+export type AuditPage = { items: AuditEvent[]; total: number; page: number; pageSize: number; pageCount: number };
+
 export function createHrApp(deps: HrAppDeps) {
   const ctx = createHrAppContext(deps, deps.repositories ?? createMemoryRepositories());
   const { repositories, has } = ctx;
@@ -34,7 +37,17 @@ export function createHrApp(deps: HrAppDeps) {
     exports: createExportUseCases(ctx),
     reminders: createReminderUseCases(ctx),
     ocr: { parseIdText: async (actor: Actor, text: string): Promise<Result<ParsedId>> => has(actor, "ocr") ? success(parseIdText(text)) : err("FORBIDDEN"), mergeParsed },
-    audit: { list: async (actor: Actor): Promise<Result<AuditEvent[]>> => has(actor, "auditRead") ? success(await repositories.audit.list()) : err("FORBIDDEN") },
+    audit: {
+      list: async (actor: Actor): Promise<Result<AuditEvent[]>> => has(actor, "auditRead") ? success(await repositories.audit.list()) : err("FORBIDDEN"),
+      /** Nhật ký theo trang (mới nhất trước), chỉ đọc đúng trang cần hiện. */
+      page: async (actor: Actor, input: AuditPageInput = {}): Promise<Result<AuditPage>> => {
+        if (!has(actor, "auditRead")) return err("FORBIDDEN");
+        const pageSize = Math.min(100, Math.max(1, Math.floor(input.pageSize ?? 50)));
+        const page = Math.max(1, Math.floor(input.page ?? 1));
+        const { items, total } = await repositories.audit.page({ offset: (page - 1) * pageSize, limit: pageSize, ...(input.entityType ? { entityType: input.entityType } : {}), ...(input.entityId ? { entityId: input.entityId } : {}) });
+        return success({ items, total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)) });
+      },
+    },
     messages: messagesVi,
   };
 

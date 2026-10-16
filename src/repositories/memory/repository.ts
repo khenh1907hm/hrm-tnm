@@ -1,4 +1,4 @@
-import type { Repository, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
+import type { Repository, AuditQuery, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
 import type { AuditEvent } from "../../modules/audit/types";
 import type { HrSettings } from "../../modules/settings/types";
 
@@ -29,6 +29,12 @@ export class MemoryAuditRepository implements AuditRepository {
   private readonly events: AuditEvent[] = [];
   async append(event: AuditEvent): Promise<void> { this.events.push(structuredClone(event)); }
   async list(): Promise<AuditEvent[]> { return this.events.map((event) => structuredClone(event)); }
+  async page(query: AuditQuery): Promise<{ items: AuditEvent[]; total: number }> {
+    const matched = this.events
+      .filter((event) => (!query.entityType || event.entityType === query.entityType) && (!query.entityId || event.entityId === query.entityId))
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+    return { items: matched.slice(query.offset, query.offset + query.limit).map((event) => structuredClone(event)), total: matched.length };
+  }
 }
 
 export const DEFAULT_SETTINGS: HrSettings = { reminderEmails: [], sendExpiredNotice: false, reminderDays: 30, version: 0 };
