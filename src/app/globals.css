@@ -385,3 +385,4 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .signature-drop p{margin:0;font-size:13px}
 
 .pill.none{background:var(--soft);color:var(--muted)}
+.nav-item.nav-link{text-decoration:none}.side-nav a.nav-item{color:var(--nav-ink)}.side-nav a.nav-item:hover{color:var(--nav-ink-strong)}

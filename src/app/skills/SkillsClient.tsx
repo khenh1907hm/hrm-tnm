@@ -17,12 +17,13 @@ type SkillPost = {
   updated_at: string;
 };
 
-type GuideTab = "web" | "code" | "gpt" | "codex";
+type GuideTab = "web" | "code" | "gpt" | "codex" | "gemini";
 const GUIDE_TABS: { key: GuideTab; label: string }[] = [
   { key: "web", label: "Claude" },
   { key: "code", label: "Claude Code" },
   { key: "gpt", label: "ChatGPT" },
   { key: "codex", label: "Codex" },
+  { key: "gemini", label: "Gemini" },
 ];
 
 type ZipState = { kind: "new"; file: File } | { kind: "keep"; path: string; name: string; size: number } | null;
@@ -145,7 +146,7 @@ export default function SkillsClient() {
         <div>
           <Link className="sk-back" href="/">← Quản lý nhân sự</Link>
           <h1>Kho Skill AI</h1>
-          <p>Nơi lưu các gói skill (.zip) cho Claude, ChatGPT, Codex, kèm ghi chú và ảnh minh họa cách dùng. Tải về rồi cài theo mục “Cách cài skill”.</p>
+          <p>Nơi lưu các gói skill (.zip) cho Claude, ChatGPT, Gemini, Codex, kèm ghi chú và ảnh minh họa cách dùng. Tải về rồi cài theo mục “Cách cài skill”.</p>
         </div>
         <span className="sk-count">{posts ? `${posts.length} skill` : ""}</span>
       </header>
@@ -243,6 +244,14 @@ export default function SkillsClient() {
                 <ol className="sk-steps" role="tabpanel">
                   <li>Giải nén, chép thư mục vào <code>.agents/skills/</code> trong repo hoặc <code>~/.agents/skills/</code> (mọi dự án).</li>
                   <li>Codex tự dùng khi khớp mô tả, hoặc gõ <code>$ten-skill</code> / <code>/skills</code> để gọi.</li>
+                </ol>
+              )}
+              {guideTab === "gemini" && (
+                <ol className="sk-steps" role="tabpanel">
+                  <li>Tải lên ở <b>gemini.google.com</b> (web) hoặc app Gemini trên Mac, mục <b>Skills</b>. Cần tài khoản Google cá nhân, đủ 18 tuổi, bật Keep Activity.</li>
+                  <li>Chọn file <code>SKILL.md</code>, hoặc cả thư mục / file <b>.zip</b> có <code>SKILL.md</code> ở thư mục chính. Tổng tối đa 100 MB.</li>
+                  <li>File kèm chỉ nhận dạng chữ, PDF, ảnh và script <code>.py</code>/<code>.sh</code>. <b>Không nhận .docx, .xlsx</b>: đổi sang .md, .pdf hoặc .csv trước khi nén. Script không được truy cập internet.</li>
+                  <li>Gọi bằng <code>/</code> hoặc <code>@</code> rồi chọn skill, hoặc để Gemini tự dùng khi khớp mô tả.</li>
                 </ol>
               )}
               <div className="sk-label">Cấu trúc một gói skill (chung cho mọi AI)</div>

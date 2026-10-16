@@ -1,4 +1,5 @@
-import { BellRing, FileSpreadsheet, LogOut, PenLine, Settings, Users, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { BellRing, FileSpreadsheet, LogOut, PenLine, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import type { PageView } from "./shared";
 
@@ -23,6 +24,10 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
             {key === "alerts" && alertCount > 0 && <span className="badge" aria-label={`${alertCount} chứng chỉ cần chú ý`}>{alertCount}</span>}
           </button>
         ))}
+        <Link className="nav-item nav-link" href="/skills">
+          <Sparkles size={18} aria-hidden="true" />
+          <span className="nav-label">Kho Skill AI</span>
+        </Link>
       </nav>
       {props.mode === "demo" ? (
         <div className="side-foot">
