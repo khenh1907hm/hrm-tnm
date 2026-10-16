@@ -6,13 +6,13 @@ import type { Actor } from "../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../modules/certificates/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
-import type { Employee, EmployeeInput } from "../modules/employees/types";
+import type { Employee } from "../modules/employees/types";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
 import { CertificateFormModal, type CertificateFormMode } from "./_components/CertificateFormModal";
 import { EmployeeDetailView } from "./_components/EmployeeDetailView";
-import { EmployeeFormModal } from "./_components/EmployeeFormModal";
+import { EmployeeFormModal, type EmployeeFormInitial } from "./_components/EmployeeFormModal";
 import { DEFAULT_EMPLOYEE_FILTERS, EMPTY_PAGE_INFO, EmployeeListView, toListInput, type EmployeeFilters, type EmployeePageInfo } from "./_components/EmployeeListView";
 import { BatchExportModal } from "./_components/BatchExportModal";
 import { ExportPdfDialog, prepareExportDialog, type ExportDialogInit } from "./_components/ExportPdfDialog";
@@ -32,6 +32,7 @@ import { useBackend, type Backend } from "./_components/useBackend";
 import { getSupabaseClient } from "../lib/supabase/client";
 import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import type { FileFolder } from "./_components/fileStore";
+import { photoRef } from "../modules/employees/photo";
 import { parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
 import SkillsClient from "./skills/SkillsClient";
 
@@ -74,7 +75,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [certificateTypes, setCertificateTypes] = useState<CertificateTypeRecord[]>([]);
   const [sessionFiles, setSessionFiles] = useState<Record<string, File>>({});
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
-  const [employeeForm, setEmployeeForm] = useState<{ editing: Employee | null; initial: EmployeeInput } | null>(null);
+  const [employeeForm, setEmployeeForm] = useState<{ editing: Employee | null; initial: EmployeeFormInitial } | null>(null);
   const [certificateForm, setCertificateForm] = useState<CertificateFormMode | null>(null);
   const [exportInit, setExportInit] = useState<ExportDialogInit | null>(null);
   const [reasonDialog, setReasonDialog] = useState<{ kind: "employee" } | { kind: "certificate"; certificate: Certificate } | null>(null);
@@ -91,19 +92,31 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     catch (error) { setNotice(error instanceof Error ? error.message : "Không tải được tệp lên kho lưu trữ.", "error"); }
   }, [fileStore, setNotice]);
 
+  /** Đẩy tệp lên kho trước khi lưu bản ghi trỏ tới nó; lỗi thì báo và trả false để không lưu bản ghi. */
+  const uploadFiles = useCallback(async (folder: FileFolder, files: Record<string, File>) => {
+    if (fileStore) {
+      try { await Promise.all(Object.entries(files).map(([id, file]) => fileStore.put(folder, id, file))); }
+      catch (error) { setNotice(error instanceof Error ? error.message : "Không tải được tệp lên kho lưu trữ.", "error"); return false; }
+    }
+    setSessionFiles((current) => ({ ...current, ...files }));
+    return true;
+  }, [fileStore, setNotice]);
+
   /** Tải về những tệp chưa có trong phiên; trả về bộ tệp đầy đủ để dùng ngay. */
   const ensureFiles = useCallback(async (refs: readonly { id: string; name: string; folder: FileFolder }[]) => {
     const missing = refs.filter((ref) => !sessionFiles[ref.id]);
     if (!fileStore || !missing.length) return sessionFiles;
     const loaded = await Promise.all(missing.map(async (ref) => [ref.id, await fileStore.get(ref.folder, ref.id, ref.name)] as const));
     const found = Object.fromEntries(loaded.filter((entry): entry is readonly [string, File] => entry[1] !== null));
-    const merged = { ...sessionFiles, ...found };
-    setSessionFiles(merged);
-    return merged;
+    // Gộp theo state mới nhất: nhiều lượt tải chạy song song (ảnh chân dung, ảnh trường tùy chỉnh) không ghi đè nhau
+    setSessionFiles((current) => ({ ...current, ...found }));
+    return { ...sessionFiles, ...found };
   }, [fileStore, sessionFiles]);
 
   const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
-  const extraFileRefs = (employee: Employee) => Object.values(employee.extraFiles ?? {}).map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
+  /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */
+  const extraFileRefs = (employee: Employee) => [...Object.values(employee.extraFiles ?? {}), ...[photoRef(employee.photo)].filter((file) => file !== null)].map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
+  const loadPhoto = async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "employees" }]))[file.id] ?? null;
   const signatureFileRefs = async () => { const listed = await app.signatures.list(actor); return listed.ok ? listed.value.map((signature) => ({ id: signature.file.id, name: signature.file.name, folder: "signatures" as const })) : []; };
 
   const refresh = useCallback(async (instance: App, currentActor: Actor) => {
@@ -330,6 +343,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onEdit={() => void openEdit()}
           onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
+          loadPhoto={loadPhoto}
           onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => setShowExcelModal(true))}
           onExportPdf={() => void openExportDialog()}
           onShowFile={(file) => void showFile(file)}
@@ -360,6 +374,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         actor={actor}
         editing={employeeForm.editing}
         initial={employeeForm.initial}
+        loadPhoto={loadPhoto}
+        uploadPhoto={(files) => uploadFiles("employees", files)}
         setNotice={setNotice}
         onClose={() => setEmployeeForm(null)}
         onSaved={(employee) => { setEmployeeForm(null); setNotice("Đã lưu hồ sơ nhân sự."); void openDetail(employee); void refresh(app, actor); }}

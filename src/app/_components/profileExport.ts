@@ -10,6 +10,7 @@ import type { Commander } from "../../modules/commanders/types";
 import type { Employee } from "../../modules/employees/types";
 import { mergeProfilePdf, type MergePart } from "../../modules/exports/pdf/mergeProfilePdf";
 import { getSupabaseClient } from "../../lib/supabase/client";
+import { photoFile } from "./employeePhoto";
 
 /** Cạnh dài tối đa của ảnh scan khi chèn vào Excel (~150 dpi trên A4), để file không quá nặng. */
 const MAX_SCAN_SIDE = 1800;
@@ -90,7 +91,11 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     const options = aspect ? { aspect } : {};
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
-    if (slot.field === "photo3x4" && input.employee.photo) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.photo), options);
+    if (slot.field === "photo3x4" && input.employee.photo) {
+      const photo = photoFile(input.employee.photo, input.sessionFiles);
+      if (photo) images[slot.field] = await toTemplateImage(photo, options);
+      else warnings.push(`${fieldLabel(slot.field, profile)}: chưa tải được ảnh chân dung`);
+    }
     else if (fixed) images[slot.field] = await toTemplateImage(await dataUrlToBlob(fixed), options);
     else if (stored && input.sessionFiles[stored.id]) images[slot.field] = await toTemplateImage(input.sessionFiles[stored.id]!, options);
     else if (stored) warnings.push(`${fieldLabel(slot.field, profile)}: chưa tải được ảnh "${stored.name}"`);

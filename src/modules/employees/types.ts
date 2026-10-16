@@ -7,9 +7,13 @@ export type EmployeeInput = {
   code: string; name: string; dob: string; gender: Gender; cccd: string; phone: string;
   home: string; address: string; currentAddress?: string; position: Position; group: number | null; startDate: string;
   emergencyContactId: string | null; status: EmploymentStatus; endDate: string | null;
-  mismatchOverrideReason?: string; photo?: string | null;
+  mismatchOverrideReason?: string;
+  /** Ảnh chân dung 3×4 trong kho lưu trữ (thư mục employees). */
+  photo?: FileRef | null;
 };
-export type Employee = EmployeeInput & {
+export type Employee = Omit<EmployeeInput, "photo"> & {
+  /** Như EmployeeInput; chuỗi data URL là dữ liệu cũ chưa chuyển sang kho, chỉ còn đọc. */
+  photo?: FileRef | string | null;
   id: string; version: number; archivedAt: string | null; archivedBy: string | null;
   archiveReason: string | null; cccdMismatchOverrideReason: string | null;
   /** Giá trị trường tùy chỉnh của mẫu hồ sơ (phạm vi "theo nhân sự"): chữ, ngày ISO, "true"/"" cho ô đánh dấu. */

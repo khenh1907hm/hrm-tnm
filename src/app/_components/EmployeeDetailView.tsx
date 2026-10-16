@@ -5,6 +5,7 @@ import type { CertificateChecklistRow, CertificateChecklistSummary } from "../..
 import type { Certificate, FileRef } from "../../modules/certificates/types";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
 import type { Employee } from "../../modules/employees/types";
+import { usePhotoUrl } from "./employeePhoto";
 import type { App, SetNotice } from "./shared";
 
 export function EmployeeDetailView(props: {
@@ -23,6 +24,7 @@ export function EmployeeDetailView(props: {
   onExportExcel: () => void;
   onExportPdf: () => void;
   onShowFile: (file: FileRef) => void;
+  loadPhoto: (file: FileRef) => Promise<File | null>;
   onCertificateForm: (type: string, certificate?: Certificate) => void;
   onRenewCertificate: (certificate: Certificate) => void;
   onArchiveCertificate: (certificate: Certificate) => void;
@@ -30,6 +32,7 @@ export function EmployeeDetailView(props: {
 }) {
   const { app, actor, employee: selected, checklistRows, checklistSummary, employeeCertificates, certificateTypes } = props;
   const [showCertificateHistory, setShowCertificateHistory] = useState(false);
+  const photoUrl = usePhotoUrl(selected.photo, props.loadPhoto);
   return <>
     <button className="back-button" onClick={props.onBack}>← Quay lại danh sách</button>
     <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : selected.status}</p></div><div className="button-row">{actor.role === "admin" && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
@@ -37,7 +40,7 @@ export function EmployeeDetailView(props: {
       <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {selected.photo && (
           <div className="photo-preview-3x4" style={{ marginBottom: "10px" }}>
-            <img src={selected.photo} alt={`Ảnh ${selected.name}`} />
+            {photoUrl ? <img src={photoUrl} alt={`Ảnh ${selected.name}`} /> : <span className="muted">Đang tải ảnh…</span>}
           </div>
         )}
         <div style={{ flex: 1, minWidth: "260px" }}>
