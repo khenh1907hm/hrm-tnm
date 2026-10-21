@@ -16,7 +16,8 @@
     "rules:check": "node scripts/check-rule-tests.mjs",
     "traceability": "node scripts/traceability.mjs",
     "messages:check": "node scripts/check-message-codes.mjs",
-    "postinstall": "node scripts/setup-tesseract.mjs"
+    "postinstall": "node scripts/setup-tesseract.mjs",
+    "build:ho-so-fn": "npx -y esbuild@0.25.10 scripts/ho-so-fn-entry.ts --bundle --format=esm --platform=neutral --target=es2022 --legal-comments=none --minify --outfile=supabase/functions/ho-so/hoSoRules.mjs --banner:js=\"// TỆP TẠO TỰ ĐỘNG từ src/modules/claude-ho-so (npm run build:ho-so-fn). Không sửa tay.\""
   },
   "dependencies": {
     "@pdf-lib/fontkit": "^1.1.1",
