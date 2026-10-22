@@ -2,9 +2,25 @@ import ExcelJS from "exceljs";
 import type { ImageExtension } from "./imageSize";
 
 export type TemplateImage = { bytes: Uint8Array; extension: ImageExtension; width: number; height: number };
-/** Vùng ô đặt ảnh; ảnh luôn được co vừa khung, giữ tỉ lệ, căn giữa. */
-/** fit "stretch": kéo ảnh phủ kín cả vùng ô; mặc định co vừa và căn giữa. */
+/** Vùng ô đặt ảnh. fit "stretch": kéo ảnh phủ kín cả vùng ô; mặc định co vừa khung, giữ tỉ lệ, căn giữa. */
 export type ImageSlot = { field: string; range: string; fit?: "contain" | "cover" | "stretch" };
+
+/**
+ * Độ rộng cột ra pixel theo cách Excel tính (chữ mặc định rộng 7px). Độ rộng lưu trong file đã gồm lề,
+ * nên không cộng thêm. Cột chưa đặt độ rộng: dùng mặc định của trang tính, không có thì 64px như Excel.
+ */
+export function columnWidthPx(sheet: ExcelJS.Worksheet, col: number): number {
+  const column = sheet.getColumn(col);
+  if (column.hidden) return 0;
+  const width = column.width ?? sheet.properties.defaultColWidth;
+  return width === undefined ? 64 : Math.trunc(((256 * width + Math.trunc(128 / 7)) / 256) * 7);
+}
+
+/** Chiều cao dòng ra pixel (điểm × 96/72); dòng ẩn bằng 0. */
+export function rowHeightPx(sheet: ExcelJS.Worksheet, row: number): number {
+  const line = sheet.getRow(row);
+  return line.hidden ? 0 : ((line.height ?? sheet.properties.defaultRowHeight ?? 15) * 96) / 72;
+}
 export type AttachmentPage = { title: string; image: TemplateImage };
 export type FillWarning = { location: string; field: string };
 
@@ -70,8 +86,8 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     if (!item.value) warnings.push({ location: target.address, field: item.field });
   }
 
-  const columnPx = (col: number) => Math.round((sheet.getColumn(col).width ?? sheet.properties.defaultColWidth ?? 8.43) * 7 + 5);
-  const rowPx = (row: number) => ((sheet.getRow(row).height ?? sheet.properties.defaultRowHeight ?? 15) * 96) / 72;
+  const columnPx = (col: number) => columnWidthPx(sheet, col);
+  const rowPx = (row: number) => rowHeightPx(sheet, row);
 
   const placeImage = (image: TemplateImage, range: string, stretch: boolean) => {
     const [start, end] = parseRange(range);
@@ -91,7 +107,7 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     while (offsetY >= rowPx(row) && row < end.row) { offsetY -= rowPx(row); row += 1; }
     const imageId = workbook.addImage({ buffer: image.bytes.slice().buffer, extension: image.extension });
     sheet.addImage(imageId, {
-      tl: { col: col - 1 + offsetX / columnPx(col), row: row - 1 + offsetY / rowPx(row) } as ExcelJS.Anchor,
+      tl: { col: col - 1 + (columnPx(col) ? offsetX / columnPx(col) : 0), row: row - 1 + (rowPx(row) ? offsetY / rowPx(row) : 0) } as ExcelJS.Anchor,
       ext: { width: imageWidth, height: imageHeight },
       editAs: "oneCell",
     });
