@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { ImagePlus, Save, Trash2 } from "lucide-react";
+import { ImagePlus, RotateCw, Save, Trash2 } from "lucide-react";
 import { randomIds } from "../../lib/ids";
+import { rotateImageFile } from "../../lib/image/rotateImage";
 import type { Actor } from "../../modules/auth/permissions";
 import type { FileRef } from "../../modules/certificates/types";
 import type { Employee } from "../../modules/employees/types";
-import { IMAGE_FIELDS } from "../../modules/excel-template/engine/profileConfig";
+import { IMAGE_FIELDS, isIdCardImage } from "../../modules/excel-template/engine/profileConfig";
 import type { ExcelReportTemplate, ProfileCustomFieldKind } from "../../modules/excel-template/types";
 import { issueText, type App, type SetNotice } from "./shared";
 
@@ -22,7 +23,7 @@ export function employeeExtraFields(templates: readonly ExcelReportTemplate[]): 
   for (const template of templates) {
     if (!template.profile) continue;
     for (const field of template.profile.customFields) if (field.scope === "employee") add(field.key, field.label, field.kind, template.name);
-    for (const slot of template.profile.imageSlots) if (slot.field !== "photo3x4") add(slot.field, IMAGE_FIELDS.find((item) => item.key === slot.field)?.label ?? slot.field, "image", template.name);
+    for (const slot of template.profile.imageSlots) if (slot.field !== "photo3x4" && slot.field !== "employeeSignature") add(slot.field, IMAGE_FIELDS.find((item) => item.key === slot.field)?.label ?? slot.field, "image", template.name);
   }
   return [...fields.values()];
 }
@@ -54,11 +55,31 @@ export function EmployeeExtraPanel(props: { app: App; actor: Actor; employee: Em
   if (!fields.length) return null;
   const dirty = JSON.stringify(values) !== JSON.stringify(employee.extraFields ?? {}) || Object.keys(pending).length > 0;
 
-  const chooseImage = (key: string, file: File | undefined) => {
-    if (!file) return;
-    if (!IMAGE_TYPES.includes(file.type) || file.size > 10 * 1024 * 1024) { props.setNotice("Chỉ nhận ảnh JPG, PNG hoặc WebP tối đa 10 MB.", "warning"); return; }
+  const putImage = (key: string, file: File) => {
     const id = randomIds().next();
-    setPending({ ...pending, [key]: { ref: { id, name: file.name, mime: file.type, size: file.size }, file } });
+    setPending((current) => ({ ...current, [key]: { ref: { id, name: file.name, mime: file.type, size: file.size }, file } }));
+  };
+
+  const chooseImage = async (field: ExtraField, upload: File | undefined) => {
+    if (!upload) return;
+    if (!IMAGE_TYPES.includes(upload.type) || upload.size > 10 * 1024 * 1024) { props.setNotice("Chỉ nhận ảnh JPG, PNG hoặc WebP tối đa 10 MB.", "warning"); return; }
+    try {
+      // Ảnh CCCD chụp dọc bằng điện thoại → xoay cho nằm ngang
+      putImage(field.key, isIdCardImage(field.key, field.label) ? await rotateImageFile(upload, true) : upload);
+    } catch (error) {
+      props.setNotice(error instanceof Error ? error.message : "Không xử lý được ảnh.", "warning");
+    }
+  };
+
+  const rotateImage = async (key: string) => {
+    const change = pending[key];
+    const current = change === undefined ? (stored[key] ? props.sessionFiles[stored[key]!.id] : undefined) : change?.file;
+    if (!current) return;
+    try {
+      putImage(key, await rotateImageFile(current));
+    } catch (error) {
+      props.setNotice(error instanceof Error ? error.message : "Không xoay được ảnh.", "warning");
+    }
   };
 
   const save = async () => {
@@ -91,7 +112,8 @@ export function EmployeeExtraPanel(props: { app: App; actor: Actor; employee: Em
                   {previews[field.key] ? <img src={previews[field.key]} alt={field.label} /> : <span className="muted">{has ? "Đang tải ảnh…" : "Chưa có ảnh"}</span>}
                 </div>
                 {canEdit && <div className="button-row">
-                  <label className="button"><ImagePlus className="ico" size={14} aria-hidden="true" /> {has ? "Đổi ảnh" : "Tải ảnh"}<input type="file" accept={IMAGE_TYPES.join(",")} hidden onChange={(event) => { chooseImage(field.key, event.target.files?.[0]); event.target.value = ""; }} /></label>
+                  <label className="button"><ImagePlus className="ico" size={14} aria-hidden="true" /> {has ? "Đổi ảnh" : "Tải ảnh"}<input type="file" accept={IMAGE_TYPES.join(",")} hidden onChange={(event) => { void chooseImage(field, event.target.files?.[0]); event.target.value = ""; }} /></label>
+                  {previews[field.key] && <button type="button" className="button" title="Xoay 90° theo chiều kim đồng hồ" onClick={() => void rotateImage(field.key)}><RotateCw className="ico" size={14} aria-hidden="true" /> Xoay ảnh</button>}
                   {has && <button type="button" className="button danger" onClick={() => setPending({ ...pending, [field.key]: null })}><Trash2 className="ico" size={14} aria-hidden="true" /> Xóa ảnh</button>}
                 </div>}
                 <small className="field-help">{hint}</small>

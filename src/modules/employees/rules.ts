@@ -7,7 +7,7 @@ import type { EmployeeInput } from "./types";
 
 export function validateEmployee(input: EmployeeInput, today: string, existing: { code: string; cccd: string; phone: string; id?: string }[] = [], excludeId?: string, commanderIds: string[] = ["cmd-1", "cmd-2"]): { value: EmployeeInput; errors: Issue[]; warnings: Issue[] } {
   const phoneResult = validatePhone(input.phone);
-  const value = { ...input, code: input.code.trim().toUpperCase(), name: validateName(input.name).value, phone: phoneResult.value ?? normalizePhone(input.phone) };
+  const value = { ...input, code: input.code.trim().toUpperCase(), companyStartDate: input.companyStartDate?.trim() || null, name: validateName(input.name).value, phone: phoneResult.value ?? normalizePhone(input.phone) };
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
   const add = (items: Issue[]) => items.forEach((item) => (item.severity === "error" ? errors : warnings).push(item));
@@ -34,6 +34,11 @@ export function validateEmployee(input: EmployeeInput, today: string, existing: 
   }
   if (isValidISODate(input.dob) && isValidISODate(input.startDate) && input.startDate < addMonths(input.dob, 180)) errors.push(issue("EMP_START_TOO_EARLY", "startDate"));
   if (input.startDate > today) warnings.push(issue("EMP_START_FUTURE", "startDate", "warning"));
+  if (input.companyStartDate) {
+    if (!isValidISODate(input.companyStartDate)) errors.push(issue("DATE_INVALID", "companyStartDate"));
+    else if (isValidISODate(input.startDate) && input.companyStartDate < input.startDate) errors.push(issue("EMP_COMPANY_START_BEFORE_CAREER", "companyStartDate"));
+    else if (input.companyStartDate > today) warnings.push(issue("EMP_COMPANY_START_FUTURE", "companyStartDate", "warning"));
+  }
   add(validateCccd(input.cccd, input.dob, input.gender, input.mismatchOverrideReason));
   if (existing.some((employee) => employee.cccd === input.cccd && employee.id !== excludeId)) errors.push(issue("CCCD_DUPLICATE", "cccd"));
   add(phoneResult.issues);

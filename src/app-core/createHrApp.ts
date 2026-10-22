@@ -1,3 +1,4 @@
+import type { Page, PageInput } from "../lib/paginate";
 import { success, type Result } from "../lib/result";
 import type { Actor } from "../modules/auth/permissions";
 import type { AuditEvent } from "../modules/audit/types";
@@ -34,7 +35,11 @@ export function createHrApp(deps: HrAppDeps) {
     exports: createExportUseCases(ctx),
     reminders: createReminderUseCases(ctx),
     ocr: { parseIdText: async (actor: Actor, text: string): Promise<Result<ParsedId>> => has(actor, "ocr") ? success(parseIdText(text)) : err("FORBIDDEN"), mergeParsed },
-    audit: { list: async (actor: Actor): Promise<Result<AuditEvent[]>> => has(actor, "auditRead") ? success(await repositories.audit.list()) : err("FORBIDDEN") },
+    audit: {
+      list: async (actor: Actor): Promise<Result<AuditEvent[]>> => has(actor, "auditRead") ? success(await repositories.audit.list()) : err("FORBIDDEN"),
+      /** Một trang nhật ký (mới nhất trước), phân trang ở nơi lưu. */
+      listPage: async (actor: Actor, input: PageInput = {}): Promise<Result<Page<AuditEvent>>> => has(actor, "auditRead") ? success(await repositories.audit.listPage(input)) : err("FORBIDDEN"),
+    },
     messages: messagesVi,
   };
 

@@ -5,7 +5,9 @@ import type { Commander } from "../../commanders/types";
 import type { Employee } from "../../employees/types";
 
 export type SystemFieldKind = "text" | "date" | "checkbox";
-export type SystemField = { key: string; label: string; kind: SystemFieldKind; group: "employee" | "computed" | "contact" | "certificate" };
+export type SystemField = { key: string; label: string; kind: SystemFieldKind; group: "employee" | "computed" | "contact" | "signer" | "certificate" };
+/** Người ký phiếu, chọn từ Thư viện chữ ký khi xuất. */
+export type Signer = { name: string; role: string };
 
 const CHECKED = "☑";
 const UNCHECKED = "☐";
@@ -25,7 +27,8 @@ export const SYSTEM_FIELDS: readonly SystemField[] = [
   { key: "address", label: "Thường trú", kind: "text", group: "employee" },
   { key: "currentAddress", label: "Địa chỉ hiện tại", kind: "text", group: "employee" },
   { key: "position", label: "Chức vụ", kind: "text", group: "employee" },
-  { key: "startDate", label: "Ngày nhận việc", kind: "date", group: "employee" },
+  { key: "startDate", label: "Ngày làm nghề", kind: "date", group: "employee" },
+  { key: "companyStartDate", label: "Ngày vào TNM", kind: "date", group: "employee" },
   { key: "safetyGroup", label: "Nhóm an toàn", kind: "text", group: "employee" },
   { key: "age", label: "Tuổi", kind: "text", group: "computed" },
   { key: "experience", label: "Thâm niên", kind: "text", group: "computed" },
@@ -35,6 +38,10 @@ export const SYSTEM_FIELDS: readonly SystemField[] = [
   { key: "contactRelation", label: "Quan hệ / chức vụ người liên hệ", kind: "text", group: "contact" },
   { key: "contactPhone", label: "Điện thoại người liên hệ", kind: "text", group: "contact" },
   { key: "contactAddress", label: "Địa chỉ người liên hệ", kind: "text", group: "contact" },
+  { key: "signerName", label: "Tên người ký", kind: "text", group: "signer" },
+  { key: "signerNameUpper", label: "TÊN NGƯỜI KÝ (in hoa)", kind: "text", group: "signer" },
+  { key: "signerRole", label: "Chức danh người ký", kind: "text", group: "signer" },
+  { key: "signerTitle", label: "Tên - chức danh người ký", kind: "text", group: "signer" },
 ];
 
 export function ageOn(dob: string, date: string): number {
@@ -50,6 +57,8 @@ export function hasValidCertificate(certificates: readonly Certificate[], type: 
 export type FieldValueSource = {
   employee: Employee;
   commander: Commander | null;
+  /** Người ký chọn khi xuất; không có thì các ô người ký để trống. */
+  signer?: Signer | null;
   certificates: readonly Certificate[];
   certificateTypes: readonly string[];
   exportDate: string;
@@ -57,6 +66,7 @@ export type FieldValueSource = {
 
 export function buildSystemValues(source: FieldValueSource): Record<string, string> {
   const { employee, commander, exportDate } = source;
+  const signer = source.signer ?? null;
   const months = monthsBetween(employee.startDate, exportDate);
   const safetyGroups = currentSafetyGroups(employee, source.certificates, exportDate);
   const values: Record<string, string> = {
@@ -74,6 +84,7 @@ export function buildSystemValues(source: FieldValueSource): Record<string, stri
     currentAddress: employee.currentAddress ?? "",
     position: employee.position,
     startDate: formatDate(employee.startDate),
+    companyStartDate: employee.companyStartDate ? formatDate(employee.companyStartDate) : "",
     safetyGroup: formatSafetyGroups(safetyGroups),
     age: String(ageOn(employee.dob, exportDate)),
     experience: months === null ? "" : formatTenure(months),
@@ -83,6 +94,10 @@ export function buildSystemValues(source: FieldValueSource): Record<string, stri
     contactRelation: commander?.role ?? "",
     contactPhone: commander?.phone ?? "",
     contactAddress: commander?.address ?? "",
+    signerName: signer?.name ?? "",
+    signerNameUpper: signer?.name.toLocaleUpperCase("vi") ?? "",
+    signerRole: signer?.role ?? "",
+    signerTitle: signer ? [signer.name, signer.role].filter(Boolean).join(" - ") : "",
   };
   for (const type of source.certificateTypes) values[`cert:${type}`] = hasValidCertificate(source.certificates, type, exportDate) ? CHECKED : UNCHECKED;
   return values;

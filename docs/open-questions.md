@@ -27,3 +27,14 @@ Chưa có bảng B8 đã chỉnh sửa, nên các mục dưới đây giữ nguy
 - `cccd_reader.py` được nhắc đến trong yêu cầu nhưng không có trong repo hiện tại; giai đoạn OCR sẽ cần tệp nguồn hoặc sẽ chỉ triển khai theo đặc tả OCR trong prompt.
 - Chưa có dịch vụ gửi email, lưu tệp, hay danh bạ chỉ huy trưởng. Giai đoạn chưa có cơ sở dữ liệu sẽ dùng interface và bộ giả trong bộ nhớ.
 - Bộ dữ liệu mẫu sẽ là dữ liệu giả, không đại diện hồ sơ nhân sự thật.
+
+## Cải tiến sau (bộ nhớ tạm và phân trang)
+
+Đã cố ý chưa làm trong đợt làm bộ nhớ tạm phía trình duyệt (`src/repositories/cached.ts`):
+
+- **Tách CCCD khỏi dữ liệu danh sách.** Hiện Supabase vẫn gửi CCCD đầy đủ qua mạng (cột `cccd` và trong `doc`) cho mọi tài khoản admin/hr, nên che CCCD trong bộ nhớ tạm không bảo vệ được (xem được trong DevTools). Băm CCCD cũng không có tác dụng vì CCCD là số có cấu trúc, dò ngược được. Cách làm đúng: migration tách CCCD sang cột/bảng riêng có RLS chặn đọc hàng loạt, thêm hàm `getCccd(id)` ghi `audit_events`, kiểm trùng CCCD và xuất Excel gọi phía máy chủ. Ràng buộc duy nhất `employees_cccd_key` đã có ở DB.
+- **Chọn cột cho danh sách** (không tải nguyên `doc`): hoãn cùng lý do trên. Số đo ngày 19/10/2026: 32 nhân sự ≈ 19 KB JSON, 109 chứng chỉ ≈ 52 KB; `extraFiles`/`extraFields` chỉ chứa mã tệp/đường dẫn, không có base64.
+- Optimistic update; đồng bộ nhiều tab bằng BroadcastChannel; lưu cache ra ổ đĩa (localStorage/IndexedDB); phân trang cursor; Supabase realtime.
+- Bộ nhớ tạm cho `settings` (một dòng, `get()` không qua `list()`), `report_templates` và `skill_posts` (gọi Supabase trực tiếp, không qua repository).
+- Màn hình cảnh báo hạn tự tính lại lúc 00:00 giờ Việt Nam khi để mở qua đêm (hiện chỉ tính lại khi dữ liệu làm mới hoặc tải lại trang).
+- Ngưỡng nâng cấp: khi một bảng vượt khoảng 10.000 dòng thì chuyển bảng đó sang phân trang ở máy chủ thay vì nạp cả bảng.

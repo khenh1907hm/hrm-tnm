@@ -13,6 +13,7 @@ export type ExcelFieldKey =
   | "position"
   | "group"
   | "startDate"
+  | "companyStartDate"
   | "status";
 
 export interface ExcelFieldDefinition {
@@ -33,7 +34,8 @@ export const AVAILABLE_REPORT_FIELDS: ExcelFieldDefinition[] = [
   { key: "currentAddress", label: "Địa chỉ hiện tại", example: "Số 12 Ngõ 34, TP. Hà Nội" },
   { key: "position", label: "Chức vụ / Vị trí", example: "Công nhân bậc 3" },
   { key: "group", label: "Nhóm an toàn", example: "Nhóm 3" },
-  { key: "startDate", label: "Ngày bắt đầu làm việc", example: "01/01/2024" },
+  { key: "startDate", label: "Ngày làm nghề", example: "01/01/2024" },
+  { key: "companyStartDate", label: "Ngày vào TNM", example: "01/03/2024" },
   { key: "status", label: "Trạng thái", example: "Đang làm việc" },
 ];
 
@@ -59,8 +61,10 @@ export interface ProfileCustomField {
 export interface ProfileImageSlot {
   field: string;
   range: string;
-  /** "cover" cắt ảnh cho kín khung (ảnh 3×4); "contain" co vừa khung. */
-  fit: "contain" | "cover";
+  /** "cover" cắt ảnh cho kín khung (ảnh 3×4, ảnh CCCD); "contain" co vừa khung; "stretch" kéo giãn phủ kín khung. */
+  fit: "contain" | "cover" | "stretch";
+  /** Vùng do người dùng nhập/sửa trong app: tải lại file Excel không ghi đè bằng vùng tên IMG_ trong file. */
+  custom?: boolean;
 }
 /** Cấu hình "Mẫu hồ sơ": file thiết kế có ô {{trường}}, vùng ảnh và chứng chỉ đính kèm. */
 export interface ProfileTemplateConfig {
@@ -72,6 +76,8 @@ export interface ProfileTemplateConfig {
   slotAspect: Record<string, number>;
   /** Loại chứng chỉ đính kèm, theo thứ tự in. */
   attachments: string[];
+  /** Chữ ký mặc định (id trong Thư viện chữ ký) cho ô người ký / vùng IMG_signature; đổi được khi xuất. */
+  signatureId?: string;
 }
 
 export interface ExcelReportTemplate {
@@ -122,6 +128,7 @@ export function mapEmployeeToExcelData(employee: Employee): Record<ExcelFieldKey
     position: employee.position ?? "",
     group: employee.group ? `Nhóm ${employee.group}` : "",
     startDate: formatVnDate(employee.startDate),
+    companyStartDate: employee.companyStartDate ? formatVnDate(employee.companyStartDate) : "",
     status: employee.status === "active" ? "Đang làm việc" : "Đã nghỉ việc",
   };
 }

@@ -6,6 +6,10 @@ import { profileConfigFromScan } from "../modules/excel-template/engine/profileC
 import { parseRange } from "../modules/excel-template/engine/fillWorkbook";
 import { scanTemplate } from "../modules/excel-template/engine/scanTemplate";
 import { ProfileTemplateEditor } from "./_components/ProfileTemplateEditor";
+import { PartnersPanel } from "./_components/PartnersPanel";
+import type { PartnerStore } from "./_components/usePartners";
+import type { SignatureFileLoader } from "./_components/SignerPicker";
+import type { Signature } from "../modules/signatures/types";
 import type { App } from "./_components/shared";
 import type { Employee } from "../modules/employees/types";
 import {
@@ -35,6 +39,10 @@ interface ReportTemplatesPanelProps {
   setNotice: (msg: string) => void;
   app: App;
   actor: Actor;
+  /** Đối tác (tên + ảnh) để chọn nhanh làm ảnh dự án. */
+  partners: PartnerStore;
+  /** Tải ảnh chữ ký để xem trước ở mục Người ký. */
+  loadSignatureFile?: SignatureFileLoader | undefined;
 }
 
 export function ReportTemplatesPanel({
@@ -44,6 +52,8 @@ export function ReportTemplatesPanel({
   setNotice,
   app,
   actor,
+  partners,
+  loadSignatureFile,
 }: ReportTemplatesPanelProps) {
   const [editingTemplate, setEditingTemplate] = useState<ExcelReportTemplate | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -58,10 +68,13 @@ export function ReportTemplatesPanel({
   /** Có giá trị khi file tải lên chứa ô {{trường}} → "Mẫu hồ sơ". */
   const [formProfile, setFormProfile] = useState<ProfileTemplateConfig | null>(null);
   const [certificateTypes, setCertificateTypes] = useState<{ key: string; name: string }[]>([]);
+  const [signatures, setSignatures] = useState<Signature[] | null>(null);
 
   useEffect(() => {
     let active = true;
     void app.certificateTypes.list(actor).then((result) => { if (active && result.ok) setCertificateTypes(result.value.map((type) => ({ key: type.key, name: type.name }))); });
+    // Thư viện chữ ký: chọn người ký mặc định cho mẫu
+    void app.signatures.list(actor).then((result) => { if (active) setSignatures(result.ok ? result.value : []); });
     return () => { active = false; };
   }, [app, actor]);
 
@@ -331,6 +344,8 @@ export function ReportTemplatesPanel({
         </div>
       </div>
 
+      <PartnersPanel store={partners} setNotice={setNotice} />
+
       {/* Danh sách các templates */}
       <div className="template-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "16px", marginBottom: "24px" }}>
         {templates.map((tpl) => (
@@ -511,7 +526,7 @@ export function ReportTemplatesPanel({
                 </div>
               </div>
 
-              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} certificateTypes={certificateTypes} />}
+              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
 
               {/* Bảng định nghĩa ô nào thêm trường nào */}
               {!formProfile && <><div style={{ marginBottom: "20px" }}>

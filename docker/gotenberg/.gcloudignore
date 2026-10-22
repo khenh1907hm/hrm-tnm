@@ -1,0 +1,2 @@
+# Gửi cả thư mục fonts/ lên Cloud Build (mặc định gcloud bỏ qua theo .gitignore, mà font không đưa lên git)
+README.md

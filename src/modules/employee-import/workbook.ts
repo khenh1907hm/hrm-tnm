@@ -32,7 +32,7 @@ export async function buildImportTemplate(): Promise<Uint8Array> {
   sheet.getRow(1).eachCell((cell) => { cell.font = { bold: true, color: { argb: "FFFFFFFF" } }; cell.fill = HEADER_FILL; });
   // CCCD và điện thoại để dạng chữ cho khỏi mất số 0 đầu
   for (const key of ["cccd", "phone"]) sheet.getColumn(key).numFmt = "@";
-  sheet.addRow({ code: "TNM001", name: "Nguyễn Văn An", dob: "15/03/1990", gender: "Nam", cccd: "001090012345", phone: "0912345678", home: "Xã Đông Hưng, Tỉnh Thái Bình", address: "Phường Hà Đông, Thành phố Hà Nội", currentAddress: "", position: "Nhân viên hiện trường", group: 3, startDate: "01/06/2015", status: "Đang làm", endDate: "" });
+  sheet.addRow({ code: "TNM001", name: "Nguyễn Văn An", dob: "15/03/1990", gender: "Nam", cccd: "001090012345", phone: "0912345678", home: "Xã Đông Hưng, Tỉnh Thái Bình", address: "Phường Hà Đông, Thành phố Hà Nội", currentAddress: "", position: "Nhân viên hiện trường", group: 3, startDate: "01/06/2015", companyStartDate: "01/03/2019", status: "Đang làm", endDate: "" });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
 
   const guide = workbook.addWorksheet("Hướng dẫn");
@@ -45,6 +45,7 @@ export async function buildImportTemplate(): Promise<Uint8Array> {
     ["Giới tính", "Nam hoặc Nữ. Để trống thì hệ thống lấy theo số CCCD."],
     ["Chức danh", POSITIONS.join(", ")],
     ["Nhóm ATLĐ", "Số từ 1 đến 6, có thể để trống."],
+    ["Ngày làm nghề", "Ngày bắt đầu làm nghề, dùng để tính kinh nghiệm. Ngày vào TNM không bắt buộc, không được trước ngày làm nghề."],
     ["Tình trạng", "Đang làm (mặc định khi để trống), Tạm nghỉ, Nghỉ việc. Nghỉ việc thì cần Ngày nghỉ việc."],
     ["Tên cột", "Có thể giữ tên cột trong file cũ (ví dụ “SĐT”, “Quê quán”, “Chức vụ”); hệ thống tự nhận."],
   ];

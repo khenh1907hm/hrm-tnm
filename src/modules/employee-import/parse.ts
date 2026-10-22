@@ -6,13 +6,13 @@ import { POSITIONS, type EmployeeInput, type EmploymentStatus, type Position } f
 /** Giá trị ô sau khi đã gỡ lớp vỏ của ExcelJS (công thức, chữ định dạng, liên kết). */
 export type PlainCell = string | number | boolean | Date | null;
 
-export const IMPORT_FIELDS = ["code", "name", "dob", "gender", "cccd", "phone", "home", "address", "currentAddress", "position", "group", "startDate", "status", "endDate"] as const;
+export const IMPORT_FIELDS = ["code", "name", "dob", "gender", "cccd", "phone", "home", "address", "currentAddress", "position", "group", "startDate", "companyStartDate", "status", "endDate"] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
 export const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
   code: "Mã NV", name: "Họ và tên", dob: "Ngày sinh", gender: "Giới tính", cccd: "Số CCCD", phone: "Số điện thoại",
   home: "Nguyên quán", address: "Địa chỉ thường trú", currentAddress: "Nơi ở hiện tại", position: "Chức danh",
-  group: "Nhóm ATLĐ", startDate: "Ngày nhận việc", status: "Tình trạng", endDate: "Ngày nghỉ việc",
+  group: "Nhóm ATLĐ", startDate: "Ngày làm nghề", companyStartDate: "Ngày vào TNM", status: "Tình trạng", endDate: "Ngày nghỉ việc",
 };
 
 /** Cột bắt buộc phải có trong file. Giới tính không bắt buộc vì suy được từ số CCCD. */
@@ -31,7 +31,8 @@ const HEADER_ALIASES: Record<ImportField, readonly string[]> = {
   currentAddress: ["noi o hien tai", "dia chi hien tai", "cho o hien tai", "tam tru"],
   position: ["chuc danh", "chuc vu", "vi tri"],
   group: ["nhom atld", "nhom an toan", "nhom huan luyen", "nhom an toan lao dong"],
-  startDate: ["ngay nhan viec", "ngay vao lam", "ngay vao", "ngay bat dau lam viec", "ngay bat dau"],
+  startDate: ["ngay lam nghe", "ngay vao nghe", "ngay bat dau lam nghe", "ngay nhan viec", "ngay vao lam", "ngay vao", "ngay bat dau lam viec", "ngay bat dau"],
+  companyStartDate: ["ngay vao tnm", "ngay bat dau lam viec tai tnm", "ngay vao cong ty", "ngay vao lam tai tnm"],
   status: ["tinh trang", "trang thai", "tinh trang lam viec"],
   endDate: ["ngay nghi viec", "ngay nghi"],
 };
@@ -176,6 +177,7 @@ export function parseRow(row: readonly PlainCell[], columns: ColumnMap, rowNumbe
   if (!name) errors.push(`${label("name")}: còn trống`);
   const dob = date("dob", true);
   const startDate = date("startDate", true);
+  const companyStartDate = date("companyStartDate", false);
   const endDate = date("endDate", false);
   const cccd = cccdCell(get("cccd"));
   if (!cccd) errors.push(`${label("cccd")}: còn trống`);
@@ -211,7 +213,7 @@ export function parseRow(row: readonly PlainCell[], columns: ColumnMap, rowNumbe
     code, name, dob, gender, cccd, phone,
     home: cellText(get("home")), address: cellText(get("address")),
     ...(currentAddress ? { currentAddress } : {}),
-    position, group, startDate, emergencyContactId: null, status, endDate: status === "resigned" ? endDate : null,
+    position, group, startDate, companyStartDate, emergencyContactId: null, status, endDate: status === "resigned" ? endDate : null,
   };
   return { rowNumber, cells, input, errors, notes };
 }

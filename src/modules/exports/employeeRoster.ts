@@ -72,7 +72,8 @@ export async function buildEmployeeRosterWorkbook(data: RosterData): Promise<Uin
     { header: "Địa chỉ hiện tại", key: "currentAddress", width: 36 },
     { header: "Chức danh", key: "position", width: 22 },
     { header: "Nhóm ATLĐ", key: "group", width: 10 },
-    { header: "Ngày nhận việc", key: "startDate", width: 13, date: true },
+    { header: "Ngày làm nghề", key: "startDate", width: 13, date: true },
+    { header: "Ngày vào TNM", key: "companyStartDate", width: 13, date: true },
     { header: "Tình trạng", key: "status", width: 14 },
     { header: "Ngày nghỉ việc", key: "endDate", width: 13, date: true },
     { header: "Tình trạng chứng chỉ", key: "health", width: 30 },
@@ -92,7 +93,7 @@ export async function buildEmployeeRosterWorkbook(data: RosterData): Promise<Uin
     const row = sheet.addRow({
       no: index + 1, code: employee.code, name: employee.name, gender: employee.gender, dob: toDate(employee.dob), cccd: employee.cccd, phone: employee.phone,
       home: employee.home, address: employee.address, currentAddress: employee.currentAddress || employee.address, position: employee.position,
-      group: employee.group ?? "", startDate: toDate(employee.startDate), status: employee.archivedAt ? "Đã lưu trữ" : STATUS[employee.status], endDate: toDate(employee.endDate),
+      group: employee.group ?? "", startDate: toDate(employee.startDate), companyStartDate: toDate(employee.companyStartDate ?? null), status: employee.archivedAt ? "Đã lưu trữ" : STATUS[employee.status], endDate: toDate(employee.endDate),
       health: problems.length ? problems.join("; ") : "Đầy đủ, còn hạn",
     });
     row.alignment = { vertical: "top", wrapText: true };

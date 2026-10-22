@@ -1,4 +1,4 @@
-import { BellRing, FileSpreadsheet, LogOut, PenLine, Settings, Sparkles, Users, type LucideIcon } from "lucide-react";
+import { BellRing, FileSpreadsheet, LogOut, PenLine, Settings, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import { routePath } from "./routes";
 import type { PageView } from "./shared";
@@ -10,9 +10,10 @@ const NAV_ITEMS: readonly (readonly [PageView, string, LucideIcon])[] = [
   ["reports", "FORM Báo cáo (Excel)", FileSpreadsheet],
   ["settings", "Cài đặt email", Settings],
   ["skills", "Kho Skill AI", Sparkles],
+  ["tools", "Công cụ", Wrench],
 ];
 
-export function SideNav(props: { mode: "demo" | "live"; email: string | null; onSignOut: () => void; view: PageView; onNavigate: (view: PageView) => void; alertCount: number; actor: Actor; onActorChange: (actor: Actor) => void }) {
+export function SideNav(props: { mode: "demo" | "live"; email: string | null; onSignOut: () => void; view: PageView; onNavigate: (view: PageView) => void; alertCount: number; actor: Actor; onActorChange: (actor: Actor) => void; onPreviewEmployee?: (() => void) | undefined }) {
   const { view, onNavigate, alertCount, actor, onActorChange } = props;
   return (
     <aside className="side-nav">
@@ -34,7 +35,7 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
       {props.mode === "demo" ? (
         <div className="side-foot">
           <span>Vai trò đang xem thử</span>
-          <div className="role-switch"><button aria-pressed={actor.role === "admin"} onClick={() => onActorChange({ id: "demo-admin", role: "admin" })}>Admin</button><button aria-pressed={actor.role === "hr"} onClick={() => onActorChange({ id: "demo-hr", role: "hr" })}>HR</button></div>
+          <div className="role-switch"><button aria-pressed={actor.role === "admin"} onClick={() => onActorChange({ id: "demo-admin", role: "admin" })}>Admin</button><button aria-pressed={actor.role === "hr"} onClick={() => onActorChange({ id: "demo-hr", role: "hr" })}>HR</button>{props.onPreviewEmployee && <button aria-pressed={false} onClick={props.onPreviewEmployee}>Nhân viên</button>}</div>
           <small>Bản demo: dữ liệu chỉ lưu trong phiên làm việc này</small>
         </div>
       ) : (

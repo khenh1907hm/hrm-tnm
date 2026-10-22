@@ -22,26 +22,28 @@ describe("employee list paging, multi-select filters and facets", () => {
   it("pages results and clamps the page number to the last page", async () => {
     const app = await setup();
     const second = await app.employees.list(admin, { page: 2, pageSize: 5 });
-    expect(second.ok && { page: second.value.page, pageCount: second.value.pageCount, total: second.value.total }).toEqual({ page: 2, pageCount: 3, total: 12 });
+    expect(second.ok && { page: second.value.page, totalPages: second.value.totalPages, total: second.value.total }).toEqual({ page: 2, totalPages: 3, total: 12 });
     expect(codes(second)).toEqual(["TNM006", "TNM007", "TNM008", "TNM009", "TNM010"]);
     const beyond = await app.employees.list(admin, { page: 99, pageSize: 5 });
     expect(beyond.ok && beyond.value.page).toBe(3);
     expect(codes(beyond)).toEqual(["TNM011", "TNM012"]);
     const empty = await app.employees.list(admin, { query: "không ai cả" });
-    expect(empty.ok && { page: empty.value.page, pageCount: empty.value.pageCount, total: empty.value.total }).toEqual({ page: 1, pageCount: 1, total: 0 });
+    expect(empty.ok && { page: empty.value.page, totalPages: empty.value.totalPages, total: empty.value.total }).toEqual({ page: 1, totalPages: 1, total: 0 });
   });
 
-  it("combines values inside a group with OR and groups with AND", async () => {
+  it("requires every ticked certificate condition, while position and status stay any-of", async () => {
     const app = await setup();
-    expect(codes(await app.employees.list(admin, { certificateHealth: ["ok", "expired"] }))).toEqual(["TNM001", "TNM002"]);
-    expect(codes(await app.employees.list(admin, { positions: ["Giám đốc"], certificateHealth: ["ok", "expired"] }))).toEqual(["TNM001"]);
+    expect(codes(await app.employees.list(admin, { certificateHealth: ["missing", "expired"] }))).toEqual(["TNM002"]);
+    expect(codes(await app.employees.list(admin, { certificateHealth: ["ok", "expired"] }))).toEqual([]);
+    expect(codes(await app.employees.list(admin, { positions: ["Giám đốc"], certificateHealth: ["ok"] }))).toEqual(["TNM001"]);
     expect(codes(await app.employees.list(admin, { statuses: ["on_leave", "resigned"] }))).toEqual([]);
     expect(codes(await app.employees.list(admin, { statuses: ["active"], pageSize: 3 }))).toEqual(["TNM001", "TNM002", "TNM003"]);
   });
 
-  it("matches certificate types with any-of or all-of", async () => {
+  it("matches certificate types with all-of by default, any-of on request", async () => {
     const app = await setup();
-    const any = await app.employees.list(admin, { certificateTypes: ["atld", "health"] });
+    expect(codes(await app.employees.list(admin, { certificateTypes: ["atld", "health"] }))).toEqual(["TNM001"]);
+    const any = await app.employees.list(admin, { certificateTypes: ["atld", "health"], certificateTypeMode: "any" });
     expect(codes(any)).toEqual(["TNM001", "TNM003", "TNM004", "TNM005", "TNM006", "TNM007", "TNM008"]);
     expect(codes(await app.employees.list(admin, { certificateTypes: ["atld", "health"], certificateTypeMode: "all" }))).toEqual(["TNM001"]);
   });

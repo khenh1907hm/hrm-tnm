@@ -8,7 +8,11 @@ export const VIEW_PATHS: Record<PageView, string> = {
   reports: "/bao-cao",
   settings: "/cai-dat",
   skills: "/skills",
+  tools: "/cong-cu",
 };
+
+/** Vai trò Nhân viên chỉ vào được các màn hình này. */
+export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools"];
 
 /** Tiêu đề tab trình duyệt theo màn hình. */
 export const VIEW_TITLES: Record<PageView, string> = {
@@ -18,6 +22,7 @@ export const VIEW_TITLES: Record<PageView, string> = {
   reports: "FORM Báo cáo",
   settings: "Cài đặt",
   skills: "Kho Skill AI",
+  tools: "Công cụ",
 };
 
 export type AppRoute = { view: PageView; employeeId: string | null };

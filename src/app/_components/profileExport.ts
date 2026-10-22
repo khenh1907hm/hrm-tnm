@@ -1,7 +1,8 @@
-import { buildSystemValues, resolveLayers } from "../../modules/excel-template/engine/fieldValues";
+import JSZip from "jszip";
+import { buildSystemValues, resolveLayers, type Signer } from "../../modules/excel-template/engine/fieldValues";
 import { fillWorkbook, type AttachmentPage, type TemplateImage } from "../../modules/excel-template/engine/fillWorkbook";
 import { readImageInfo } from "../../modules/excel-template/engine/imageSize";
-import { customImageSlots, customValues, fieldLabel } from "../../modules/excel-template/engine/profileConfig";
+import { customImageSlots, customValues, fieldLabel, isIdCardImage } from "../../modules/excel-template/engine/profileConfig";
 import { normalizeText } from "../../lib/text";
 import { base64ToUint8Array } from "../../modules/excel-template/templateStorage";
 import type { ExcelReportTemplate } from "../../modules/excel-template/types";
@@ -20,18 +21,33 @@ async function canvasToPng(canvas: HTMLCanvasElement): Promise<TemplateImage> {
   return { bytes: new Uint8Array(await blob.arrayBuffer()), extension: "png", width: canvas.width, height: canvas.height };
 }
 
+/** Xoay 90° theo chiều kim đồng hồ (ảnh CCCD chụp dọc → nằm ngang). */
+async function rotateBitmap(bitmap: ImageBitmap): Promise<ImageBitmap> {
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.height; canvas.height = bitmap.width;
+  const context = canvas.getContext("2d");
+  if (!context) { bitmap.close(); throw new Error("Trình duyệt không xử lý được ảnh."); }
+  context.translate(canvas.width, 0); context.rotate(Math.PI / 2);
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  return createImageBitmap(canvas);
+}
+
 /**
  * Đổi tệp ảnh thành ảnh chèn được vào Excel.
+ * - `landscape`: ảnh đang dọc thì xoay cho nằm ngang (ảnh CCCD).
  * - `aspect`: cắt giữa ảnh theo tỉ lệ rộng/cao này (kiểu "lấp đầy" cho ảnh 3×4).
  * - Ảnh PNG/JPEG vừa cỡ được giữ nguyên byte gốc; WebP hoặc ảnh quá lớn được vẽ lại thành PNG.
  */
-export async function toTemplateImage(blob: Blob, options: { aspect?: number; maxSide?: number } = {}): Promise<TemplateImage | null> {
+export async function toTemplateImage(blob: Blob, options: { aspect?: number; maxSide?: number; landscape?: boolean } = {}): Promise<TemplateImage | null> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const info = readImageInfo(bytes);
   const maxSide = options.maxSide ?? MAX_SCAN_SIDE;
-  if (info && !options.aspect && Math.max(info.width, info.height) <= maxSide) return { bytes, ...info };
+  // landscape luôn vẽ lại: byte gốc có thể mang cờ xoay EXIF mà Excel bỏ qua
+  if (info && !options.aspect && !options.landscape && Math.max(info.width, info.height) <= maxSide) return { bytes, ...info };
   if (!blob.type.startsWith("image/")) return null;
-  const bitmap = await createImageBitmap(blob);
+  const decoded = await createImageBitmap(blob);
+  const bitmap = options.landscape && decoded.height > decoded.width ? await rotateBitmap(decoded) : decoded;
   let sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height;
   if (options.aspect) {
     if (sw / sh > options.aspect) { sw = Math.round(sh * options.aspect); sx = Math.round((bitmap.width - sw) / 2); }
@@ -54,6 +70,8 @@ export type ProfileExportInput = {
   template: ExcelReportTemplate & { profile: NonNullable<ExcelReportTemplate["profile"]> };
   employee: Employee;
   commander: Commander | null;
+  /** Người ký chọn từ Thư viện chữ ký (tên, chức danh, ảnh PNG nền trong suốt). */
+  signer?: (Signer & { image: Blob | null }) | null;
   certificates: readonly Certificate[];
   certificateTypeNames: Readonly<Record<string, string>>;
   /** Tệp nhị phân đang có trong phiên, theo id tệp. */
@@ -74,7 +92,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   const { profile } = input.template;
   const warnings: string[] = [];
   const values = resolveLayers(
-    buildSystemValues({ employee: input.employee, commander: input.commander, certificates: input.certificates, certificateTypes: Object.keys(input.certificateTypeNames), exportDate: input.exportDate }),
+    buildSystemValues({ employee: input.employee, commander: input.commander, signer: input.signer ?? null, certificates: input.certificates, certificateTypes: Object.keys(input.certificateTypeNames), exportDate: input.exportDate }),
     customValues(profile, input.overrides, input.employee.extraFields),
   );
   // Trường tự thêm có ô đích: ghi thẳng vào ô
@@ -88,9 +106,16 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   for (const slot of imageSlots) {
     const fit = profile.imageSlots.find((item) => item.field === slot.field)?.fit;
     const aspect = fit === "cover" ? profile.slotAspect[slot.field] : undefined;
-    const options = aspect ? { aspect } : {};
+    const options = { ...(aspect ? { aspect } : {}), ...(isIdCardImage(slot.field, fieldLabel(slot.field, profile)) ? { landscape: true } : {}) };
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
+    if (slot.field === "signature") {
+      // Thiếu ảnh thì fillWorkbook tự báo "vùng ảnh chưa có ảnh" như các vùng khác
+      if (input.signer?.image) images[slot.field] = await toTemplateImage(input.signer.image);
+      continue;
+    }
+    if (slot.field === "photo3x4" && input.employee.photo) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.photo), options);
+    else if (slot.field === "employeeSignature" && input.employee.signatureImage) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.signatureImage), options);
     if (slot.field === "photo3x4" && input.employee.photo) {
       const photo = photoFile(input.employee.photo, input.sessionFiles);
       if (photo) images[slot.field] = await toTemplateImage(photo, options);
@@ -158,11 +183,41 @@ export async function exportProfilePdf(input: ProfileExportInput): Promise<{ byt
   return { bytes: merged.bytes, pageCount: merged.pageCount, warnings: [...workbook.warnings, ...merged.warnings] };
 }
 
+export type ProfileBundleFile = { name: string; bytes: Uint8Array };
+
+/**
+ * Bộ hồ sơ không cần máy chủ chuyển PDF: phiếu Excel (không chèn chứng chỉ) + một PDF gộp mọi chứng chỉ đã chọn,
+ * theo thứ tự của mẫu. Không có chứng chỉ nào ghép được thì chỉ có tệp Excel.
+ */
+export async function exportProfileBundle(input: ProfileExportInput): Promise<{ files: ProfileBundleFile[]; warnings: string[] }> {
+  const workbook = await exportProfileWorkbook({ ...input, format: "pdf" });
+  const files: ProfileBundleFile[] = [{ name: profileFileName(input.employee, input.exportDate), bytes: workbook.bytes }];
+  const warnings = [...workbook.warnings];
+  if (workbook.mergeParts.length) {
+    const merged = await mergeProfilePdf(null, workbook.mergeParts);
+    warnings.push(...merged.warnings);
+    if (merged.pageCount) files.push({ name: certificatesFileName(input.employee, input.exportDate), bytes: merged.bytes });
+  } else warnings.push("Không có chứng chỉ nào để gộp PDF, chỉ có tệp Excel");
+  return { files, warnings };
+}
+
+/** Nén các tệp thành ZIP; folder (nếu có) để mỗi nhân sự một thư mục khi xuất hàng loạt. */
+export async function zipFiles(files: readonly (ProfileBundleFile & { folder?: string })[]): Promise<Blob> {
+  const zip = new JSZip();
+  for (const file of files) zip.file(file.folder ? `${file.folder}/${file.name}` : file.name, file.bytes);
+  return zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+}
+
 const safeName = (value: string) => normalizeText(value).replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_|_$/g, "");
 
 /** Tên tệp hồ sơ: HoSo_<mã>_<tên không dấu>_<yyyymmdd>.xlsx */
-export function profileFileName(employee: Pick<Employee, "code" | "name">, exportDate: string, extension: "xlsx" | "pdf" = "xlsx"): string {
+export function profileFileName(employee: Pick<Employee, "code" | "name">, exportDate: string, extension: "xlsx" | "pdf" | "zip" = "xlsx"): string {
   return `HoSo_${employee.code}_${safeName(employee.name)}_${exportDate.replaceAll("-", "")}.${extension}`;
+}
+
+/** Tên tệp PDF gộp chứng chỉ: ChungChi_<mã>_<tên không dấu>_<yyyymmdd>.pdf */
+export function certificatesFileName(employee: Pick<Employee, "code" | "name">, exportDate: string): string {
+  return `ChungChi_${employee.code}_${safeName(employee.name)}_${exportDate.replaceAll("-", "")}.pdf`;
 }
 
 export function zipFileName(templateName: string, exportDate: string, count: number): string {

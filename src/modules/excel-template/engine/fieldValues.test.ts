@@ -28,6 +28,13 @@ describe("buildSystemValues", () => {
     expect(values).toMatchObject({ genderMale: "☐", genderFemale: "☑", safetyGroup: "", currentAddress: "", experience: "", contactName: "", contactNameUpper: "", contactRelation: "", contactPhone: "", contactAddress: "" });
   });
 
+  it("fills the signer chosen from the signature library (name, role, 'name - role'), empty when none", () => {
+    const signed = buildSystemValues({ employee, commander, signer: { name: "Nguyễn Gia Luân", role: "Giám Đốc" }, certificates: [], certificateTypes: [], exportDate: "2026-10-14" });
+    expect(signed).toMatchObject({ signerName: "Nguyễn Gia Luân", signerNameUpper: "NGUYỄN GIA LUÂN", signerRole: "Giám Đốc", signerTitle: "Nguyễn Gia Luân - Giám Đốc" });
+    expect(buildSystemValues({ employee, commander, signer: { name: "Lê Văn Ký", role: "" }, certificates: [], certificateTypes: [], exportDate: "2026-10-14" }).signerTitle).toBe("Lê Văn Ký");
+    expect(buildSystemValues({ employee, commander, certificates: [], certificateTypes: [], exportDate: "2026-10-14" })).toMatchObject({ signerName: "", signerNameUpper: "", signerRole: "", signerTitle: "" });
+  });
+
   it("computes age around the birthday and validity on the export date", () => {
     expect(ageOn("1988-05-12", "2026-05-11")).toBe(37);
     expect(ageOn("1988-05-12", "2026-05-12")).toBe(38);

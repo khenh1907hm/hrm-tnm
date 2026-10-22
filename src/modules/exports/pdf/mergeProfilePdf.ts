@@ -10,12 +10,15 @@ const MARGIN = 28;
 
 /**
  * Ghép phiếu (PDF đã chuyển từ Excel) với các chứng chỉ theo thứ tự, từ trên xuống dưới.
+ * cover = null: chỉ ghép các chứng chỉ thành một tệp (khi không có máy chủ chuyển Excel → PDF).
  * Tệp hỏng/không đọc được bị bỏ qua và trả về cảnh báo, phần còn lại vẫn được ghép.
  */
-export async function mergeProfilePdf(cover: Uint8Array, parts: readonly MergePart[]): Promise<{ bytes: Uint8Array; pageCount: number; warnings: string[] }> {
+export async function mergeProfilePdf(cover: Uint8Array | null, parts: readonly MergePart[]): Promise<{ bytes: Uint8Array; pageCount: number; warnings: string[] }> {
   const output = await PDFDocument.create();
-  const coverDocument = await PDFDocument.load(cover, { ignoreEncryption: true });
-  for (const page of await output.copyPages(coverDocument, coverDocument.getPageIndices())) output.addPage(page);
+  if (cover) {
+    const coverDocument = await PDFDocument.load(cover, { ignoreEncryption: true });
+    for (const page of await output.copyPages(coverDocument, coverDocument.getPageIndices())) output.addPage(page);
+  }
   const warnings: string[] = [];
 
   for (const part of parts) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { Actor } from "../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../modules/certificates/checklist";
@@ -22,6 +22,7 @@ import { SideNav } from "./_components/SideNav";
 import { SignaturesView } from "./_components/SignaturesView";
 import { emptyEmployee, issueText, type App, type ExpiringCertificateRow, type PageView, type SignatureRow } from "./_components/shared";
 import { useReportTemplates } from "./_components/useReportTemplates";
+import { usePartners } from "./_components/usePartners";
 import { useToast } from "./_components/Toast";
 import { EmployeeExtraPanel } from "./_components/EmployeeExtraPanel";
 import { ReasonDialog } from "./_components/ReasonDialog";
@@ -30,8 +31,10 @@ import { ClaudeHoSoImportModal } from "./_components/ClaudeHoSoImportModal";
 import { downloadXlsx } from "./_components/profileExport";
 import { buildEmployeeRosterWorkbook } from "../modules/exports/employeeRoster";
 import { useBackend, type Backend } from "./_components/useBackend";
+import { filtersFromSearch, filtersToSearch } from "./_components/listQuery";
 import { getSupabaseClient } from "../lib/supabase/client";
 import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
+import { EmployeeWorkspace, ToolsPage } from "./_components/EmployeeWorkspace";
 import type { FileFolder } from "./_components/fileStore";
 import { photoRef } from "../modules/employees/photo";
 import { parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
@@ -45,6 +48,7 @@ export default function HrmClient() {
   // Kho Skill xem công khai được, không bắt đăng nhập
   if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
   if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
+  if (backend.status === "employee") return <EmployeeWorkspace mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
   return <HrmWorkspace backend={backend} />;
 }
 
@@ -53,15 +57,23 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   // Màn hình đang mở lấy từ URL: mỗi mục có đường dẫn riêng, tải lại trang hay mở link vẫn đúng chỗ
   const route = parseRoute(usePathname()) ?? { view: "employees" as const, employeeId: null };
   const view = route.view;
+  // Bộ lọc danh sách đọc từ URL (/nhan-su?page=3&q=…) để Back, F5, chia sẻ link về đúng chỗ
+  const [filters, setFilters] = useState<EmployeeFilters>(() => typeof window === "undefined" ? DEFAULT_EMPLOYEE_FILTERS : filtersFromSearch(window.location.search));
+  const filtersRef = useRef(filters);
+  useEffect(() => { filtersRef.current = filters; }, [filters]);
   const navigate = useCallback((next: PageView, employeeId: string | null = null) => {
-    const path = routePath(next, employeeId);
-    if (path !== window.location.pathname) window.history.pushState(null, "", path);
+    // Về danh sách thì mang theo bộ lọc đang dùng
+    const path = routePath(next, employeeId) + (next === "employees" && !employeeId ? filtersToSearch(filtersRef.current) : "");
+    if (path !== window.location.pathname + window.location.search) window.history.pushState(null, "", path);
   }, []);
   const [rows, setRows] = useState<Employee[]>([]);
   const [employeeCertificateHealth, setEmployeeCertificateHealth] = useState<Record<string, CertificateChecklistSummary>>({});
-  const [filters, setFilters] = useState<EmployeeFilters>(DEFAULT_EMPLOYEE_FILTERS);
   const [pageInfo, setPageInfo] = useState<EmployeePageInfo>(EMPTY_PAGE_INFO);
   const [loadedListKey, setLoadedListKey] = useState("");
+  const [listError, setListError] = useState(false);
+  const [listAttempt, setListAttempt] = useState(0);
+  // Tăng khi dữ liệu nền được thay (tải ngầm xong): tải lại nội dung nhưng giữ trang, bộ lọc, vị trí cuộn
+  const { revision, stale } = backend.dataStatus;
   const [rosterBusy, setRosterBusy] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchEmployees, setBatchEmployees] = useState<Employee[] | null>(null);
@@ -81,10 +93,13 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [exportInit, setExportInit] = useState<ExportDialogInit | null>(null);
   const [reasonDialog, setReasonDialog] = useState<{ kind: "employee" } | { kind: "certificate"; certificate: Certificate } | null>(null);
   const [showExcelModal, setShowExcelModal] = useState(false);
+  // Mở cửa sổ xuất theo mẫu ở chế độ chỉ PDF gộp (nút "Xuất hồ sơ PDF")
+  const [pdfOnlyExport, setPdfOnlyExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showClaudeImport, setShowClaudeImport] = useState(false);
   const templateError = useCallback((message: string) => setNotice(message, "error"), [setNotice]);
   const [templates, setTemplates] = useReportTemplates(backend.mode === "live" ? getSupabaseClient() : null, templateError);
+  const partnerStore = usePartners(backend.mode === "live" ? getSupabaseClient() : null, templateError);
   const listInput = useMemo(() => toListInput(filters), [filters]);
 
   /** Chế độ thật: đẩy tệp vừa chọn lên kho lưu trữ (lỗi thì báo, tệp vẫn dùng được trong phiên). */
@@ -116,17 +131,18 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   }, [fileStore, sessionFiles]);
 
   const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
+  const extraFileRefs = (employee: Employee) => Object.values(employee.extraFiles ?? {}).map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
+  /** Ảnh chữ ký của người ký khi xuất mẫu hồ sơ (vùng IMG_signature). */
+  const loadSignatureFile = useCallback(async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "signatures" }]))[file.id] ?? null, [ensureFiles]);
   /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */
   const extraFileRefs = (employee: Employee) => [...Object.values(employee.extraFiles ?? {}), ...[photoRef(employee.photo)].filter((file) => file !== null)].map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
   const loadPhoto = async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "employees" }]))[file.id] ?? null;
   const signatureFileRefs = async () => { const listed = await app.signatures.list(actor); return listed.ok ? listed.value.map((signature) => ({ id: signature.file.id, name: signature.file.name, folder: "signatures" as const })) : []; };
 
   const refresh = useCallback(async (instance: App, currentActor: Actor) => {
-    const listed = await instance.employees.list(currentActor, listInput);
-    if (listed.ok) { setRows(listed.value.items); setPageInfo(listed.value); }
-    const certs = await instance.certificates.listExpiring(currentActor);
+    const [listed, certs, signatures] = await Promise.all([instance.employees.list(currentActor, listInput), instance.certificates.listExpiring(currentActor), instance.signatures.list(currentActor)]);
+    if (listed.ok) { setRows(listed.value.items); setPageInfo(listed.value); setEmployeeCertificateHealth(listed.value.certificateSummaries); }
     if (certs.ok) setCertRows(certs.value);
-    const signatures = await instance.signatures.list(currentActor);
     if (signatures.ok) setSignatureRows(signatures.value);
   }, [listInput]);
 
@@ -135,22 +151,45 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     if (!app) return;
     let current = true;
     const key = JSON.stringify(listInput);
-    void app.employees.list(actor, listInput).then(async (result) => {
+    // Một lượt gọi trả cả danh sách lẫn tình trạng chứng chỉ của từng người trên trang
+    void app.employees.list(actor, listInput).then((result) => {
       if (!current) return;
       setLoadedListKey(key);
+      setListError(false);
       if (!result.ok) return;
       setRows(result.value.items);
       setPageInfo(result.value);
-      const health = await Promise.all(result.value.items.map(async (employee) => {
-        const checklist = await app.certificates.checklist(actor, employee.id);
-        return checklist.ok ? [employee.id, checklist.value.summary] as const : null;
-      }));
-      if (current) setEmployeeCertificateHealth(Object.fromEntries(health.filter((item): item is readonly [string, CertificateChecklistSummary] => item !== null)));
+      setEmployeeCertificateHealth(result.value.certificateSummaries);
+    }, () => {
+      // Lỗi mạng: giữ nguyên dữ liệu đang hiện, báo lỗi kèm nút "Thử lại" (không treo "Đang tải…")
+      if (!current) return;
+      setLoadedListKey(key);
+      setListError(true);
     });
+    return () => { current = false; };
+  }, [app, actor, listInput, revision, listAttempt]);
+
+  // Giữ bộ lọc trên URL của màn danh sách (thay mục lịch sử hiện tại, không tạo thêm mục)
+  useEffect(() => {
+    if (view !== "employees" || route.employeeId) return;
+    const target = routePath("employees") + filtersToSearch(filters);
+    if (target !== window.location.pathname + window.location.search) window.history.replaceState(window.history.state, "", target);
+  }, [filters, view, route.employeeId]);
+  // Back/Forward giữa các URL danh sách: đọc lại bộ lọc từ URL
+  useEffect(() => {
+    const onPop = () => { if (parseRoute(window.location.pathname)?.view === "employees" && !parseRoute(window.location.pathname)?.employeeId) setFilters(filtersFromSearch(window.location.search)); };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // Cảnh báo hạn và chữ ký không phụ thuộc bộ lọc: chỉ tải khi vào app (sau đó cập nhật qua refresh)
+  useEffect(() => {
+    if (!app) return;
+    let current = true;
     void app.certificates.listExpiring(actor).then((result) => { if (current && result.ok) setCertRows(result.value); });
     void app.signatures.list(actor).then((result) => { if (current && result.ok) setSignatureRows(result.value); });
     return () => { current = false; };
-  }, [app, actor, listInput]);
+  }, [app, actor, revision]);
 
   useEffect(() => {
     if (!app) return;
@@ -200,7 +239,11 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     if (!routeEmployeeId || routeEmployeeId === selectedId) return;
     let current = true;
     // Bấm qua lại nhanh giữa các hồ sơ: bỏ kết quả của lần tải cũ
-    void fetchDetail(routeEmployeeId).then((data) => { if (current) applyDetail(data); });
+    void fetchDetail(routeEmployeeId).then((data) => { if (current) applyDetail(data); }, () => {
+      if (!current) return;
+      setNotice(issueText("LIST_LOAD_FAILED"), "error");
+      navigate("employees");
+    });
     return () => { current = false; };
     // Chỉ chạy khi URL đổi sang hồ sơ khác
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -229,10 +272,12 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         position: selected.position,
         group: selected.group,
         startDate: selected.startDate,
+        companyStartDate: selected.companyStartDate ?? null,
         emergencyContactId: selected.emergencyContactId,
         status: selected.status,
         endDate: selected.endDate,
         photo: selected.photo ?? null,
+        signatureImage: selected.signatureImage ?? null,
         mismatchOverrideReason: selected.cccdMismatchOverrideReason ?? "",
       },
     });
@@ -320,7 +365,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       const result = await app.employees.list(actor, { ...listInput, page, pageSize: 100 });
       if (!result.ok) break;
       ids.push(...result.value.items.filter((employee) => !employee.archivedAt).map((employee) => employee.id));
-      if (page >= result.value.pageCount) break;
+      if (page >= result.value.totalPages) break;
     }
     setSelectedIds((current) => Array.from(new Set([...current, ...ids])));
   };
@@ -328,8 +373,9 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
 
   return (
     <div className="app-shell">
-      <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} />
+      <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
+        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
@@ -345,6 +391,11 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onEdit={() => void openEdit()}
           onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
+          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(false); setShowExcelModal(true); })}
+          onExportPdf={() => templates.some((template) => template.profile)
+            // Có mẫu hồ sơ: phiếu Excel → PDF rồi ghép chứng chỉ; chưa có mẫu thì dùng phiếu PDF dựng sẵn
+            ? void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(true); setShowExcelModal(true); })
+            : void openExportDialog()}
           loadPhoto={loadPhoto}
           onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => setShowExcelModal(true))}
           onExportPdf={() => void openExportDialog()}
@@ -367,8 +418,9 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         />}
         {view === "alerts" && <AlertsView app={app} actor={actor} certRows={certRows} onCertRowsChange={setCertRows} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} setNotice={setNotice} />}
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
-        {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} />}
+        {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} partners={partnerStore} loadSignatureFile={loadSignatureFile} />}
         {view === "skills" && <SkillsClient embedded />}
+        {view === "tools" && <ToolsPage />}
         {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal
@@ -428,15 +480,17 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       {showClaudeImport && <ClaudeHoSoImportModal setNotice={setNotice} onClose={() => setShowClaudeImport(false)} onSaved={() => void refresh(app, actor)} />}
       {showImport && <ImportEmployeesModal app={app} actor={actor} setNotice={setNotice} onClose={() => setShowImport(false)} onImported={() => void refresh(app, actor)} />}
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
-      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
+      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} loadSignatureFile={loadSignatureFile} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}
+          pdfOnly={pdfOnlyExport}
           templates={templates}
           app={app}
           actor={actor}
           certificates={employeeCertificates}
           sessionFiles={sessionFiles}
+          loadSignatureFile={loadSignatureFile}
           onClose={() => setShowExcelModal(false)}
           setNotice={setNotice}
           onGoToTemplatesConfig={() => {

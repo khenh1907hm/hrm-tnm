@@ -1,4 +1,5 @@
 "use client";
+import type { SignatureFileLoader } from "./_components/SignerPicker";
 import { Download, FileText, Settings } from "lucide-react";
 import { useState } from "react";
 import type { Employee } from "../modules/employees/types";
@@ -21,11 +22,15 @@ interface ExportExcelModalProps {
   actor: Actor;
   certificates: readonly Certificate[];
   sessionFiles: Readonly<Record<string, File>>;
+  /** Tải ảnh chữ ký của người ký (cho vùng IMG_signature). */
+  loadSignatureFile?: SignatureFileLoader;
+  /** Nút "Xuất hồ sơ PDF": chỉ mẫu hồ sơ, chỉ tải PDF gộp (phiếu + chứng chỉ). */
+  pdfOnly?: boolean;
 }
 
 export function ExportExcelModal({
   employee,
-  templates,
+  templates: allTemplates,
   onClose,
   setNotice,
   onGoToTemplatesConfig,
@@ -33,7 +38,10 @@ export function ExportExcelModal({
   actor,
   certificates,
   sessionFiles,
+  loadSignatureFile,
+  pdfOnly = false,
 }: ExportExcelModalProps) {
+  const templates = pdfOnly ? allTemplates.filter((template) => template.profile) : allTemplates;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
 
@@ -79,7 +87,7 @@ export function ExportExcelModal({
     <div className="modal-backdrop" role="presentation">
       <div className="modal-card" style={{ maxWidth: activeTemplate?.profile ? "820px" : "600px" }}>
         <header>
-          <h2>Xuất hồ sơ theo mẫu (Excel / PDF gộp)</h2>
+          <h2>{pdfOnly ? "Xuất hồ sơ PDF (.zip: phiếu Excel + PDF gộp chứng chỉ)" : "Xuất hồ sơ theo mẫu (Excel / PDF gộp)"}</h2>
           <button type="button" className="close" onClick={onClose}>
             ×
           </button>
@@ -97,7 +105,7 @@ export function ExportExcelModal({
 
           <div style={{ marginBottom: "16px" }}>
             <label className="field">
-              <span>Chọn mẫu báo cáo Excel:</span>
+              <span>{pdfOnly ? "Chọn mẫu hồ sơ:" : "Chọn mẫu báo cáo Excel:"}</span>
               <select
                 value={selectedTemplateId}
                 onChange={(e) => setSelectedTemplateId(e.target.value)}
@@ -113,7 +121,7 @@ export function ExportExcelModal({
           </div>
 
           {activeTemplate?.profile ? (
-            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} />
+            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} loadSignatureFile={loadSignatureFile} pdfOnly={pdfOnly} />
           ) : activeTemplate ? (
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "12px", borderRadius: "6px", fontSize: "13px", marginBottom: "16px" }}>
               <div style={{ fontWeight: "bold", color: "#166534", marginBottom: "6px" }}>

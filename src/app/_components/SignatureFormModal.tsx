@@ -1,25 +1,21 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { ImagePlus, X } from "lucide-react";
-import { removeWhiteBackground } from "../../lib/image/removeWhiteBackground";
+import { Check, Copy, ExternalLink, ImagePlus, Sparkles, X } from "lucide-react";
+import { toTransparentPng } from "../../lib/image/toTransparentPng";
 import { randomIds } from "../../lib/ids";
 import type { Actor } from "../../modules/auth/permissions";
 import type { Signature } from "../../modules/signatures/types";
 import { issueText, type App, type SetNotice } from "./shared";
 
-/** Ảnh chụp chữ ký trên giấy trắng → PNG nền trong suốt (xử lý ngay trong trình duyệt). */
-async function toTransparentPng(upload: File): Promise<File> {
-  const bitmap = await createImageBitmap(upload);
-  const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width; canvas.height = bitmap.height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Không thể xử lý ảnh chữ ký.");
-  context.drawImage(bitmap, 0, 0); bitmap.close();
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  pixels.data.set(removeWhiteBackground({ data: pixels.data, width: pixels.width, height: pixels.height }).data);
-  context.putImageData(pixels, 0, 0);
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Không thể tạo ảnh chữ ký PNG.")), "image/png"));
-  return new File([blob], `${upload.name.replace(/\.[^.]+$/, "")}.png`, { type: "image/png" });
-}
+/** Prompt gửi kèm ảnh chụp chữ ký cho AI chỉnh ảnh: nhận lại PNG nền trong suốt dùng được khi xuất hợp đồng. */
+const SIGNATURE_PROMPT = `I am attaching a photo of a handwritten signature. Extract the signature and return exactly one PNG file:
+- Real transparent background (alpha channel). No white, grey or fake checkerboard background.
+- Keep the original strokes exactly: same shape, thickness and proportions. Do not redraw, restyle or add any text.
+- Make the ink a clean, solid dark blue or black. Remove shadows, paper texture, ruled lines, stains and stamps.
+- Crop tightly around the signature with about 5% padding.
+- Landscape, around 1200 px wide, sharp edges.
+
+Output only the final PNG file, no explanation.`;
+const SIGNATURE_PROMPT_URL = `https://chatgpt.com/?q=${encodeURIComponent(SIGNATURE_PROMPT)}`;
 
 /** Thêm mới hoặc sửa chữ ký: tên, chức danh, ảnh (khi sửa có thể giữ ảnh cũ). */
 export function SignatureFormModal(props: { app: App; actor: Actor; editing?: Signature | null; currentImageUrl?: string | undefined; onClose: () => void; onSaved: (signature: Signature, newFile: File | null) => void; setNotice: SetNotice }) {
@@ -31,6 +27,7 @@ export function SignatureFormModal(props: { app: App; actor: Actor; editing?: Si
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
 
   const choose = async (file: File | undefined) => {
@@ -44,6 +41,16 @@ export function SignatureFormModal(props: { app: App; actor: Actor; editing?: Si
       setPreview(URL.createObjectURL(png));
     } catch { setError("Không đọc được ảnh. Hãy chọn ảnh JPG, PNG hoặc WebP khác."); }
     finally { setProcessing(false); }
+  };
+
+  const copyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(SIGNATURE_PROMPT);
+      setPromptCopied(true);
+      window.setTimeout(() => setPromptCopied(false), 2500);
+    } catch {
+      props.setNotice("Không thể sao chép tự động, vui lòng chọn văn bản và bấm Ctrl+C.");
+    }
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
@@ -77,6 +84,21 @@ export function SignatureFormModal(props: { app: App; actor: Actor; editing?: Si
             </label>
             <p className="muted">Chụp chữ ký trên giấy trắng; nền trắng được tách tự động trước khi lưu.{editing && !processed ? " Không chọn ảnh mới thì giữ ảnh cũ." : ""}</p>
           </div>
+          <details className="prompt-tab-panel signature-prompt">
+            <summary className="prompt-tab-header">
+              <span className="prompt-tab-title"><Sparkles className="ico" size={14} aria-hidden="true" /> Ảnh chụp xấu? Tách nền bằng AI</span>
+              <a className="chatgpt-open-link" href={SIGNATURE_PROMPT_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Đi đến AI tách nền <ExternalLink className="ico" size={12} aria-hidden="true" /></a>
+            </summary>
+            <div className="prompt-tab-body">
+              <div className="prompt-box-wrapper">
+                <button type="button" className={promptCopied ? "prompt-copy-btn copied" : "prompt-copy-btn"} onClick={() => void copyPrompt()}>
+                  {promptCopied ? <><Check className="ico" size={12} aria-hidden="true" /> Đã sao chép</> : <><Copy className="ico" size={12} aria-hidden="true" /> Sao chép</>}
+                </button>
+                <pre className="prompt-text-box">{SIGNATURE_PROMPT}</pre>
+              </div>
+              <p className="prompt-hint">Bấm “Đi đến AI tách nền” (prompt đã điền sẵn) hoặc sao chép prompt, đính kèm ảnh chụp chữ ký, tải file PNG nhận được về rồi bấm “Chọn ảnh chữ ký” ở trên.</p>
+            </div>
+          </details>
           {error && <p className="form-error" role="alert">{error}</p>}
         </div>
         <footer><button className="button" type="button" onClick={props.onClose}>Hủy</button><button className="button primary" type="submit" disabled={busy || processing}>{processing ? "Đang xử lý ảnh…" : busy ? "Đang lưu…" : editing ? "Lưu thay đổi" : "Lưu chữ ký"}</button></footer>

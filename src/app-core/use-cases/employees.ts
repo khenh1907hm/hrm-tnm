@@ -1,12 +1,14 @@
 import { diffDays } from "../../lib/dates";
 import { failure, issue, success, type Issue, type Result } from "../../lib/result";
+import { normalizePageSize, paginate } from "../../lib/paginate";
 import { normalizeText } from "../../lib/text";
 import { maskCccd } from "../../lib/vietnam/cccd";
 import type { Actor } from "../../modules/auth/permissions";
 import { employeeInputSchema } from "../../modules/employees/schema";
 import { validateEmployee } from "../../modules/employees/rules";
 import type { Employee, EmployeeInput, EmploymentStatus } from "../../modules/employees/types";
-import type { FileRef } from "../../modules/certificates/types";
+import type { Certificate, FileRef } from "../../modules/certificates/types";
+import { getCertificateChecklist, type CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import { err, type HrAppContext } from "../context";
 
 /** Tình trạng chứng chỉ của một nhân sự (dùng cho bộ lọc nhiều lựa chọn). */
@@ -24,7 +26,11 @@ export type EmployeeListInput = {
 export type EmployeeFacets = { positions: Record<string, number>; statuses: Record<string, number>; certificateHealth: Record<CertificateHealth, number>; certificateTypes: Record<string, number> };
 /** Kết quả từng dòng khi nhập nhiều hồ sơ (cùng thứ tự với đầu vào). */
 export type EmployeeImportOutcome = { ok: true; employee: Employee | null; warnings: Issue[] } | { ok: false; errors: Issue[]; warnings: Issue[] };
-export type EmployeeListResult = { items: Employee[]; page: number; pageSize: number; total: number; pageCount: number; facets: EmployeeFacets };
+export type EmployeeListResult = {
+  items: Employee[]; page: number; pageSize: number; total: number; totalPages: number; facets: EmployeeFacets;
+  /** Tóm tắt chứng chỉ của từng người trên trang này, để danh sách không phải gọi riêng từng người. */
+  certificateSummaries: Record<string, CertificateChecklistSummary>;
+};
 
 export function createEmployeeUseCases(ctx: HrAppContext) {
   const { deps, repositories, today, nowDate, has, writeAudit, getEmployee, getCommanderIds } = ctx;
@@ -131,7 +137,6 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
     },
     list: async (actor: Actor, input: EmployeeListInput = {}): Promise<Result<EmployeeListResult>> => {
       if (!has(actor, "employeeRead")) return err("FORBIDDEN");
-      const pageSize = Math.min(100, Math.max(1, Math.floor(input.pageSize ?? 20)));
       const tokens = normalizeText(input.query ?? "").split(/\s+/).filter(Boolean);
       const [allEmployees, types, certificates] = await Promise.all([repositories.employees.list(), repositories.certificateTypes.list(), repositories.certificates.list()]);
       const todayValue = today();
@@ -141,14 +146,24 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       // Cờ cũ: phải thỏa đồng thời (và)
       const requiredHealth: CertificateHealth[] = [...(input.missingRequiredCertificate ? ["missing" as const] : []), ...(input.expiringCertificates ? ["expiring" as const] : []), ...(input.expiredCertificates ? ["expired" as const] : [])];
       const typeFilter = [...(input.certificateTypes ?? []), ...(input.certificateType ? [input.certificateType] : [])];
-      const typeMode = input.certificateTypeMode ?? "any";
+      // Tick nhiều ô chứng chỉ thì người đó phải thỏa đủ tất cả (trừ khi chọn "một trong")
+      const typeMode = input.certificateTypeMode ?? "all";
+
+      // Gom chứng chỉ hiện hành theo người một lần, thay vì lọc cả bảng cho từng người
+      const currentByEmployee = new Map<string, Certificate[]>();
+      for (const certificate of certificates) {
+        if (certificate.state !== "current") continue;
+        const list = currentByEmployee.get(certificate.employeeId);
+        if (list) list.push(certificate); else currentByEmployee.set(certificate.employeeId, [certificate]);
+      }
 
       // Tính sẵn cho từng người: tình trạng chứng chỉ và các loại còn hạn
       type Row = { employee: Employee; health: Set<CertificateHealth>; validTypes: Set<string> };
       const rows: Row[] = allEmployees
-        .filter((employee) => (input.includeArchived || employee.archivedAt === null) && tokens.every((token) => [normalizeText(employee.name), normalizeText(employee.code), employee.phone, employee.cccd].join(" ").includes(token)))
+        // Tên, mã, SĐT khớp một phần (không dấu); CCCD chỉ khớp chính xác cả 12 số
+        .filter((employee) => (input.includeArchived || employee.archivedAt === null) && tokens.every((token) => token === employee.cccd || [normalizeText(employee.name), normalizeText(employee.code), employee.phone].join(" ").includes(token)))
         .map((employee) => {
-          const current = certificates.filter((certificate) => certificate.employeeId === employee.id && certificate.state === "current");
+          const current = currentByEmployee.get(employee.id) ?? [];
           const health = new Set<CertificateHealth>();
           if (types.some((type) => !type.archived && type.requiredForPositions.includes(employee.position) && !current.some((certificate) => certificate.type === type.key))) health.add("missing");
           for (const certificate of current) {
@@ -163,7 +178,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       const tests: Record<Group, (row: Row) => boolean> = {
         positions: (row) => !positions.length || positions.includes(row.employee.position),
         statuses: (row) => !statuses.length || statuses.includes(row.employee.status),
-        certificateHealth: (row) => (!healthFilter.length || healthFilter.some((value) => row.health.has(value))) && requiredHealth.every((value) => row.health.has(value)),
+        certificateHealth: (row) => healthFilter.every((value) => row.health.has(value)) && requiredHealth.every((value) => row.health.has(value)),
         certificateTypes: (row) => !typeFilter.length || (typeMode === "all" ? typeFilter.every((type) => row.validTypes.has(type)) : typeFilter.some((type) => row.validTypes.has(type))),
       };
       const groups = Object.keys(tests) as Group[];
@@ -179,15 +194,13 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
         if (passesExcept(row, "certificateTypes")) for (const type of row.validTypes) bump(facets.certificateTypes, type);
       }
 
-      const direction = input.sortDir === "desc" ? -1 : 1;
       const sortKey = input.sort ?? "code";
-      const compare = (a: Employee, b: Employee) => sortKey === "name" ? a.name.localeCompare(b.name, "vi") : sortKey === "startDate" ? a.startDate.localeCompare(b.startDate) : 0;
-      const matches = rows.filter((row) => passesExcept(row, null)).map((row) => row.employee)
-        .sort((a, b) => (compare(a, b) || a.code.localeCompare(b.code, "en", { numeric: true })) * direction);
-      const pageCount = Math.max(1, Math.ceil(matches.length / pageSize));
-      const page = Math.min(pageCount, Math.max(1, Math.floor(input.page ?? 1)));
-      const items = matches.slice((page - 1) * pageSize, page * pageSize).map((employee) => ({ ...employee, cccd: maskCccd(employee.cccd) }));
-      return success({ items, page, pageSize, total: matches.length, pageCount, facets });
+      const compare = (a: Employee, b: Employee) => (sortKey === "name" ? a.name.localeCompare(b.name, "vi") : sortKey === "startDate" ? a.startDate.localeCompare(b.startDate) : 0) || a.code.localeCompare(b.code, "en", { numeric: true });
+      const matches = rows.filter((row) => passesExcept(row, null)).map((row) => row.employee);
+      const { items: pageEmployees, page, pageSize, total, totalPages } = paginate(matches, { page: input.page, pageSize: normalizePageSize(input.pageSize), compare, direction: input.sortDir });
+      const certificateSummaries = Object.fromEntries(pageEmployees.map((employee) => [employee.id, getCertificateChecklist(employee, types, currentByEmployee.get(employee.id) ?? [], todayValue).summary]));
+      const items = pageEmployees.map((employee) => ({ ...employee, cccd: maskCccd(employee.cccd) }));
+      return success({ items, page, pageSize, total, totalPages, facets, certificateSummaries });
     },
     search: async (actor: Actor, input: EmployeeListInput): Promise<Result<EmployeeListResult>> => employeeUseCases.list(actor, input),
     /** Lưu giá trị trường tùy chỉnh theo nhân sự; `files[key] = null` là xóa ảnh. */

@@ -25,14 +25,16 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | NAME-02 | Dài 2 đến 100 ký tự; chỉ gồm chữ cái Unicode, khoảng trắng, dấu nháy đơn, dấu chấm, gạch ngang; cấm chữ số; phải có ít nhất 2 từ. | Giả định | `NAME_02` |
 | NAME-03 | Nếu toàn bộ viết hoa thì chuyển thành Title Case từng từ (ví dụ OCR trả về hoa hết); ngược lại giữ nguyên. | Đã chốt | `NAME_03` |
 | EMP-01 | Mã nhân viên: ^TNM\d{3,5}$ sau khi cắt khoảng trắng và viết hoa; duy nhất toàn hệ thống kể cả đã ẩn; không bao giờ dùng lại. | Giả định | `EMP_01` |
-| EMP-02 | Bắt buộc khi tạo: mã, họ tên, ngày sinh, giới tính (Nam hoặc Nữ), CCCD, số điện thoại, chức danh (một trong: Giám đốc, Nhân sự, Trưởng phòng kỹ thuật, Nhân viên kỹ thuật, Nhân viên hiện trường), ngày nhận việc. | Đã chốt | `EMP_02` |
+| EMP-02 | Bắt buộc khi tạo: mã, họ tên, ngày sinh, giới tính (Nam hoặc Nữ), CCCD, số điện thoại, chức danh (một trong: Giám đốc, Nhân sự, Trưởng phòng kỹ thuật, Nhân viên kỹ thuật, Nhân viên hiện trường), ngày làm nghề. | Đã chốt | `EMP_02` |
 | EMP-03 | Không bắt buộc khi tạo: nguyên quán, địa chỉ thường trú, nhóm ATLĐ (số nguyên 1 đến 6), người liên hệ khẩn cấp. Các trường này chỉ bị chặn ở bước xuất PDF (EXP-01). | Đã chốt | `EMP_03` |
 | EMP-04 | Tuổi tính tại hôm nay: dưới 15 là lỗi; dưới 18 hoặc trên 65 là cảnh báo; trên 100 là lỗi. | Giả định | `EMP_04` |
-| EMP-05 | Ngày nhận việc: không trước (ngày sinh + 15 năm), lỗi nếu vi phạm; ở tương lai thì cảnh báo. | Đã chốt | `EMP_05` |
-| EMP-06 | Tình trạng làm việc: active | on_leave | resigned; resigned bắt buộc có endDate không trước ngày nhận việc và không ở tương lai. | Đã chốt | `EMP_06` |
+| EMP-05 | Ngày làm nghề: không trước (ngày sinh + 15 năm), lỗi nếu vi phạm; ở tương lai thì cảnh báo. | Đã chốt | `EMP_05` |
+| EMP-06 | Tình trạng làm việc: active | on_leave | resigned; resigned bắt buộc có endDate không trước ngày làm nghề và không ở tương lai. | Đã chốt | `EMP_06` |
 | EMP-07 | Người liên hệ khẩn cấp (nếu có) phải trỏ tới một người trong danh sách chỉ huy trưởng còn tồn tại. | Đã chốt | `EMP_07` |
 | EMP-08 | Ẩn thay vì xóa: archive bắt buộc có lý do từ 3 ký tự, ghi archivedAt, archivedBy, archiveReason. Nhân sự ẩn không xuất hiện trong danh sách mặc định (có tùy chọn bao gồm đã ẩn), không bị gửi nhắc, không được xuất PDF. restore khôi phục nguyên vẹn, kể cả các chứng chỉ của họ. | Giả định | `EMP_08` |
-| EMP-09 | Số năm làm việc không lưu, luôn tính từ ngày nhận việc đến một ngày tham chiếu (DATE-05, DATE-06). | Đã chốt | `EMP_09` |
+| EMP-09 | Số năm làm việc không lưu, luôn tính từ ngày làm nghề đến một ngày tham chiếu (DATE-05, DATE-06). | Đã chốt | `EMP_09` |
+| EMP-10 | Ngày vào TNM (companyStartDate) không bắt buộc; nếu có thì không được trước ngày làm nghề (lỗi), ở tương lai thì cảnh báo. Không dùng để tính kinh nghiệm. | Giả định | `EMP_10` |
+| EMP-11 | Chữ ký nhân sự (signatureImage) không bắt buộc: ảnh PNG nền trong suốt lưu trong hồ sơ, xuất vào vùng ảnh IMG_employeeSignature của mẫu. | Giả định | `EMP_11` |
 | SRCH-01 | Tìm không phân biệt hoa thường và không dấu (bỏ dấu tiếng Việt, đ thành d). Mỗi từ trong câu tìm phải khớp ít nhất một trong: họ tên, mã nhân viên, số điện thoại (so khớp chuỗi con theo chữ số), số CCCD (chỉ khi câu tìm đúng 12 chữ số). | Đã chốt | `SRCH_01` |
 | SRCH-02 | Sắp theo mã tự nhiên (TNM45 trước TNM100), phân trang page, pageSize mặc định 20, tối đa 100. | Đã chốt | `SRCH_02` |
 | SRCH-03 | Kết hợp bộ lọc theo chức danh, chứng chỉ sắp hết hạn, chứng chỉ đã hết hạn và nhân sự thiếu ít nhất một chứng chỉ hiện hành còn hạn bắt buộc theo chức danh; các bộ lọc trạng thái kết hợp theo AND. Nhân sự đã ẩn bị loại mặc định, Admin có thể yêu cầu đưa vào. | Đã chốt | `SRCH_03` |
@@ -79,9 +81,9 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | AUD-01 | Mọi thao tác thay đổi dữ liệu thành công ghi một sự kiện {id, at, actorId, role, action, entityType, entityId, before, after}. Thao tác thất bại không ghi. | Đã chốt | `AUD_01` |
 | AUD-02 | Trong before và after, số CCCD được che bằng maskCccd. Việc hiện số CCCD đầy đủ cũng ghi sự kiện cccd.reveal. | Đã chốt | `AUD_02` |
 | AUD-03 | Nhật ký chỉ thêm, không sửa, không xóa. Chỉ Admin đọc được. | Đã chốt | `AUD_03` |
-| EXP-01 | checkReadiness(employee, signDate, signerId) trả danh sách lỗi chặn nếu thiếu bất kỳ trường nào trên phiếu: họ tên, ngày sinh, giới tính, nguyên quán, địa chỉ thường trú, số điện thoại, ngày nhận việc, người liên hệ khẩn cấp, người ký (có trong thư viện), ngày ký hợp lệ. Nhân sự đã ẩn thì chặn. Chưa có nhóm ATLĐ trong khi có chứng chỉ huấn luyện an toàn được tick thì chỉ cảnh báo. | Giả định | `EXP_01` |
+| EXP-01 | checkReadiness(employee, signDate, signerId) trả danh sách lỗi chặn nếu thiếu bất kỳ trường nào trên phiếu: họ tên, ngày sinh, giới tính, nguyên quán, địa chỉ thường trú, số điện thoại, ngày làm nghề, người liên hệ khẩn cấp, người ký (có trong thư viện), ngày ký hợp lệ. Nhân sự đã ẩn thì chặn. Chưa có nhóm ATLĐ trong khi có chứng chỉ huấn luyện an toàn được tick thì chỉ cảnh báo. | Giả định | `EXP_01` |
 | EXP-02 | Ô tick hệ thống đúng khi có ít nhất một chứng chỉ hiện hành cùng loại còn hạn tại ngày ký; ghi chú hết hạn chỉ khi không còn chứng chỉ nào của loại đó hợp lệ. | Đã chốt | `EXP_02` |
-| EXP-03 | Kinh nghiệm tính từ ngày nhận việc đến ngày ký. Ngày nhận việc sau ngày ký thì hiển thị "0 tháng" kèm cảnh báo. | Đã chốt | `EXP_03` |
+| EXP-03 | Kinh nghiệm tính từ ngày làm nghề đến ngày ký. Ngày làm nghề sau ngày ký thì hiển thị "0 tháng" kèm cảnh báo. | Đã chốt | `EXP_03` |
 | EXP-04 | Họ tên trên phiếu viết hoa toàn bộ. Ô giới tính tick đúng một trong hai. Ghi "Nhóm N" cạnh dòng huấn luyện an toàn khi dòng đó được tick. | Đã chốt | `EXP_04` |
 | EXP-05 | Với mỗi loại được tick, mặc định chọn chứng chỉ hiện hành còn hạn có ngày hết hạn xa nhất; selectedCertificateIds ghi đè chọn mặc định, extraCertificateIds chọn loại tự thêm cho trang scan, includeSupplementary mặc định false và nếu bật thì tệp bổ sung theo ngay sau tệp chính. | Đã chốt | `EXP_05` |
 | EXP-06 | Không sinh PDF ở giai đoạn này, chỉ trả cấu trúc dữ liệu để giai đoạn sau dựng PDF. | Đã chốt | `EXP_06` |

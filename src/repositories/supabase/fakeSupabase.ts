@@ -1,33 +1,39 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type Row = Record<string, unknown>;
-type Result = { data: unknown; error: { message: string } | null };
+type Result = { data: unknown; error: { message: string } | null; count?: number | null };
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /**
  * Supabase giả lập trong bộ nhớ, chỉ đủ các thao tác repository dùng:
- * select/eq/order/maybeSingle/single, insert, update…select, delete…select và rpc renew_certificate.
- * Dữ liệu đi qua JSON như khi gửi lên máy chủ thật.
+ * select/eq/order/range/maybeSingle/single, insert, update…select, delete…select và rpc renew_certificate.
+ * Dữ liệu đi qua JSON như khi gửi lên máy chủ thật. Giống PostgREST, mỗi lần đọc trả tối đa `maxRows` dòng
+ * (mặc định 1.000) và KHÔNG báo lỗi khi cắt; `select(…, { count: "exact" })` trả thêm tổng số dòng khớp.
  */
-export function createFakeSupabase(seed: Record<string, Row[]> = {}) {
-  const tables: Record<string, Row[]> = Object.fromEntries(Object.entries(seed).map(([name, rows]) => [name, clone(rows)]));
+export function createFakeSupabase(seed: Record<string, Row[]> = {}, options: { maxRows?: number } = {}) {
+  const maxRows = options.maxRows ?? 1000;
   let clock = 0;
+  // Như cột created_at mặc định now(): dòng mẫu không ghi created_at nhận thứ tự chèn
+  const tables: Record<string, Row[]> = Object.fromEntries(Object.entries(seed).map(([name, rows]) => [name, clone(rows).map((row) => ({ created_at: ++clock, ...row }))]));
   const table = (name: string) => (tables[name] ??= []);
 
   class Query implements PromiseLike<Result> {
     private op: "select" | "insert" | "update" | "delete" = "select";
     private columns = "*";
     private filters: [string, unknown][] = [];
-    private sort: [string, boolean] | null = null;
+    private sorts: [string, boolean][] = [];
+    private window: [number, number] | null = null;
+    private counting = false;
     private mode: "many" | "maybe" | "single" = "many";
     private returning = false;
     private payload: Row = {};
     constructor(private readonly name: string) {}
 
-    select(columns = "*") { if (this.op === "select") this.columns = columns; else this.returning = true; return this; }
+    select(columns = "*", selectOptions: { count?: "exact" } = {}) { if (this.op === "select") { this.columns = columns; this.counting = selectOptions.count === "exact"; } else this.returning = true; return this; }
     eq(column: string, value: unknown) { this.filters.push([column, value]); return this; }
-    order(column: string, options: { ascending: boolean }) { this.sort = [column, options.ascending]; return this; }
+    order(column: string, orderOptions: { ascending: boolean } = { ascending: true }) { this.sorts.push([column, orderOptions.ascending]); return this; }
+    range(from: number, to: number) { this.window = [from, to]; return this; }
     maybeSingle() { this.mode = "maybe"; return this; }
     single() { this.mode = "single"; return this; }
     insert(payload: Row) { this.op = "insert"; this.payload = clone(payload); return this; }
@@ -55,10 +61,18 @@ export function createFakeSupabase(seed: Record<string, Row[]> = {}) {
         tables[this.name] = rows.filter((row) => !matched.includes(row));
         return { data: this.returning ? matched.map((row) => ({ id: row.id })) : null, error: null };
       }
-      const sorted = this.sort ? [...matched].sort((a, b) => (a[this.sort![0]]! < b[this.sort![0]]! ? -1 : 1) * (this.sort![1] ? 1 : -1)) : matched;
+      const sorted = [...matched].sort((a, b) => {
+        for (const [column, ascending] of this.sorts) {
+          const left = a[column] as string | number, right = b[column] as string | number;
+          if (left !== right) return (left < right ? -1 : 1) * (ascending ? 1 : -1);
+        }
+        return 0;
+      });
+      const [from, to] = this.window ?? [0, sorted.length - 1];
+      const windowed = sorted.slice(from, Math.min(to + 1, from + maxRows));
       const keys = this.columns === "*" ? null : this.columns.split(",").map((key) => key.trim());
-      const projected = sorted.map((row) => clone(keys ? Object.fromEntries(keys.map((key) => [key, row[key]])) : row));
-      if (this.mode === "many") return { data: projected, error: null };
+      const projected = windowed.map((row) => clone(keys ? Object.fromEntries(keys.map((key) => [key, row[key]])) : row));
+      if (this.mode === "many") return { data: projected, error: null, count: this.counting ? sorted.length : null };
       if (this.mode === "single" && projected.length !== 1) return { data: null, error: { message: "not exactly one row" } };
       return { data: projected[0] ?? null, error: null };
     }

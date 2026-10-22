@@ -35,6 +35,9 @@ export async function handleConvertRequest(request: Request, env: ConvertEnv, fe
 
   const form = new FormData();
   form.append("files", new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "hoso.xlsx");
+  // Giữ nét ảnh như trong Excel (chữ ký, logo, ảnh 3×4): không nén JPEG, không hạ độ phân giải
+  form.append("losslessImageCompression", "true");
+  form.append("reduceImageResolution", "false");
   const headers: Record<string, string> = {};
   if (env.gotenbergUsername && env.gotenbergPassword) headers.authorization = `Basic ${btoa(`${env.gotenbergUsername}:${env.gotenbergPassword}`)}`;
   let response: Response;
