@@ -2,9 +2,42 @@ import ExcelJS from "exceljs";
 import type { ImageExtension } from "./imageSize";
 
 export type TemplateImage = { bytes: Uint8Array; extension: ImageExtension; width: number; height: number };
-/** Vùng ô đặt ảnh; ảnh luôn được co vừa khung, giữ tỉ lệ, căn giữa. */
-/** fit "stretch": kéo ảnh phủ kín cả vùng ô; mặc định co vừa và căn giữa. */
+/**
+ * Vùng ô đặt ảnh. "stretch" và "cover" phủ kín đúng 4 góc vùng ô ("cover" đã được cắt theo tỉ lệ vùng trước đó,
+ * nên chỉ méo vài phần trăm khi Excel/LibreOffice tính độ rộng cột khác ước lượng); mặc định co vừa khung, giữ tỉ lệ, căn giữa.
+ */
 export type ImageSlot = { field: string; range: string; fit?: "contain" | "cover" | "stretch" };
+
+/**
+ * Độ rộng cột ra pixel theo cách Excel tính (chữ mặc định rộng 7px). Độ rộng lưu trong file đã gồm lề,
+ * nên không cộng thêm. Cột chưa đặt độ rộng: dùng mặc định của trang tính, không có thì 64px như Excel.
+ */
+export function columnWidthPx(sheet: ExcelJS.Worksheet, col: number): number {
+  const column = sheet.getColumn(col);
+  if (column.hidden) return 0;
+  const width = column.width ?? sheet.properties.defaultColWidth;
+  return width === undefined ? 64 : Math.trunc(((256 * width + Math.trunc(128 / 7)) / 256) * 7);
+}
+
+/**
+ * Vị trí cách mép đầu vùng `distance` pixel → tọa độ cột/dòng phân số (đếm từ 0) để neo ảnh.
+ * Chạm đúng mép cuối vùng thì trả về đúng biên ô cuối (không làm tròn lệch sang ô bên cạnh).
+ */
+export function anchorAt(first: number, last: number, distance: number, sizePx: (index: number) => number): number {
+  let remaining = Math.max(0, distance);
+  for (let index = first; index <= last; index += 1) {
+    const size = sizePx(index);
+    if (remaining < size || index === last) return index - 1 + (size ? Math.min(1, remaining / size) : 0);
+    remaining -= size;
+  }
+  return last;
+}
+
+/** Chiều cao dòng ra pixel (điểm × 96/72); dòng ẩn bằng 0. */
+export function rowHeightPx(sheet: ExcelJS.Worksheet, row: number): number {
+  const line = sheet.getRow(row);
+  return line.hidden ? 0 : ((line.height ?? sheet.properties.defaultRowHeight ?? 15) * 96) / 72;
+}
 export type AttachmentPage = { title: string; image: TemplateImage };
 export type FillWarning = { location: string; field: string };
 
@@ -70,8 +103,8 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     if (!item.value) warnings.push({ location: target.address, field: item.field });
   }
 
-  const columnPx = (col: number) => Math.round((sheet.getColumn(col).width ?? sheet.properties.defaultColWidth ?? 8.43) * 7 + 5);
-  const rowPx = (row: number) => ((sheet.getRow(row).height ?? sheet.properties.defaultRowHeight ?? 15) * 96) / 72;
+  const columnPx = (col: number) => columnWidthPx(sheet, col);
+  const rowPx = (row: number) => rowHeightPx(sheet, row);
 
   const placeImage = (image: TemplateImage, range: string, stretch: boolean) => {
     const [start, end] = parseRange(range);
@@ -82,25 +115,23 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     const scale = Math.min(width / image.width, height / image.height);
     const imageWidth = stretch ? width : image.width * scale;
     const imageHeight = stretch ? height : image.height * scale;
-    // Lệch theo pixel để căn giữa → đổi ra vị trí cột/dòng phân số (đếm từ 0)
-    let offsetX = (width - imageWidth) / 2;
-    let col = start.col;
-    while (offsetX >= columnPx(col) && col < end.col) { offsetX -= columnPx(col); col += 1; }
-    let offsetY = (height - imageHeight) / 2;
-    let row = start.row;
-    while (offsetY >= rowPx(row) && row < end.row) { offsetY -= rowPx(row); row += 1; }
+    // Neo cả hai góc theo ô (cột/dòng phân số, đếm từ 0) thay vì góc trên + kích thước pixel:
+    // Excel/LibreOffice vẽ ảnh đúng từ góc này tới góc kia theo độ rộng cột thật của họ,
+    // nên cạnh ảnh luôn trùng cạnh vùng ô dù ước lượng pixel ở đây lệch vài phần trăm.
+    const left = (width - imageWidth) / 2;
+    const top = (height - imageHeight) / 2;
     const imageId = workbook.addImage({ buffer: image.bytes.slice().buffer, extension: image.extension });
     sheet.addImage(imageId, {
-      tl: { col: col - 1 + offsetX / columnPx(col), row: row - 1 + offsetY / rowPx(row) } as ExcelJS.Anchor,
-      ext: { width: imageWidth, height: imageHeight },
-      editAs: "oneCell",
+      tl: { col: anchorAt(start.col, end.col, left, columnPx), row: anchorAt(start.row, end.row, top, rowPx) } as ExcelJS.Anchor,
+      br: { col: anchorAt(start.col, end.col, left + imageWidth, columnPx), row: anchorAt(start.row, end.row, top + imageHeight, rowPx) } as ExcelJS.Anchor,
+      editAs: "twoCell",
     });
   };
 
   for (const slot of input.imageSlots) {
     const image = input.images[slot.field];
     if (!image) { warnings.push({ location: slot.range, field: slot.field }); continue; }
-    placeImage(image, slot.range, slot.fit === "stretch");
+    placeImage(image, slot.range, slot.fit === "stretch" || slot.fit === "cover");
   }
 
   const [printStart, printEnd] = parseRange(input.printArea);

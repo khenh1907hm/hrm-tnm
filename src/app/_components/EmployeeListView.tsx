@@ -242,7 +242,6 @@ export function EmployeeListView(props: {
             <td><span className="code-tag">{employee.code}</span></td>
             {/* Danh sách chỉ hiện họ tên (không ảnh, không chữ viết tắt) cho nhẹ; ảnh xem ở trang chi tiết */}
             <td><b>{employee.name}</b></td>
-            <td><span className="person-cell">{/* Chỉ chữ viết tắt: không tải ảnh của cả trang danh sách */}<span className={`avatar avatar-${avatarTone(employee.code)}`} aria-hidden="true">{initials(employee.name)}</span><b>{employee.name}</b></span></td>
             <td>{employee.phone}</td><td>{employee.position}</td><td>{employee.startDate.split("-").reverse().join("/")}</td>
             <td>{health ? <span className={health.missing || health.expired ? "pill bad" : health.expiring ? "pill warn" : "pill ok"}>{health.missing ? `Thiếu ${health.missing} bắt buộc` : health.expired ? `Hết hạn ${health.expired}` : health.expiring ? `Sắp hết hạn ${health.expiring}` : "Đầy đủ"}</span> : <span className="pill none">Đang kiểm tra</span>}</td>
             <td><span className={employee.archivedAt ? "pill bad" : employee.status === "active" ? "pill ok" : "pill warn"}>{employee.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[employee.status]}</span>{employee.archivedAt && actor.role === "admin" && <button className="button" onClick={(event) => { event.stopPropagation(); props.onRestore(employee); }}>Khôi phục</button>}</td>

@@ -34,7 +34,7 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
   // Vùng ảnh: lấy theo vùng tên IMG_ trong file, trừ vùng người dùng đã sửa trong app (giữ nguyên, kể cả vùng không có trong file)
   const edited = previous?.imageSlots.filter((slot) => slot.custom) ?? [];
   const imageSlots = [
-    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (slot.field === "photo3x4" || isIdCardImage(slot.field, "") ? "cover" as const : "contain" as const) })),
+    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (isIdCardImage(slot.field, "") ? "stretch" as const : slot.field === "photo3x4" ? "cover" as const : "contain" as const) })),
     ...edited,
   ];
   const certificateKeys = scan.placeholders.filter(isCertificateKey).map(certificateTypeOf);

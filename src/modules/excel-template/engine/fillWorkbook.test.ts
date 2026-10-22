@@ -2,7 +2,7 @@ import { deflateSync } from "node:zlib";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { fillWorkbook, parseCellRef, parseRange, type TemplateImage } from "./fillWorkbook";
+import { columnWidthPx, fillWorkbook, parseCellRef, parseRange, type TemplateImage } from "./fillWorkbook";
 
 /** PNG RGB một màu, đủ để Excel nhúng như ảnh thật. */
 function solidPng(width: number, height: number): Uint8Array {
@@ -103,6 +103,42 @@ describe("fillWorkbook", () => {
     expect(warnings).toEqual([{ location: "C7", field: "missingField" }, { location: "A8", field: "cert:atld" }, { location: "C5", field: "fullNameUpper" }, { location: "C6", field: "exportDate" }, { location: "B14:C18", field: "cccdImage" }].sort((a, b) => warnings.findIndex((w) => w.location === a.location) - warnings.findIndex((w) => w.location === b.location)));
   });
 
+  it("converts column widths to pixels the way Excel does, without adding the padding twice", () => {
+    const sheet = new ExcelJS.Workbook().addWorksheet("S");
+    sheet.getColumn(1).width = 10;
+    sheet.getColumn(2).width = 2.7109375;
+    sheet.getColumn(4).hidden = true;
+    expect([columnWidthPx(sheet, 1), columnWidthPx(sheet, 2), columnWidthPx(sheet, 3), columnWidthPx(sheet, 4)]).toEqual([70, 19, 64, 0]);
+  });
+
+  it("covers the whole slot corner to corner when fit is cover (image already cropped to the slot ratio)", async () => {
+    const { bytes } = await fillWorkbook({
+      template: await buildTemplate(), sheetName: "Phieu", printArea: "A1:F20", values: {},
+      imageSlots: [{ field: "photo3x4", range: "B12:F13", fit: "cover" }],
+      images: { photo3x4: image(300, 400) }, attachments: [],
+    });
+    const placed = (await open(bytes)).getImages().find((item) => item.range.tl.row >= 11)!;
+    expect([placed.range.tl.col, placed.range.tl.row, placed.range.br.col, placed.range.br.row].map((value) => Math.round(value * 1000) / 1000)).toEqual([1, 11, 6, 13]);
+  });
+
+  it("centres a contained image horizontally inside a wide slot", async () => {
+    const source = new ExcelJS.Workbook();
+    const sheet = source.addWorksheet("Phieu");
+    for (let col = 2; col <= 6; col += 1) sheet.getColumn(col).width = 10; // B:F = 5 × 70px
+    for (let row = 12; row <= 13; row += 1) sheet.getRow(row).height = 15; // 2 × 20px
+    const { bytes } = await fillWorkbook({
+      template: new Uint8Array(await source.xlsx.writeBuffer()), sheetName: "Phieu", printArea: "A1:F20", values: {},
+      imageSlots: [{ field: "cccdImage", range: "B12:F13" }], images: { cccdImage: image(400, 300) }, attachments: [],
+    });
+    const [placed] = (await open(bytes)).getImages();
+    // Ảnh rộng 53.3px trong vùng 350px: lệch trái 148.3px = B (70) + C (70) + 8.3px của D
+    expect(placed!.range.tl.col).toBeCloseTo(3 + 8.33 / 70, 2);
+    expect(placed!.range.tl.row).toBeCloseTo(11, 5);
+    // Cao vừa đúng vùng: chạm mép dưới dòng 13; rộng 53.3px nên kết thúc ở 61.7px trong cột D
+    expect(placed!.range.br.row).toBeCloseTo(13, 5);
+    expect(placed!.range.br.col).toBeCloseTo(3 + 61.67 / 70, 2);
+  });
+
   it("stretches an image over the whole slot when fit is stretch", async () => {
     const { bytes } = await fillWorkbook({
       template: await buildTemplate(), sheetName: "Phieu", printArea: "A1:F20", values: {},
@@ -113,6 +149,9 @@ describe("fillWorkbook", () => {
     // Không căn giữa: góc trên trái ảnh trùng góc trên trái vùng B12
     expect(placed!.range.tl.col).toBeCloseTo(1);
     expect(placed!.range.tl.row).toBeCloseTo(11);
+    // Góc dưới phải trùng đúng mép phải cột F và mép dưới dòng 13
+    expect(placed!.range.br.col).toBeCloseTo(6);
+    expect(placed!.range.br.row).toBeCloseTo(13);
   });
 
   it("appends one printed page per attachment below the form, in the given order", async () => {

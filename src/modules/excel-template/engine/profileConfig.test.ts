@@ -16,7 +16,7 @@ describe("profileConfigFromScan", () => {
     expect(profileConfigFromScan(scan)).toEqual({
       sheetName: "Phieu thong tin", printArea: "B1:AZ73", placeholders: scan.placeholders,
       customFields: [{ key: "projectStartDate", label: "projectStartDate", kind: "date", defaultValue: "" }, { key: "contractorName", label: "contractorName", kind: "text", defaultValue: "" }],
-      imageSlots: [{ field: "photo3x4", range: "E8:K16", fit: "cover" }, { field: "cccdImage", range: "C19:Z33", fit: "cover" }],
+      imageSlots: [{ field: "photo3x4", range: "E8:K16", fit: "cover" }, { field: "cccdImage", range: "C19:Z33", fit: "stretch" }],
       slotAspect: scan.slotAspect, attachments: ["atld", "health"],
     });
   });

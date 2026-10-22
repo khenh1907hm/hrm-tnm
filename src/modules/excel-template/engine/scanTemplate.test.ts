@@ -27,8 +27,8 @@ describe("scanTemplate", () => {
     expect(scan.placeholders).toEqual(["fullNameUpper", "exportDate", "projectStartDate"]);
     expect(scan.printArea).toBe("B1:F20");
     expect(scan.imageSlots).toEqual([{ field: "photo3x4", range: "A8:B9" }, { field: "cccdImage", range: "C10" }]);
-    // A8:B9 = 2 cột × 75px, cao 40px + 20px
-    expect(scan.slotAspect.photo3x4).toBeCloseTo(150 / 60);
+    // A8:B9 = 2 cột × 70px (độ rộng 10 theo Excel), cao 40px + 20px
+    expect(scan.slotAspect.photo3x4).toBeCloseTo(140 / 60);
     expect(scan.slotAspect.cccdImage).toBeCloseTo(64 / 20);
   });
 
