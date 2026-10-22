@@ -22,7 +22,7 @@ describe("luồng nghiệp vụ qua bộ nhớ tạm", () => {
     const after = await app.employees.list(admin, { pageSize: 100 });
     expect(after.ok && after.value.total).toBe(before.value.total + 1);
     // Tạo trùng mã ngay sau đó phải bị chặn (đọc lại danh sách mới, không dùng bản cũ)
-    const duplicate = await app.employees.create(admin, { ...created.value, cccd: "001090099951", phone: "0912000951" });
+    const duplicate = await app.employees.create(admin, { ...created.value, photo: null, cccd: "001090099951", phone: "0912000951" });
     expect(!duplicate.ok && duplicate.errors.map((item) => item.code)).toContain("EMP_CODE_DUPLICATE");
 
     const added = await app.certificates.add(admin, { employeeId: created.value.id, type: "health", title: "", number: "KSK-950", issueDate: "2026-01-01", expiryDate: "2026-10-30", document: pdf, supplementaryFiles: [] });

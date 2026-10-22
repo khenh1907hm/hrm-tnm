@@ -114,13 +114,12 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
       if (input.signer?.image) images[slot.field] = await toTemplateImage(input.signer.image);
       continue;
     }
-    if (slot.field === "photo3x4" && input.employee.photo) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.photo), options);
-    else if (slot.field === "employeeSignature" && input.employee.signatureImage) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.signatureImage), options);
     if (slot.field === "photo3x4" && input.employee.photo) {
       const photo = photoFile(input.employee.photo, input.sessionFiles);
       if (photo) images[slot.field] = await toTemplateImage(photo, options);
       else warnings.push(`${fieldLabel(slot.field, profile)}: chưa tải được ảnh chân dung`);
     }
+    else if (slot.field === "employeeSignature" && input.employee.signatureImage) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.signatureImage), options);
     else if (fixed) images[slot.field] = await toTemplateImage(await dataUrlToBlob(fixed), options);
     else if (stored && input.sessionFiles[stored.id]) images[slot.field] = await toTemplateImage(input.sessionFiles[stored.id]!, options);
     else if (stored) warnings.push(`${fieldLabel(slot.field, profile)}: chưa tải được ảnh "${stored.name}"`);

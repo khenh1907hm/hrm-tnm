@@ -11,10 +11,9 @@ export type EmployeeInput = {
   /** Ngày bắt đầu làm việc tại TNM. */
   companyStartDate?: string | null;
   emergencyContactId: string | null; status: EmploymentStatus; endDate: string | null;
-  mismatchOverrideReason?: string; photo?: string | null;
+  mismatchOverrideReason?: string;
   /** Ảnh chữ ký của chính nhân sự (PNG nền trong suốt, dạng data URL), có thể để trống. */
   signatureImage?: string | null;
-  mismatchOverrideReason?: string;
   /** Ảnh chân dung 3×4 trong kho lưu trữ (thư mục employees). */
   photo?: FileRef | null;
 };

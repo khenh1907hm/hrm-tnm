@@ -131,7 +131,6 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   }, [fileStore, sessionFiles]);
 
   const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
-  const extraFileRefs = (employee: Employee) => Object.values(employee.extraFiles ?? {}).map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
   /** Ảnh chữ ký của người ký khi xuất mẫu hồ sơ (vùng IMG_signature). */
   const loadSignatureFile = useCallback(async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "signatures" }]))[file.id] ?? null, [ensureFiles]);
   /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */
@@ -375,8 +374,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     <div className="app-shell">
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
-        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
-        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
           app={app}
@@ -393,12 +391,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onRestore={() => void restoreSelected()}
           onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(false); setShowExcelModal(true); })}
           onExportPdf={() => templates.some((template) => template.profile)
-            // Có mẫu hồ sơ: phiếu Excel → PDF rồi ghép chứng chỉ; chưa có mẫu thì dùng phiếu PDF dựng sẵn
+            // Có mẫu hồ sơ: tải ZIP gồm phiếu Excel + PDF gộp chứng chỉ; chưa có mẫu thì dùng phiếu PDF dựng sẵn
             ? void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(true); setShowExcelModal(true); })
             : void openExportDialog()}
           loadPhoto={loadPhoto}
-          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => setShowExcelModal(true))}
-          onExportPdf={() => void openExportDialog()}
           onShowFile={(file) => void showFile(file)}
           onCertificateForm={(type, certificate) => setCertificateForm({ type, editing: certificate ?? null, renewing: null })}
           onRenewCertificate={(certificate) => setCertificateForm({ type: certificate.type, editing: null, renewing: certificate })}
