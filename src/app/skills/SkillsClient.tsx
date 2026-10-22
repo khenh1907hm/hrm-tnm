@@ -373,8 +373,11 @@ function Composer(props: { supabase: SupabaseClient; editing: SkillPost | null; 
       if (zip?.kind === "new") {
         setStatus({ text: "Đang tải .zip lên…" });
         const path = `zips/${id}/${newId().slice(0, 8)}-${safeZipName(zip.file.name)}`;
-        const { error } = await supabase.storage.from(SKILL_BUCKET).upload(path, zip.file, { contentType: "application/zip", upsert: false });
-        if (error) throw new Error("Không tải được file .zip lên. Kiểm tra quyền admin rồi thử lại.");
+        // Gửi File thì supabase-js lấy loại tệp theo trình duyệt (Windows báo "application/x-zip-compressed"),
+        // bỏ qua contentType, và bucket chỉ nhận "application/zip" → bọc lại với đúng loại
+        const body = new Blob([zip.file], { type: "application/zip" });
+        const { error } = await supabase.storage.from(SKILL_BUCKET).upload(path, body, { contentType: "application/zip", upsert: false });
+        if (error) throw new Error(`Không tải được file .zip lên (${error.message}). Kiểm tra quyền admin rồi thử lại.`);
         zipFields = { zip_path: path, zip_name: zip.file.name, zip_size: zip.file.size };
       }
       setStatus({ text: "Đang lưu…" });

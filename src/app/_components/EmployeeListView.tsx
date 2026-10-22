@@ -4,6 +4,7 @@ import type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeSort
 import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import { POSITIONS, type Employee, type EmploymentStatus } from "../../modules/employees/types";
+import { issueText } from "./shared";
 
 export type EmployeeFilters = {
   query: string;
@@ -19,8 +20,8 @@ export type EmployeeFilters = {
   pageSize: number;
 };
 export const DEFAULT_EMPLOYEE_FILTERS: EmployeeFilters = { query: "", positions: [], statuses: [], certificateHealth: [], certificateTypes: [], certificateTypeMode: "any", includeArchived: false, sort: "code", sortDir: "asc", page: 1, pageSize: 20 };
-export type EmployeePageInfo = { total: number; page: number; pageCount: number; facets: EmployeeFacets };
-export const EMPTY_PAGE_INFO: EmployeePageInfo = { total: 0, page: 1, pageCount: 1, facets: { positions: {}, statuses: {}, certificateHealth: { ok: 0, missing: 0, expiring: 0, expired: 0 }, certificateTypes: {} } };
+export type EmployeePageInfo = { total: number; page: number; totalPages: number; facets: EmployeeFacets };
+export const EMPTY_PAGE_INFO: EmployeePageInfo = { total: 0, page: 1, totalPages: 1, facets: { positions: {}, statuses: {}, certificateHealth: { ok: 0, missing: 0, expiring: 0, expired: 0 }, certificateTypes: {} } };
 
 export const STATUS_LABELS: Record<EmploymentStatus, string> = { active: "Đang làm việc", on_leave: "Tạm nghỉ", resigned: "Đã nghỉ việc" };
 const HEALTH_OPTIONS: { value: CertificateHealth; label: string; tone: "ok" | "warn" | "bad" }[] = [
@@ -46,9 +47,6 @@ export function pageNumbers(page: number, pageCount: number): (number | "gap")[]
   return sorted.flatMap((value, index) => index > 0 && value - sorted[index - 1]! > 1 ? ["gap" as const, value] : [value]);
 }
 
-const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((part) => part[0]?.toUpperCase() ?? "").join("");
-const AVATAR_TONES = 6;
-const avatarTone = (code: string) => [...code].reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_TONES;
 
 type Option<T extends string> = { value: T; label: string; count: number; tone?: "ok" | "warn" | "bad" | "info" };
 
@@ -102,6 +100,11 @@ export function EmployeeListView(props: {
   rows: Employee[];
   pageInfo: EmployeePageInfo;
   loading: boolean;
+  /** Lần tải danh sách gần nhất bị lỗi (mạng); dữ liệu đang hiện, nếu có, vẫn giữ nguyên. */
+  error: boolean;
+  onRetry: () => void;
+  /** Dữ liệu có thể chưa mới nhất (tải ngầm lỗi). */
+  stale: boolean;
   certificateHealth: Record<string, CertificateChecklistSummary>;
   alertCount: number;
   signatureCount: number;
@@ -123,6 +126,17 @@ export function EmployeeListView(props: {
   const { facets } = pageInfo;
   /** Đổi bộ lọc → quay về trang 1 (trừ khi đang đổi trang). */
   const update = (patch: Partial<EmployeeFilters>) => props.onFiltersChange({ ...filters, ...patch, page: patch.page ?? 1 });
+
+  // Ô tìm kiếm: hiện chữ ngay, nhưng chỉ lọc khi ngừng gõ 250 ms
+  const [queryDraft, setQueryDraft] = useState(filters.query);
+  const [syncedQuery, setSyncedQuery] = useState(filters.query);
+  if (filters.query !== syncedQuery) { setSyncedQuery(filters.query); setQueryDraft(filters.query); }
+  const { onFiltersChange } = props;
+  useEffect(() => {
+    if (queryDraft === filters.query) return;
+    const timer = setTimeout(() => onFiltersChange({ ...filters, query: queryDraft, page: 1 }), 250);
+    return () => clearTimeout(timer);
+  }, [queryDraft, filters, onFiltersChange]);
   const toggleIn = <K extends "positions" | "statuses" | "certificateHealth" | "certificateTypes">(key: K, value: EmployeeFilters[K][number]) => {
     const list = filters[key] as string[];
     update({ [key]: list.includes(value) ? list.filter((item) => item !== value) : [...list, value] } as Partial<EmployeeFilters>);
@@ -177,7 +191,7 @@ export function EmployeeListView(props: {
 
     <section className="panel list-card">
       <div className="list-toolbar">
-        <label className="search-box"><Search size={16} aria-hidden="true" /><input aria-label="Tìm nhân sự" placeholder="Tìm tên, mã, điện thoại, CCCD" value={filters.query} onChange={(event) => update({ query: event.target.value })} />{filters.query && <button type="button" className="search-clear" aria-label="Xóa từ khóa" onClick={() => update({ query: "" })}><X size={14} aria-hidden="true" /></button>}</label>
+        <label className="search-box"><Search size={16} aria-hidden="true" /><input aria-label="Tìm nhân sự" placeholder="Tìm tên, mã, điện thoại, CCCD" value={queryDraft} onChange={(event) => setQueryDraft(event.target.value)} />{queryDraft && <button type="button" className="search-clear" aria-label="Xóa từ khóa" onClick={() => { setQueryDraft(""); update({ query: "" }); }}><X size={14} aria-hidden="true" /></button>}</label>
         <FilterDropdown label="Chức danh" selected={filters.positions} onToggle={(value) => toggleIn("positions", value)} onClear={() => update({ positions: [] })}
           options={POSITIONS.map((position) => ({ value: position, label: position, count: facets.positions[position] ?? 0 }))} />
         <FilterDropdown label="Tình trạng" selected={filters.statuses} onToggle={(value) => toggleIn("statuses", value)} onClear={() => update({ statuses: [] })}
@@ -211,7 +225,9 @@ export function EmployeeListView(props: {
         </div>
       )}
 
-      <div className={`table-scroll employee-table${props.loading ? " is-loading" : ""}`}>
+      {props.stale && <div className="list-notice is-warn" role="status"><AlertTriangle size={16} aria-hidden="true" />{issueText("DATA_STALE")}</div>}
+      {props.error && rows.length > 0 && <div className="list-notice is-error" role="alert"><AlertTriangle size={16} aria-hidden="true" />{issueText("LIST_LOAD_FAILED")}<button type="button" className="button" onClick={props.onRetry}>Thử lại</button></div>}
+      <div className={`table-scroll employee-table${props.loading && rows.length ? " is-loading" : ""}`}>
         <table><thead><tr>
           <th className="select-col"><input type="checkbox" aria-label="Chọn tất cả nhân sự trong trang" checked={allVisibleSelected} ref={(element) => { if (element) element.indeterminate = !allVisibleSelected && someVisibleSelected; }} onChange={(event) => toggleAll(event.target.checked)} /></th>
           {sortHeader("code", "Mã NV")}{sortHeader("name", "Họ và tên")}<th>Điện thoại</th><th>Chức danh</th>{sortHeader("startDate", "Ngày nhận việc")}<th>Tình trạng chứng chỉ</th><th>Tình trạng</th>
@@ -221,12 +237,19 @@ export function EmployeeListView(props: {
           return <tr key={employee.id} className={checked ? "row-selected" : undefined} onClick={() => props.onOpen(employee)}>
             <td className="select-col" onClick={(event) => event.stopPropagation()}>{!employee.archivedAt && <input type="checkbox" aria-label={`Chọn ${employee.name}`} checked={checked} onChange={(event) => toggle(employee.id, event.target.checked)} />}</td>
             <td><span className="code-tag">{employee.code}</span></td>
-            <td><span className="person-cell">{employee.photo ? <img className="avatar" src={employee.photo} alt="" /> : <span className={`avatar avatar-${avatarTone(employee.code)}`} aria-hidden="true">{initials(employee.name)}</span>}<b>{employee.name}</b></span></td>
+            {/* Danh sách chỉ hiện họ tên (không ảnh, không chữ viết tắt) cho nhẹ; ảnh xem ở trang chi tiết */}
+            <td><b>{employee.name}</b></td>
             <td>{employee.phone}</td><td>{employee.position}</td><td>{employee.startDate.split("-").reverse().join("/")}</td>
             <td>{health ? <span className={health.missing || health.expired ? "pill bad" : health.expiring ? "pill warn" : "pill ok"}>{health.missing ? `Thiếu ${health.missing} bắt buộc` : health.expired ? `Hết hạn ${health.expired}` : health.expiring ? `Sắp hết hạn ${health.expiring}` : "Đầy đủ"}</span> : <span className="pill none">Đang kiểm tra</span>}</td>
             <td><span className={employee.archivedAt ? "pill bad" : employee.status === "active" ? "pill ok" : "pill warn"}>{employee.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[employee.status]}</span>{employee.archivedAt && actor.role === "admin" && <button className="button" onClick={(event) => { event.stopPropagation(); props.onRestore(employee); }}>Khôi phục</button>}</td>
           </tr>;
-        })}{!rows.length && <tr><td colSpan={8} className="empty">{props.loading ? "Đang tải…" : filtered ? "Không có nhân sự phù hợp với bộ lọc." : "Chưa có nhân sự."}</td></tr>}</tbody></table>
+        })}{!rows.length && (props.error
+          ? <tr><td colSpan={8} className="empty" role="alert">{issueText("LIST_LOAD_FAILED")} <button type="button" className="button" onClick={props.onRetry}>Thử lại</button></td></tr>
+          : props.loading
+            // Tải lần đầu: khung xương giữ chỗ, không nhảy bố cục
+            ? Array.from({ length: 6 }, (_, index) => <tr key={`skeleton-${index}`} className="skeleton-row" aria-hidden="true">{Array.from({ length: 8 }, (_, cell) => <td key={cell}><span className="skeleton-bar" /></td>)}</tr>)
+            : <tr><td colSpan={8} className="empty">{filtered ? <>Không có nhân sự phù hợp với bộ lọc. <button type="button" className="button" onClick={clearAll}>Xóa bộ lọc</button></> : "Chưa có nhân sự."}</td></tr>)}</tbody></table>
+      {!rows.length && props.loading && !props.error && <p className="sr-only" role="status">Đang tải…</p>}
       </div>
 
       <nav className="pager" aria-label="Phân trang">
@@ -236,10 +259,10 @@ export function EmployeeListView(props: {
         </label>
         <div className="pager-pages">
           <button type="button" className="pager-btn" aria-label="Trang trước" disabled={pageInfo.page <= 1} onClick={() => update({ page: pageInfo.page - 1 })}><ChevronLeft size={16} aria-hidden="true" /></button>
-          {pageNumbers(pageInfo.page, pageInfo.pageCount).map((value, index) => value === "gap"
+          {pageNumbers(pageInfo.page, pageInfo.totalPages).map((value, index) => value === "gap"
             ? <span key={`gap-${index}`} className="pager-gap">…</span>
             : <button type="button" key={value} className={`pager-btn${value === pageInfo.page ? " is-current" : ""}`} aria-current={value === pageInfo.page ? "page" : undefined} onClick={() => update({ page: value })}>{value}</button>)}
-          <button type="button" className="pager-btn" aria-label="Trang sau" disabled={pageInfo.page >= pageInfo.pageCount} onClick={() => update({ page: pageInfo.page + 1 })}><ChevronRight size={16} aria-hidden="true" /></button>
+          <button type="button" className="pager-btn" aria-label="Trang sau" disabled={pageInfo.page >= pageInfo.totalPages} onClick={() => update({ page: pageInfo.page + 1 })}><ChevronRight size={16} aria-hidden="true" /></button>
         </div>
       </nav>
     </section>

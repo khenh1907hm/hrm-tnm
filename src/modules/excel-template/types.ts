@@ -61,6 +61,8 @@ export interface ProfileImageSlot {
   range: string;
   /** "cover" cắt ảnh cho kín khung (ảnh 3×4); "contain" co vừa khung. */
   fit: "contain" | "cover";
+  /** Vùng do người dùng nhập/sửa trong app: tải lại file Excel không ghi đè bằng vùng tên IMG_ trong file. */
+  custom?: boolean;
 }
 /** Cấu hình "Mẫu hồ sơ": file thiết kế có ô {{trường}}, vùng ảnh và chứng chỉ đính kèm. */
 export interface ProfileTemplateConfig {
@@ -72,6 +74,8 @@ export interface ProfileTemplateConfig {
   slotAspect: Record<string, number>;
   /** Loại chứng chỉ đính kèm, theo thứ tự in. */
   attachments: string[];
+  /** Chữ ký mặc định (id trong Thư viện chữ ký) cho ô người ký / vùng IMG_signature; đổi được khi xuất. */
+  signatureId?: string;
 }
 
 export interface ExcelReportTemplate {

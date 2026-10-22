@@ -1,4 +1,5 @@
 "use client";
+import type { SignatureFileLoader } from "./_components/SignerPicker";
 import { Download, FileText, Settings } from "lucide-react";
 import { useState } from "react";
 import type { Employee } from "../modules/employees/types";
@@ -21,6 +22,8 @@ interface ExportExcelModalProps {
   actor: Actor;
   certificates: readonly Certificate[];
   sessionFiles: Readonly<Record<string, File>>;
+  /** Tải ảnh chữ ký của người ký (cho vùng IMG_signature). */
+  loadSignatureFile?: SignatureFileLoader;
 }
 
 export function ExportExcelModal({
@@ -33,6 +36,7 @@ export function ExportExcelModal({
   actor,
   certificates,
   sessionFiles,
+  loadSignatureFile,
 }: ExportExcelModalProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
@@ -113,7 +117,7 @@ export function ExportExcelModal({
           </div>
 
           {activeTemplate?.profile ? (
-            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} />
+            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} loadSignatureFile={loadSignatureFile} />
           ) : activeTemplate ? (
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "12px", borderRadius: "6px", fontSize: "13px", marginBottom: "16px" }}>
               <div style={{ fontWeight: "bold", color: "#166534", marginBottom: "6px" }}>

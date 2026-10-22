@@ -6,6 +6,8 @@ import type { Actor } from "../../modules/auth/permissions";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Commander } from "../../modules/commanders/types";
 import { ContactPicker, EMPTY_CONTACT, type ContactChoice } from "./ContactPicker";
+import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./SignerPicker";
+import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { downloadBlob, downloadPdf, downloadXlsx, exportProfilePdf, exportProfileWorkbook, profileFileName, zipFileName } from "./profileExport";
@@ -18,7 +20,7 @@ type PersonResult = { employee: Employee; warnings: string[]; error?: string };
  * Xuất "Mẫu hồ sơ" cho một hoặc nhiều nhân sự: giá trị chung nhập một lần, sửa riêng cho người khác biệt;
  * một người → tệp .xlsx, nhiều người → một tệp .zip.
  */
-export function BatchExportModal(props: { app: App; actor: Actor; employees: readonly Employee[]; templates: readonly ExcelReportTemplate[]; sessionFiles: Readonly<Record<string, File>>; ensureFiles?: (certificates: readonly Certificate[], employee: Employee) => Promise<Readonly<Record<string, File>>>; onClose: () => void; onGoToTemplates: () => void; setNotice: SetNotice }) {
+export function BatchExportModal(props: { app: App; actor: Actor; employees: readonly Employee[]; templates: readonly ExcelReportTemplate[]; sessionFiles: Readonly<Record<string, File>>; ensureFiles?: (certificates: readonly Certificate[], employee: Employee) => Promise<Readonly<Record<string, File>>>; onClose: () => void; onGoToTemplates: () => void; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined }) {
   const { app, actor, employees, sessionFiles, setNotice } = props;
   const profileTemplates = useMemo(() => props.templates.filter((template): template is ProfileTemplate => Boolean(template.profile)), [props.templates]);
   const defaultsOf = (item: ProfileTemplate | undefined) => Object.fromEntries((item?.profile.customFields ?? []).map((field) => [field.key, field.defaultValue]));
@@ -30,6 +32,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
   const [includeAttachments, setIncludeAttachments] = useState(true);
   const [contactChoice, setContactChoice] = useState<ContactChoice>(EMPTY_CONTACT);
   const [contact, setContact] = useState<Commander | null>(null);
+  const [signer, setSigner] = useState<ChosenSigner>(null);
   const employeeIds = useMemo(() => employees.map((employee) => employee.id), [employees]);
   const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
   const [progress, setProgress] = useState(0);
@@ -66,7 +69,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
           }
           const selected = includeAttachments ? list.filter((item) => item.state === "current" && item.expiryDate >= exportDate && template.profile.attachments.includes(item.type)).map((item) => item.id) : [];
           const overrides = { ...shared, ...Object.fromEntries(Object.entries(perPerson[employee.id] ?? {}).filter(([, value]) => value !== "")) };
-          const input = { template, employee: full, commander: contact, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, selectedCertificateIds: selected, overrides, exportDate };
+          const input = { template, employee: full, commander: contact, signer: usesSigner(template.profile) ? signer : null, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, selectedCertificateIds: selected, overrides, exportDate };
           const result = format === "pdf" ? await exportProfilePdf(input) : await exportProfileWorkbook(input);
           output.push({ name: profileFileName(employee, exportDate, format), bytes: result.bytes });
           outcomes.push({ employee, warnings: result.warnings });
@@ -110,6 +113,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
             </label>
 
             <ContactPicker app={app} actor={actor} value={contactChoice} preferredIds={employeeIds} onChange={(value, next) => { setContactChoice(value); setContact(next); }} />
+            {template && usesSigner(template.profile) && <SignerPicker key={template.id} app={app} actor={actor} loadFile={props.loadSignatureFile} onChange={setSigner} preferredId={template.profile.signatureId} />}
 
             {fields.length > 0 && (
               <section>

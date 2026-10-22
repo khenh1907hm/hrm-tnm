@@ -5,6 +5,8 @@ import type { Actor } from "../../modules/auth/permissions";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Commander } from "../../modules/commanders/types";
 import { ContactPicker, EMPTY_CONTACT, type ContactChoice } from "./ContactPicker";
+import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./SignerPicker";
+import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { downloadPdf, downloadXlsx, exportProfilePdf, exportProfileWorkbook, profileFileName } from "./profileExport";
@@ -13,7 +15,7 @@ import type { App, SetNotice } from "./shared";
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
 
 /** Xuất "Mẫu hồ sơ" cho một nhân sự: nhập trường tùy chỉnh, chọn chứng chỉ, xem cảnh báo. */
-export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice }) {
+export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined }) {
   const { app, actor, template, employee, certificates } = props;
   const { profile } = template;
   const exportDate = todayVN(systemClock);
@@ -21,6 +23,8 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   const [overrides, setOverrides] = useState<Record<string, string>>(() => Object.fromEntries(exportFields.map((field) => [field.key, field.defaultValue])));
   const [typeNames, setTypeNames] = useState<Record<string, string>>({});
   const [commander, setCommander] = useState<Commander | null>(null);
+  const [signer, setSigner] = useState<ChosenSigner>(null);
+  const needsSigner = usesSigner(profile);
   const [contactChoice, setContactChoice] = useState<ContactChoice>(EMPTY_CONTACT);
   const selfIds = useMemo(() => [employee.id], [employee.id]);
   const current = useMemo(() => certificates.filter((certificate) => certificate.state === "current"), [certificates]);
@@ -51,7 +55,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         const revealed = await app.employees.revealCccd(actor, employee.id);
         if (revealed.ok) fullEmployee = { ...employee, cccd: revealed.value };
       }
-      const input = { template, employee: fullEmployee, commander, certificates, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, selectedCertificateIds: selected, overrides, exportDate };
+      const input = { template, employee: fullEmployee, commander, signer: needsSigner ? signer : null, certificates, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, selectedCertificateIds: selected, overrides, exportDate };
       const label = format === "pdf" ? "PDF gộp" : "Excel";
       let warningList: string[];
       if (format === "pdf") {
@@ -73,6 +77,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   return (
     <div className="profile-export">
       <ContactPicker app={app} actor={actor} value={contactChoice} preferredIds={selfIds} onChange={(value, next) => { setContactChoice(value); setCommander(next); }} />
+      {needsSigner && <SignerPicker app={app} actor={actor} loadFile={props.loadSignatureFile} onChange={setSigner} preferredId={profile.signatureId} />}
       {exportFields.length > 0 && (
         <section>
           <h3>Thông tin theo dự án</h3>

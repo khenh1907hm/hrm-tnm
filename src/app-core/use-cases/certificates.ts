@@ -150,10 +150,8 @@ export function createCertificateUseCases(ctx: HrAppContext) {
     },
     listExpiring: async (actor: Actor): Promise<Result<(Certificate & { daysLeft: number; group: "expired" | "d30" | "d60"; reminderSendDate: string; reminderSent: boolean; reminderSentDate: string | null; employeeName: string; employeeCode: string; displayName: string })[]>> => {
       if (!has(actor, "certificateRead")) return err("FORBIDDEN");
-      const employees = await repositories.employees.list();
-      const certificates = await repositories.certificates.list();
-      const certificateTypes = await repositories.certificateTypes.list();
-      const { keys: sentReminderKeys, dates: sentReminderDates } = await sentReminders();
+      // Gọi song song: bốn lượt đọc độc lập nhau
+      const [employees, certificates, certificateTypes, { keys: sentReminderKeys, dates: sentReminderDates }] = await Promise.all([repositories.employees.list(), repositories.certificates.list(), repositories.certificateTypes.list(), sentReminders()]);
       const result = certificates.flatMap((certificate) => {
         if (certificate.state !== "current") return [];
         const employee = employees.find((item) => item.id === certificate.employeeId);

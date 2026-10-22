@@ -30,8 +30,8 @@ describe("RBAC-03 facade permission matrix", () => {
     const app = createHrApp({ clock: fixedClock("2026-10-12T09:00:00+07:00"), ids: sequentialIds("rbac03") });
     const audit = inspectFacadePermissionCoverage(app, FACADE_PERMISSION_MATRIX);
     expect(audit.missing).toEqual([]);
-    expect(audit.useCasesChecked).toBe(38);
-    expect(audit.roleCellsChecked).toBe(76);
+    expect(audit.useCasesChecked).toBe(39); // +audit.listPage (phân trang nhật ký ở máy chủ)
+    expect(audit.roleCellsChecked).toBe(78);
     const matrixCases = Object.values(FACADE_PERMISSION_MATRIX).flatMap((group) => Object.values(group));
     expect(matrixCases.length).toBeGreaterThan(0);
     expect(matrixCases.every((roles) => typeof roles.admin === "boolean" && typeof roles.hr === "boolean")).toBe(true);

@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Ghi chú triển khai chỉ lưu trên máy
 *.local.md
+
+# Font Microsoft cho máy chủ Gotenberg (chỉ dùng nội bộ, không đưa lên git)
+/docker/gotenberg/fonts/*.ttf

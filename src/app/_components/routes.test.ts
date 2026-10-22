@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseRoute, routePath, VIEW_PATHS } from "./routes";
+import { EMPLOYEE_VIEWS, parseRoute, routePath, VIEW_PATHS } from "./routes";
 
 describe("routes", () => {
   it("trang gốc mở danh sách nhân sự", () => {
@@ -20,6 +20,12 @@ describe("routes", () => {
 
   it("bỏ qua employeeId ở màn hình khác", () => {
     expect(routePath("alerts", "x")).toBe("/canh-bao");
+  });
+
+  it("trang Công cụ có URL riêng; Nhân viên chỉ vào Kho Skill AI và Công cụ", () => {
+    expect(routePath("tools")).toBe("/cong-cu");
+    expect(parseRoute("/cong-cu")).toEqual({ view: "tools", employeeId: null });
+    expect(EMPLOYEE_VIEWS).toEqual(["skills", "tools"]);
   });
 
   it("đường dẫn lạ thì trả null", () => {

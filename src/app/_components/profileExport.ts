@@ -1,4 +1,4 @@
-import { buildSystemValues, resolveLayers } from "../../modules/excel-template/engine/fieldValues";
+import { buildSystemValues, resolveLayers, type Signer } from "../../modules/excel-template/engine/fieldValues";
 import { fillWorkbook, type AttachmentPage, type TemplateImage } from "../../modules/excel-template/engine/fillWorkbook";
 import { readImageInfo } from "../../modules/excel-template/engine/imageSize";
 import { customImageSlots, customValues, fieldLabel } from "../../modules/excel-template/engine/profileConfig";
@@ -53,6 +53,8 @@ export type ProfileExportInput = {
   template: ExcelReportTemplate & { profile: NonNullable<ExcelReportTemplate["profile"]> };
   employee: Employee;
   commander: Commander | null;
+  /** Người ký chọn từ Thư viện chữ ký (tên, chức danh, ảnh PNG nền trong suốt). */
+  signer?: (Signer & { image: Blob | null }) | null;
   certificates: readonly Certificate[];
   certificateTypeNames: Readonly<Record<string, string>>;
   /** Tệp nhị phân đang có trong phiên, theo id tệp. */
@@ -73,7 +75,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   const { profile } = input.template;
   const warnings: string[] = [];
   const values = resolveLayers(
-    buildSystemValues({ employee: input.employee, commander: input.commander, certificates: input.certificates, certificateTypes: Object.keys(input.certificateTypeNames), exportDate: input.exportDate }),
+    buildSystemValues({ employee: input.employee, commander: input.commander, signer: input.signer ?? null, certificates: input.certificates, certificateTypes: Object.keys(input.certificateTypeNames), exportDate: input.exportDate }),
     customValues(profile, input.overrides, input.employee.extraFields),
   );
   // Trường tự thêm có ô đích: ghi thẳng vào ô
@@ -90,6 +92,11 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     const options = aspect ? { aspect } : {};
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
+    if (slot.field === "signature") {
+      // Thiếu ảnh thì fillWorkbook tự báo "vùng ảnh chưa có ảnh" như các vùng khác
+      if (input.signer?.image) images[slot.field] = await toTemplateImage(input.signer.image);
+      continue;
+    }
     if (slot.field === "photo3x4" && input.employee.photo) images[slot.field] = await toTemplateImage(await dataUrlToBlob(input.employee.photo), options);
     else if (fixed) images[slot.field] = await toTemplateImage(await dataUrlToBlob(fixed), options);
     else if (stored && input.sessionFiles[stored.id]) images[slot.field] = await toTemplateImage(input.sessionFiles[stored.id]!, options);

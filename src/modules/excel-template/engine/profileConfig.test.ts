@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileTemplateConfig } from "../types";
-import { certificateTypeOf, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, profileConfigFromScan, targetCellValues } from "./profileConfig";
+import { certificateTypeOf, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, profileConfigFromScan, targetCellValues, usesSigner } from "./profileConfig";
 import type { TemplateScan } from "./scanTemplate";
 
 const scan: TemplateScan = {
@@ -34,6 +34,20 @@ describe("profileConfigFromScan", () => {
     expect(next.imageSlots[0]!.fit).toBe("contain");
     expect(profileConfigFromScan({ ...scan, printArea: null }).printArea).toBe("A1:Z60");
   });
+
+  it("re-uploading the file keeps image areas edited in the app (and the chosen signer) instead of the IMG_ names in Excel", () => {
+    const previous: ProfileTemplateConfig = {
+      ...profileConfigFromScan(scan), signatureId: "sig-1",
+      imageSlots: [{ field: "photo3x4", range: "F9:L18", fit: "cover", custom: true }, { field: "cccdImage", range: "C19:Z33", fit: "contain" }, { field: "signature", range: "AD55:AY62", fit: "contain", custom: true }],
+    };
+    const next = profileConfigFromScan(scan, previous);
+    expect(next.imageSlots).toEqual([
+      { field: "cccdImage", range: "C19:Z33", fit: "contain" },
+      { field: "photo3x4", range: "F9:L18", fit: "cover", custom: true },
+      { field: "signature", range: "AD55:AY62", fit: "contain", custom: true },
+    ]);
+    expect(next.signatureId).toBe("sig-1");
+  });
 });
 
 describe("field helpers", () => {
@@ -59,6 +73,16 @@ describe("field helpers", () => {
     ] };
     expect(customValues(fields)).toEqual({ projectStartDate: "20/10/2026", contractorName: "TNM", hasBadge: "☑" });
     expect(customValues(fields, { projectStartDate: "2026-11-01", hasBadge: "" })).toEqual({ projectStartDate: "01/11/2026", contractorName: "TNM", hasBadge: "☐" });
+  });
+});
+
+describe("signer", () => {
+  it("needs a signer when the template has {{signer…}} cells or an IMG_signature area; signer keys are not custom fields", () => {
+    expect(usesSigner({ placeholders: ["fullName", "signerTitle"], imageSlots: [] })).toBe(true);
+    expect(usesSigner({ placeholders: ["fullName"], imageSlots: [{ field: "signature", range: "AB40:AK46", fit: "contain" }] })).toBe(true);
+    expect(usesSigner({ placeholders: ["fullName", "exportDate"], imageSlots: [{ field: "photo3x4", range: "A1:B4", fit: "cover" }] })).toBe(false);
+    expect(isCustomKey("signerName")).toBe(false);
+    expect(fieldLabel("signature", { customFields: [] })).toBe("Ảnh chữ ký người ký");
   });
 });
 

@@ -40,7 +40,7 @@ export function PendingAccessScreen(props: { email: string | null; onSignOut: ()
         <div className="brand"><div className="brand-mark">TNM</div><div><b>Thiên Nhật Minh</b><span>Quản lý nhân sự</span></div></div>
         <h1><Clock className="ico" size={20} aria-hidden="true" /> Chờ cấp quyền</h1>
         <p>Tài khoản <b>{props.email ?? "này"}</b> đã đăng nhập nhưng chưa được cấp quyền truy cập dữ liệu nhân sự.</p>
-        <p className="muted">Hãy báo Admin cấp vai trò HR hoặc Admin cho tài khoản này, rồi đăng nhập lại.</p>
+        <p className="muted">Hãy báo Admin cấp vai trò Nhân viên, HR hoặc Admin cho tài khoản này, rồi đăng nhập lại.</p>
         <button type="button" className="button" onClick={props.onSignOut}><LogOut className="ico" size={16} aria-hidden="true" /> Đăng xuất</button>
       </section>
     </main>

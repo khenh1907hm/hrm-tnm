@@ -5,7 +5,9 @@ import type { Commander } from "../../commanders/types";
 import type { Employee } from "../../employees/types";
 
 export type SystemFieldKind = "text" | "date" | "checkbox";
-export type SystemField = { key: string; label: string; kind: SystemFieldKind; group: "employee" | "computed" | "contact" | "certificate" };
+export type SystemField = { key: string; label: string; kind: SystemFieldKind; group: "employee" | "computed" | "contact" | "signer" | "certificate" };
+/** Người ký phiếu, chọn từ Thư viện chữ ký khi xuất. */
+export type Signer = { name: string; role: string };
 
 const CHECKED = "☑";
 const UNCHECKED = "☐";
@@ -35,6 +37,10 @@ export const SYSTEM_FIELDS: readonly SystemField[] = [
   { key: "contactRelation", label: "Quan hệ / chức vụ người liên hệ", kind: "text", group: "contact" },
   { key: "contactPhone", label: "Điện thoại người liên hệ", kind: "text", group: "contact" },
   { key: "contactAddress", label: "Địa chỉ người liên hệ", kind: "text", group: "contact" },
+  { key: "signerName", label: "Tên người ký", kind: "text", group: "signer" },
+  { key: "signerNameUpper", label: "TÊN NGƯỜI KÝ (in hoa)", kind: "text", group: "signer" },
+  { key: "signerRole", label: "Chức danh người ký", kind: "text", group: "signer" },
+  { key: "signerTitle", label: "Tên - chức danh người ký", kind: "text", group: "signer" },
 ];
 
 export function ageOn(dob: string, date: string): number {
@@ -50,6 +56,8 @@ export function hasValidCertificate(certificates: readonly Certificate[], type: 
 export type FieldValueSource = {
   employee: Employee;
   commander: Commander | null;
+  /** Người ký chọn khi xuất; không có thì các ô người ký để trống. */
+  signer?: Signer | null;
   certificates: readonly Certificate[];
   certificateTypes: readonly string[];
   exportDate: string;
@@ -57,6 +65,7 @@ export type FieldValueSource = {
 
 export function buildSystemValues(source: FieldValueSource): Record<string, string> {
   const { employee, commander, exportDate } = source;
+  const signer = source.signer ?? null;
   const months = monthsBetween(employee.startDate, exportDate);
   const safetyGroups = currentSafetyGroups(employee, source.certificates, exportDate);
   const values: Record<string, string> = {
@@ -83,6 +92,10 @@ export function buildSystemValues(source: FieldValueSource): Record<string, stri
     contactRelation: commander?.role ?? "",
     contactPhone: commander?.phone ?? "",
     contactAddress: commander?.address ?? "",
+    signerName: signer?.name ?? "",
+    signerNameUpper: signer?.name.toLocaleUpperCase("vi") ?? "",
+    signerRole: signer?.role ?? "",
+    signerTitle: signer ? [signer.name, signer.role].filter(Boolean).join(" - ") : "",
   };
   for (const type of source.certificateTypes) values[`cert:${type}`] = hasValidCertificate(source.certificates, type, exportDate) ? CHECKED : UNCHECKED;
   return values;

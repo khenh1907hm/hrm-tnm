@@ -1,6 +1,7 @@
 import type { Repository, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
 import type { AuditEvent } from "../../modules/audit/types";
 import type { HrSettings } from "../../modules/settings/types";
+import { paginate, type Page, type PageInput } from "../../lib/paginate";
 
 export class MemoryRepository<T extends { id: string; version: number }> implements Repository<T> {
   private readonly records = new Map<string, T>();
@@ -29,6 +30,9 @@ export class MemoryAuditRepository implements AuditRepository {
   private readonly events: AuditEvent[] = [];
   async append(event: AuditEvent): Promise<void> { this.events.push(structuredClone(event)); }
   async list(): Promise<AuditEvent[]> { return this.events.map((event) => structuredClone(event)); }
+  async listPage(input: PageInput = {}): Promise<Page<AuditEvent>> {
+    return paginate(await this.list(), { ...input, compare: (a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0, direction: "desc" });
+  }
 }
 
 export const DEFAULT_SETTINGS: HrSettings = { reminderEmails: [], sendExpiredNotice: false, reminderDays: 30, version: 0 };

@@ -6,6 +6,7 @@ import type { Commander } from "../../modules/commanders/types";
 import type { Employee } from "../../modules/employees/types";
 import type { HrSettings } from "../../modules/settings/types";
 import type { Signature } from "../../modules/signatures/types";
+import { normalizePage, normalizePageSize, type Page, type PageInput } from "../../lib/paginate";
 import type { AuditRepository, ReminderLogEntry, ReminderLogRepository, Repository, SettingsRepository } from "../interfaces";
 
 type Versioned = { id: string; version: number };
@@ -15,6 +16,29 @@ function check<T>(result: { data: T; error: { message: string } | null }): T {
   if (result.error) throw new Error(`Lỗi cơ sở dữ liệu: ${result.error.message}`);
   return result.data;
 }
+
+/** Số dòng mỗi lô; PostgREST mặc định trả tối đa 1.000 dòng mỗi lần và cắt mà không báo lỗi. */
+const BATCH_SIZE = 1000;
+
+/**
+ * Đọc cả bảng theo lô `range(0, 999)`, `range(1000, 1999)`… sắp theo khóa duy nhất để các lô không chồng, không sót.
+ * Dừng khi đã đủ tổng số dòng (`count`) hoặc một lô về rỗng, nên vẫn đúng nếu máy chủ đặt trần thấp hơn 1.000.
+ * Ngưỡng nâng cấp: khi một bảng vượt khoảng 10.000 dòng thì chuyển sang phân trang ở máy chủ thay vì nạp cả bảng.
+ */
+async function selectAll<R>(client: SupabaseClient, table: string, columns: string, key: string): Promise<R[]> {
+  const rows: R[] = [];
+  let total: number | null = null;
+  for (;;) {
+    const result = await client.from(table).select(columns, total === null ? { count: "exact" } : {}).order(key, { ascending: true }).range(rows.length, rows.length + BATCH_SIZE - 1);
+    const batch = (check(result) ?? []) as R[];
+    if (total === null) total = result.count ?? null;
+    rows.push(...batch);
+    if (!batch.length || (total !== null ? rows.length >= total : batch.length < BATCH_SIZE)) return rows;
+  }
+}
+
+const byCreatedAt = (a: { id: string; created_at: string | number }, b: { id: string; created_at: string | number }) =>
+  a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 
 /**
  * Bảng dạng tài liệu: `id`, `version`, `doc` (JSONB) + các cột phụ để đánh chỉ mục/ràng buộc.
@@ -32,9 +56,10 @@ export class SupabaseDocRepository<T extends Versioned> implements Repository<T>
     return data ? (data.doc as T) : null;
   }
 
+  /** Cả bảng (theo lô), giữ thứ tự tạo như trước. */
   async list(): Promise<T[]> {
-    const data = check(await this.client.from(this.table).select("doc").order("created_at", { ascending: true }));
-    return (data ?? []).map((item: { doc: unknown }) => item.doc as T);
+    const rows = await selectAll<{ id: string; created_at: string | number; doc: unknown }>(this.client, this.table, "id, created_at, doc", "id");
+    return rows.sort(byCreatedAt).map((item) => item.doc as T);
   }
 
   async insert(value: T): Promise<void> {
@@ -71,8 +96,24 @@ export class SupabaseAuditRepository implements AuditRepository {
   }
 
   async list(): Promise<AuditEvent[]> {
-    const data = check(await this.client.from("audit_events").select("doc").order("at", { ascending: true }));
-    return (data ?? []).map((item: { doc: unknown }) => item.doc as AuditEvent);
+    const rows = await selectAll<{ id: string; at: string; doc: unknown }>(this.client, "audit_events", "id, at, doc", "id");
+    return rows.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1).map((item) => item.doc as AuditEvent);
+  }
+
+  /** Một trang nhật ký ở máy chủ (mới nhất trước), không nạp cả bảng. */
+  async listPage(input: PageInput = {}): Promise<Page<AuditEvent>> {
+    const pageSize = normalizePageSize(input.pageSize);
+    const fetchPage = async (page: number) => {
+      const from = (page - 1) * pageSize;
+      const result = await this.client.from("audit_events").select("doc", { count: "exact" }).order("at", { ascending: false }).order("id", { ascending: false }).range(from, from + pageSize - 1);
+      return { items: ((check(result) ?? []) as { doc: unknown }[]).map((item) => item.doc as AuditEvent), total: result.count ?? 0 };
+    };
+    const wanted = normalizePage(input.page, Number.MAX_SAFE_INTEGER, pageSize).page;
+    let fetched = await fetchPage(wanted);
+    const { page, totalPages } = normalizePage(wanted, fetched.total, pageSize);
+    // Trang vượt quá tổng số trang → lấy trang cuối
+    if (page !== wanted) fetched = await fetchPage(page);
+    return { items: fetched.items, total: fetched.total, page, pageSize, totalPages };
   }
 }
 
@@ -94,9 +135,10 @@ export class SupabaseSettingsRepository implements SettingsRepository {
 export class SupabaseReminderLogRepository implements ReminderLogRepository {
   constructor(private readonly client: SupabaseClient) {}
 
+  /** Không cache (bảng tăng mãi): mỗi lần cần thì đọc theo lô. */
   async list(): Promise<ReminderLogEntry[]> {
-    const data = check(await this.client.from("reminder_log").select("identity, certificate_id, sent_on"));
-    return (data ?? []).map((item: { identity: string; certificate_id: string; sent_on: string }) => ({ identity: item.identity, certificateId: item.certificate_id, sentOn: item.sent_on }));
+    const rows = await selectAll<{ identity: string; certificate_id: string; sent_on: string }>(this.client, "reminder_log", "identity, certificate_id, sent_on", "identity");
+    return rows.map((item) => ({ identity: item.identity, certificateId: item.certificate_id, sentOn: item.sent_on }));
   }
 
   async add(entry: ReminderLogEntry): Promise<void> {

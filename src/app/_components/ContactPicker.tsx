@@ -20,7 +20,7 @@ export function useActiveEmployees(app: App, actor: Actor): Employee[] {
         const result = await app.employees.list(actor, { page, pageSize: 100, statuses: ["active", "on_leave"] });
         if (!result.ok) break;
         all.push(...result.value.items);
-        if (page >= result.value.pageCount) break;
+        if (page >= result.value.totalPages) break;
       }
       if (active) setEmployees(all);
     })();

@@ -3,6 +3,7 @@ import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { parseRange } from "../../modules/excel-template/engine/fillWorkbook";
 import { fieldKeyFromLabel } from "../../modules/excel-template/engine/profileConfig";
 import type { ProfileCustomField, ProfileCustomFieldKind, ProfileFieldScope, ProfileTemplateConfig } from "../../modules/excel-template/types";
+import type { Partner } from "../../modules/partners/types";
 
 const KIND_LABELS: Record<ProfileCustomFieldKind, string> = { text: "Chữ", date: "Ngày (dd/mm/yyyy)", checkbox: "Ô đánh dấu ☑/☐", image: "Ảnh" };
 const SCOPE_LABELS: Record<ProfileFieldScope, string> = { employee: "Lưu theo từng nhân sự", template: "Cố định theo mẫu", export: "Nhập khi xuất" };
@@ -21,7 +22,8 @@ function targetError(kind: ProfileCustomFieldKind, target: string): string | nul
 }
 
 /** Danh sách trường tùy chỉnh của mẫu + form tự thêm trường gắn vào ô bất kỳ (không cần sửa file Excel). */
-export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void }) {
+export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void; partners?: readonly Partner[] | undefined }) {
+  const partnersWithImage = (props.partners ?? []).filter((partner) => partner.image);
   const { value, onChange } = props;
   const [draft, setDraft] = useState<{ label: string; kind: ProfileCustomFieldKind; target: string; scope: ProfileFieldScope }>({ label: "", kind: "text", target: "", scope: "employee" });
   const [draftError, setDraftError] = useState("");
@@ -55,6 +57,14 @@ export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChan
       <div className="fixed-image">
         {field.defaultValue ? <img src={field.defaultValue} alt={`Ảnh ${field.label}`} /> : <span className="muted">Chưa có ảnh</span>}
         <label className="button"><ImagePlus className="ico" size={14} aria-hidden="true" /> {field.defaultValue ? "Đổi ảnh" : "Tải ảnh"}<input type="file" accept="image/png,image/jpeg" hidden onChange={(event) => { void uploadFixedImage(field.key, event.target.files?.[0]); event.target.value = ""; }} /></label>
+        {/* Thay nhanh ảnh dự án bằng ảnh của một đối tác đã lưu */}
+        {partnersWithImage.length > 0 && (
+          <select aria-label={`Ảnh đối tác cho ${field.label}`} value={partnersWithImage.find((partner) => partner.image === field.defaultValue)?.id ?? ""}
+            onChange={(event) => { const partner = partnersWithImage.find((item) => item.id === event.target.value); if (partner) { setRowError({ ...rowError, [field.key]: "" }); update(field.key, { defaultValue: partner.image }); } }}>
+            <option value="" disabled>Ảnh đối tác…</option>
+            {partnersWithImage.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
+          </select>
+        )}
       </div>
     );
     if (field.kind === "checkbox") return <input type="checkbox" aria-label={`Mặc định ${field.label}`} checked={field.defaultValue === "true"} onChange={(event) => update(field.key, { defaultValue: event.target.checked ? "true" : "" })} />;
@@ -63,8 +73,8 @@ export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChan
 
   return (
     <section>
-      <h3>Trường tùy chỉnh</h3>
-      <p className="muted">Hai cách: gõ <code>{"{{mã}}"}</code> vào ô trong Excel, hoặc bấm <b>Thêm trường</b> bên dưới và chọn ô cần điền, không cần sửa file Excel. Trường ảnh gắn vào một vùng ô.</p>
+      <h3>4. Ô nhập thêm <small>(ngày bắt đầu dự án, logo/ảnh dự án…)</small></h3>
+      <p className="muted">Thông tin không có sẵn trong hồ sơ. Gõ <code>{"{{mã}}"}</code> vào ô trong Excel, hoặc bấm <b>Thêm trường</b> bên dưới rồi chọn ô cần điền, không cần sửa file Excel.</p>
       {value.customFields.length > 0 && (
         <div className="table-scroll">
           <table className="profile-table custom-fields-table">

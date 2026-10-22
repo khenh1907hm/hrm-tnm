@@ -6,7 +6,13 @@ import type { TemplateScan } from "./scanTemplate";
 export const IMAGE_FIELDS = [
   { key: "photo3x4", label: "Ảnh 3×4 của nhân sự" },
   { key: "cccdImage", label: "Ảnh CCCD" },
+  { key: "signature", label: "Ảnh chữ ký người ký" },
 ] as const;
+
+/** Mẫu có dùng người ký (ô {{signer…}} hoặc vùng ảnh IMG_signature) → khi xuất cần chọn người ký. */
+export function usesSigner(config: Pick<ProfileTemplateConfig, "placeholders" | "imageSlots">): boolean {
+  return config.placeholders.some((key) => key.startsWith("signer")) || config.imageSlots.some((slot) => slot.field === "signature");
+}
 
 const CERT_PREFIX = "cert:";
 const systemKeys = new Set(SYSTEM_FIELDS.map((field) => field.key));
@@ -24,7 +30,12 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
   const fromPlaceholders = scan.placeholders.filter(isCustomKey).map((key) => previous?.customFields.find((field) => field.key === key) ?? { key, label: key, kind: guessKind(key), defaultValue: "" });
   // Trường người dùng tự thêm (có ô đích) không nằm trong file → giữ nguyên khi tải lại file mẫu
   const customFields = [...fromPlaceholders, ...(previous?.customFields.filter((field) => field.target && !scan.placeholders.includes(field.key)) ?? [])];
-  const imageSlots = scan.imageSlots.map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (slot.field === "photo3x4" ? "cover" as const : "contain" as const) }));
+  // Vùng ảnh: lấy theo vùng tên IMG_ trong file, trừ vùng người dùng đã sửa trong app (giữ nguyên, kể cả vùng không có trong file)
+  const edited = previous?.imageSlots.filter((slot) => slot.custom) ?? [];
+  const imageSlots = [
+    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (slot.field === "photo3x4" ? "cover" as const : "contain" as const) })),
+    ...edited,
+  ];
   const certificateKeys = scan.placeholders.filter(isCertificateKey).map(certificateTypeOf);
   return {
     sheetName: scan.sheetName,
@@ -34,6 +45,7 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
     imageSlots,
     slotAspect: scan.slotAspect,
     attachments: previous?.attachments ?? certificateKeys,
+    ...(previous?.signatureId ? { signatureId: previous.signatureId } : {}),
   };
 }
 

@@ -22,13 +22,13 @@ describe("employee list paging, multi-select filters and facets", () => {
   it("pages results and clamps the page number to the last page", async () => {
     const app = await setup();
     const second = await app.employees.list(admin, { page: 2, pageSize: 5 });
-    expect(second.ok && { page: second.value.page, pageCount: second.value.pageCount, total: second.value.total }).toEqual({ page: 2, pageCount: 3, total: 12 });
+    expect(second.ok && { page: second.value.page, totalPages: second.value.totalPages, total: second.value.total }).toEqual({ page: 2, totalPages: 3, total: 12 });
     expect(codes(second)).toEqual(["TNM006", "TNM007", "TNM008", "TNM009", "TNM010"]);
     const beyond = await app.employees.list(admin, { page: 99, pageSize: 5 });
     expect(beyond.ok && beyond.value.page).toBe(3);
     expect(codes(beyond)).toEqual(["TNM011", "TNM012"]);
     const empty = await app.employees.list(admin, { query: "không ai cả" });
-    expect(empty.ok && { page: empty.value.page, pageCount: empty.value.pageCount, total: empty.value.total }).toEqual({ page: 1, pageCount: 1, total: 0 });
+    expect(empty.ok && { page: empty.value.page, totalPages: empty.value.totalPages, total: empty.value.total }).toEqual({ page: 1, totalPages: 1, total: 0 });
   });
 
   it("combines values inside a group with OR and groups with AND", async () => {

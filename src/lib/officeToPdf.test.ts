@@ -16,6 +16,9 @@ describe("handleConvertRequest", () => {
     expect(url).toBe("https://pdf.example.test/forms/libreoffice/convert");
     expect((init.headers as Record<string, string>).authorization).toBe(`Basic ${btoa("u:p")}`);
     expect((init.body as FormData).get("files")).toBeInstanceOf(Blob);
+    // Ảnh giữ nguyên chất lượng như trong Excel
+    expect((init.body as FormData).get("losslessImageCompression")).toBe("true");
+    expect((init.body as FormData).get("reduceImageResolution")).toBe("false");
   });
 
   it("sends no basic auth when credentials are not configured", async () => {
