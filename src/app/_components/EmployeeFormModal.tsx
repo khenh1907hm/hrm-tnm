@@ -2,12 +2,15 @@ import { BriefcaseBusiness, Camera, Check, Copy, ExternalLink, IdCard, Image as 
 import { useRef, useState, type FormEvent } from "react";
 import { toTransparentPng } from "../../lib/image/toTransparentPng";
 import type { Actor } from "../../modules/auth/permissions";
+import type { FileRef } from "../../modules/certificates/types";
+import { isLegacyPhoto, MAX_PHOTO_SIZE, PHOTO_MIMES } from "../../modules/employees/photo";
 import { employeeInputSchema } from "../../modules/employees/schema";
 import type { Employee, EmployeeInput } from "../../modules/employees/types";
 import { applyOcrToForm, type OcrFormField, type OcrRejectedValue } from "../../modules/ocr/applyOcrToForm";
 import { checkIdImages } from "../../modules/ocr/imageFiles";
 import { mergeParsed, parseIdText } from "../../modules/ocr/parseIdText";
 import { readIdImages, type OcrProgress } from "../../modules/ocr/readIdImages";
+import { dataUrlToFile, newPhotoRef, preparePhoto, usePhotoUrl } from "./employeePhoto";
 import { Field } from "./Field";
 import { issueText, ocrFieldLabel, type App, type SetNotice } from "./shared";
 
@@ -28,10 +31,24 @@ Output only the final cropped portrait.`;
 const CHATGPT_PHOTO_URL = `https://chatgpt.com/?q=${encodeURIComponent(CHATGPT_PHOTO_PROMPT)}`;
 const EDIT_TOUCHED_FIELDS: OcrFormField[] = ["name", "dob", "cccd", "phone", "home", "address", "currentAddress"];
 
-/** `editing` là hồ sơ đang sửa; null khi thêm mới. */
-export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Employee | null; initial: EmployeeInput; onClose: () => void; onSaved: (employee: Employee) => void; setNotice: SetNotice }) {
+/** Giá trị ban đầu của form: ảnh có thể còn là data URL kiểu cũ. */
+export type EmployeeFormInitial = Omit<EmployeeInput, "photo"> & Pick<Employee, "photo">;
+
+/**
+ * `editing` là hồ sơ đang sửa; null khi thêm mới.
+ * Ảnh chân dung được đưa lên kho (`uploadPhoto`) trước khi lưu bản ghi; ảnh kiểu cũ (data URL) được chuyển luôn khi lưu.
+ */
+export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Employee | null; initial: EmployeeFormInitial; loadPhoto: (ref: FileRef) => Promise<File | null>; uploadPhoto: (files: Record<string, File>) => Promise<boolean>; onClose: () => void; onSaved: (employee: Employee) => void; setNotice: SetNotice }) {
   const { app, actor, editing, setNotice } = props;
-  const [form, setForm] = useState<EmployeeInput>(props.initial);
+  const [legacyPhoto] = useState(() => isLegacyPhoto(props.initial.photo) ? dataUrlToFile(props.initial.photo, "anh-3x4") : null);
+  const [form, setForm] = useState<EmployeeInput>(() => ({ ...props.initial, photo: legacyPhoto ? newPhotoRef(legacyPhoto) : props.initial.photo as FileRef | null }));
+  /** Ảnh vừa chọn (hoặc ảnh cũ cần chuyển), chưa có trên kho. */
+  const [pendingPhoto, setPendingPhoto] = useState<File | null>(legacyPhoto);
+  /** Xem trước ảnh chưa lưu, dạng data URL chỉ nằm trong bộ nhớ (không ghi vào bản ghi). */
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState<string | null>(() => isLegacyPhoto(props.initial.photo) ? props.initial.photo : null);
+  const storedPhotoUrl = usePhotoUrl(pendingPhoto ? null : form.photo, props.loadPhoto);
+  const photoUrl = pendingPhoto ? pendingPhotoUrl : storedPhotoUrl;
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
@@ -47,19 +64,20 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
 
   const handlePhotoSelect = (file: File | undefined) => {
     if (!file) return;
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    if (!(PHOTO_MIMES as readonly string[]).includes(file.type)) {
       setNotice("Chỉ nhận ảnh chân dung JPG, PNG hoặc WebP.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target?.result;
-      if (typeof dataUrl === "string") {
-        setForm((cur) => ({ ...cur, photo: dataUrl }));
-      }
-    };
-    reader.readAsDataURL(file);
+    void preparePhoto(file).then((prepared) => {
+      if (prepared.size > MAX_PHOTO_SIZE) { setNotice("Ảnh chân dung vượt quá 10 MB."); return; }
+      const reader = new FileReader();
+      reader.onload = () => { if (typeof reader.result === "string") setPendingPhotoUrl(reader.result); };
+      reader.readAsDataURL(prepared);
+      setPendingPhoto(prepared);
+      setForm((cur) => ({ ...cur, photo: newPhotoRef(prepared) }));
+    });
   };
+  const removePhoto = () => { setPendingPhoto(null); setPendingPhotoUrl(null); setForm((cur) => ({ ...cur, photo: null })); };
 
   const handleSignatureSelect = async (file: File | undefined) => {
     if (!file) return;
@@ -104,6 +122,14 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
       return;
     }
     if (preview.warnings.length && !window.confirm(preview.warnings.map((item) => issueText(item.code)).join("\n"))) return;
+    setSaving(true);
+    try {
+      if (pendingPhoto && form.photo && !await props.uploadPhoto({ [form.photo.id]: pendingPhoto })) return;
+      await saveRecord();
+    } finally { setSaving(false); }
+  };
+
+  const saveRecord = async () => {
     const result = editing
       ? await app.employees.update(actor, { ...form, id: editing.id, expectedVersion: editing.version })
       : await app.employees.create(actor, form);
@@ -277,7 +303,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
             <div className="photo-upload-area">
               {form.photo ? (
                 <div className="photo-preview-3x4-large">
-                  <img src={form.photo} alt="Ảnh thẻ 3x4" />
+                  {photoUrl ? <img src={photoUrl} alt="Ảnh thẻ 3x4" /> : <span className="photo-skeleton-hint">Đang tải ảnh…</span>}
                 </div>
               ) : (
                 <div className="photo-skeleton-large" title="Bấm để tải ảnh chân dung 3×4" onClick={() => photoInputRef.current?.click()}>
@@ -289,7 +315,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
               {form.photo ? (
                 <div style={{ display: "flex", gap: "6px", width: "100%" }}>
                   <button type="button" className="button photo-change-btn" onClick={() => photoInputRef.current?.click()}>Đổi ảnh</button>
-                  <button type="button" className="button danger photo-change-btn" onClick={() => setForm({ ...form, photo: null })}>Xóa</button>
+                  <button type="button" className="button danger photo-change-btn" onClick={removePhoto}>Xóa</button>
                 </div>
               ) : (
                 <button type="button" className="button photo-change-btn" onClick={() => photoInputRef.current?.click()}>Tải ảnh lên</button>
@@ -371,7 +397,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
 
         <footer>
           <button className="button" type="button" onClick={() => { ocrAbort.current?.abort(); props.onClose(); }}>Hủy</button>
-          <button className="button primary" type="submit">Lưu hồ sơ</button>
+          <button className="button primary" type="submit" disabled={saving}>{saving ? "Đang lưu…" : "Lưu hồ sơ"}</button>
         </footer>
       </form>
     </div>
