@@ -124,6 +124,9 @@ describe("fillWorkbook", () => {
     // Ảnh rộng 53.3px trong vùng 350px: lệch trái 148.3px = B (70) + C (70) + 8.3px của D
     expect(placed!.range.tl.col).toBeCloseTo(3 + 8.33 / 70, 2);
     expect(placed!.range.tl.row).toBeCloseTo(11, 5);
+    // Cao vừa đúng vùng: chạm mép dưới dòng 13; rộng 53.3px nên kết thúc ở 61.7px trong cột D
+    expect(placed!.range.br.row).toBeCloseTo(13, 5);
+    expect(placed!.range.br.col).toBeCloseTo(3 + 61.67 / 70, 2);
   });
 
   it("stretches an image over the whole slot when fit is stretch", async () => {
@@ -136,6 +139,9 @@ describe("fillWorkbook", () => {
     // Không căn giữa: góc trên trái ảnh trùng góc trên trái vùng B12
     expect(placed!.range.tl.col).toBeCloseTo(1);
     expect(placed!.range.tl.row).toBeCloseTo(11);
+    // Góc dưới phải trùng đúng mép phải cột F và mép dưới dòng 13
+    expect(placed!.range.br.col).toBeCloseTo(6);
+    expect(placed!.range.br.row).toBeCloseTo(13);
   });
 
   it("appends one printed page per attachment below the form, in the given order", async () => {
