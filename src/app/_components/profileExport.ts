@@ -117,16 +117,20 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   // Ảnh: 3×4 từ hồ sơ; ảnh theo nhân sự (kể cả vùng IMG_ như ảnh CCCD) từ extraFiles; ảnh cố định từ mẫu
   const imageSlots = [...profile.imageSlots, ...customImageSlots(profile)];
   const images: Record<string, TemplateImage | null> = {};
-  const paddedSlots = new Set<string>();
+  // Vùng ảnh được phủ kín đúng 4 góc ô khi điền (fillWorkbook "stretch")
+  const filledSlots = new Set<string>();
   for (const slot of imageSlots) {
-    const fit = profile.imageSlots.find((item) => item.field === slot.field)?.fit;
     const slotAspect = profile.slotAspect[slot.field];
+    const idCard = isIdCardImage(slot.field, fieldLabel(slot.field, profile));
+    // Ảnh chân dung 3×4 luôn "Lấp đầy": kín khung cả ngang lẫn dọc, chỉ cắt bớt nền, không làm méo khuôn mặt
+    const fit = slot.field === "photo3x4" ? "cover" : profile.imageSlots.find((item) => item.field === slot.field)?.fit;
     // "Vừa khung": thêm viền trong suốt theo tỉ lệ vùng rồi phủ kín vùng như "Kéo giãn", để hai bên trống đều nhau
-    // (căn giữa bằng pixel ước lượng bị lệch khi Excel/LibreOffice tính độ rộng cột khác)
-    const pad = slot.field !== "signature" && fit !== "cover" && fit !== "stretch" && slotAspect !== undefined;
-    if (pad) paddedSlots.add(slot.field);
-    const aspect = fit === "cover" || pad ? slotAspect : undefined;
-    const options = { ...(aspect ? { aspect } : {}), ...(pad ? { pad: true } : {}), ...(isIdCardImage(slot.field, fieldLabel(slot.field, profile)) ? { landscape: true } : {}) };
+    // (căn giữa bằng pixel ước lượng bị lệch khi Excel/LibreOffice tính độ rộng cột khác).
+    // Ảnh CCCD luôn kéo giãn vừa khít ô: không cắt mất chữ trên thẻ, không chừa trống hai bên.
+    const pad = !idCard && slot.field !== "signature" && fit !== "cover" && fit !== "stretch" && slotAspect !== undefined;
+    if (idCard || pad || fit === "cover" || fit === "stretch") filledSlots.add(slot.field);
+    const aspect = !idCard && (fit === "cover" || pad) ? slotAspect : undefined;
+    const options = { ...(aspect ? { aspect } : {}), ...(pad ? { pad: true } : {}), ...(idCard ? { landscape: true } : {}) };
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
     if (slot.field === "signature") {
@@ -173,7 +177,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     sheetName: profile.sheetName,
     printArea: profile.printArea,
     values,
-    imageSlots: imageSlots.map((slot) => (paddedSlots.has(slot.field) ? { ...slot, fit: "stretch" as const } : slot)),
+    imageSlots: imageSlots.map((slot) => (filledSlots.has(slot.field) ? { ...slot, fit: "stretch" as const } : slot)),
     images,
     attachments,
     cellValues,
