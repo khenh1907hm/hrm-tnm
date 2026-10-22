@@ -6,13 +6,13 @@ import type { Actor } from "../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../modules/certificates/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
-import type { Employee, EmployeeInput } from "../modules/employees/types";
+import type { Employee } from "../modules/employees/types";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
 import { CertificateFormModal, type CertificateFormMode } from "./_components/CertificateFormModal";
 import { EmployeeDetailView } from "./_components/EmployeeDetailView";
-import { EmployeeFormModal } from "./_components/EmployeeFormModal";
+import { EmployeeFormModal, type EmployeeFormInitial } from "./_components/EmployeeFormModal";
 import { DEFAULT_EMPLOYEE_FILTERS, EMPTY_PAGE_INFO, EmployeeListView, toListInput, type EmployeeFilters, type EmployeePageInfo } from "./_components/EmployeeListView";
 import { BatchExportModal } from "./_components/BatchExportModal";
 import { ExportPdfDialog, prepareExportDialog, type ExportDialogInit } from "./_components/ExportPdfDialog";
@@ -27,6 +27,7 @@ import { useToast } from "./_components/Toast";
 import { EmployeeExtraPanel } from "./_components/EmployeeExtraPanel";
 import { ReasonDialog } from "./_components/ReasonDialog";
 import { ImportEmployeesModal } from "./_components/ImportEmployeesModal";
+import { ClaudeHoSoImportModal } from "./_components/ClaudeHoSoImportModal";
 import { downloadXlsx } from "./_components/profileExport";
 import { buildEmployeeRosterWorkbook } from "../modules/exports/employeeRoster";
 import { useBackend, type Backend } from "./_components/useBackend";
@@ -35,6 +36,7 @@ import { getSupabaseClient } from "../lib/supabase/client";
 import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import { EmployeeWorkspace, ToolsPage } from "./_components/EmployeeWorkspace";
 import type { FileFolder } from "./_components/fileStore";
+import { photoRef } from "../modules/employees/photo";
 import { parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
 import SkillsClient from "./skills/SkillsClient";
 
@@ -86,7 +88,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [certificateTypes, setCertificateTypes] = useState<CertificateTypeRecord[]>([]);
   const [sessionFiles, setSessionFiles] = useState<Record<string, File>>({});
   const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
-  const [employeeForm, setEmployeeForm] = useState<{ editing: Employee | null; initial: EmployeeInput } | null>(null);
+  const [employeeForm, setEmployeeForm] = useState<{ editing: Employee | null; initial: EmployeeFormInitial } | null>(null);
   const [certificateForm, setCertificateForm] = useState<CertificateFormMode | null>(null);
   const [exportInit, setExportInit] = useState<ExportDialogInit | null>(null);
   const [reasonDialog, setReasonDialog] = useState<{ kind: "employee" } | { kind: "certificate"; certificate: Certificate } | null>(null);
@@ -94,6 +96,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   // Mở cửa sổ xuất theo mẫu ở chế độ chỉ PDF gộp (nút "Xuất hồ sơ PDF")
   const [pdfOnlyExport, setPdfOnlyExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showClaudeImport, setShowClaudeImport] = useState(false);
   const templateError = useCallback((message: string) => setNotice(message, "error"), [setNotice]);
   const [templates, setTemplates] = useReportTemplates(backend.mode === "live" ? getSupabaseClient() : null, templateError);
   const partnerStore = usePartners(backend.mode === "live" ? getSupabaseClient() : null, templateError);
@@ -106,21 +109,34 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     catch (error) { setNotice(error instanceof Error ? error.message : "Không tải được tệp lên kho lưu trữ.", "error"); }
   }, [fileStore, setNotice]);
 
+  /** Đẩy tệp lên kho trước khi lưu bản ghi trỏ tới nó; lỗi thì báo và trả false để không lưu bản ghi. */
+  const uploadFiles = useCallback(async (folder: FileFolder, files: Record<string, File>) => {
+    if (fileStore) {
+      try { await Promise.all(Object.entries(files).map(([id, file]) => fileStore.put(folder, id, file))); }
+      catch (error) { setNotice(error instanceof Error ? error.message : "Không tải được tệp lên kho lưu trữ.", "error"); return false; }
+    }
+    setSessionFiles((current) => ({ ...current, ...files }));
+    return true;
+  }, [fileStore, setNotice]);
+
   /** Tải về những tệp chưa có trong phiên; trả về bộ tệp đầy đủ để dùng ngay. */
   const ensureFiles = useCallback(async (refs: readonly { id: string; name: string; folder: FileFolder }[]) => {
     const missing = refs.filter((ref) => !sessionFiles[ref.id]);
     if (!fileStore || !missing.length) return sessionFiles;
     const loaded = await Promise.all(missing.map(async (ref) => [ref.id, await fileStore.get(ref.folder, ref.id, ref.name)] as const));
     const found = Object.fromEntries(loaded.filter((entry): entry is readonly [string, File] => entry[1] !== null));
-    const merged = { ...sessionFiles, ...found };
-    setSessionFiles(merged);
-    return merged;
+    // Gộp theo state mới nhất: nhiều lượt tải chạy song song (ảnh chân dung, ảnh trường tùy chỉnh) không ghi đè nhau
+    setSessionFiles((current) => ({ ...current, ...found }));
+    return { ...sessionFiles, ...found };
   }, [fileStore, sessionFiles]);
 
   const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
   const extraFileRefs = (employee: Employee) => Object.values(employee.extraFiles ?? {}).map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
   /** Ảnh chữ ký của người ký khi xuất mẫu hồ sơ (vùng IMG_signature). */
   const loadSignatureFile = useCallback(async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "signatures" }]))[file.id] ?? null, [ensureFiles]);
+  /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */
+  const extraFileRefs = (employee: Employee) => [...Object.values(employee.extraFiles ?? {}), ...[photoRef(employee.photo)].filter((file) => file !== null)].map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
+  const loadPhoto = async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "employees" }]))[file.id] ?? null;
   const signatureFileRefs = async () => { const listed = await app.signatures.list(actor); return listed.ok ? listed.value.map((signature) => ({ id: signature.file.id, name: signature.file.name, folder: "signatures" as const })) : []; };
 
   const refresh = useCallback(async (instance: App, currentActor: Actor) => {
@@ -360,6 +376,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
         {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
           app={app}
@@ -379,6 +396,9 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
             // Có mẫu hồ sơ: phiếu Excel → PDF rồi ghép chứng chỉ; chưa có mẫu thì dùng phiếu PDF dựng sẵn
             ? void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(true); setShowExcelModal(true); })
             : void openExportDialog()}
+          loadPhoto={loadPhoto}
+          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => setShowExcelModal(true))}
+          onExportPdf={() => void openExportDialog()}
           onShowFile={(file) => void showFile(file)}
           onCertificateForm={(type, certificate) => setCertificateForm({ type, editing: certificate ?? null, renewing: null })}
           onRenewCertificate={(certificate) => setCertificateForm({ type: certificate.type, editing: null, renewing: certificate })}
@@ -408,6 +428,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         actor={actor}
         editing={employeeForm.editing}
         initial={employeeForm.initial}
+        loadPhoto={loadPhoto}
+        uploadPhoto={(files) => uploadFiles("employees", files)}
         setNotice={setNotice}
         onClose={() => setEmployeeForm(null)}
         onSaved={(employee) => { setEmployeeForm(null); setNotice("Đã lưu hồ sơ nhân sự."); void openDetail(employee); void refresh(app, actor); }}
@@ -455,6 +477,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         onClose={() => setReasonDialog(null)}
       />}
 
+      {showClaudeImport && <ClaudeHoSoImportModal setNotice={setNotice} onClose={() => setShowClaudeImport(false)} onSaved={() => void refresh(app, actor)} />}
       {showImport && <ImportEmployeesModal app={app} actor={actor} setNotice={setNotice} onClose={() => setShowImport(false)} onImported={() => void refresh(app, actor)} />}
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
       {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} loadSignatureFile={loadSignatureFile} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
