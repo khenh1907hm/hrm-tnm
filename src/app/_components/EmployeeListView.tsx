@@ -19,7 +19,7 @@ export type EmployeeFilters = {
   page: number;
   pageSize: number;
 };
-export const DEFAULT_EMPLOYEE_FILTERS: EmployeeFilters = { query: "", positions: [], statuses: [], certificateHealth: [], certificateTypes: [], certificateTypeMode: "any", includeArchived: false, sort: "code", sortDir: "asc", page: 1, pageSize: 20 };
+export const DEFAULT_EMPLOYEE_FILTERS: EmployeeFilters = { query: "", positions: [], statuses: [], certificateHealth: [], certificateTypes: [], certificateTypeMode: "all", includeArchived: false, sort: "code", sortDir: "asc", page: 1, pageSize: 20 };
 export type EmployeePageInfo = { total: number; page: number; totalPages: number; facets: EmployeeFacets };
 export const EMPTY_PAGE_INFO: EmployeePageInfo = { total: 0, page: 1, totalPages: 1, facets: { positions: {}, statuses: {}, certificateHealth: { ok: 0, missing: 0, expiring: 0, expired: 0 }, certificateTypes: {} } };
 
@@ -157,7 +157,7 @@ export function EmployeeListView(props: {
     ...(filters.includeArchived ? [{ key: "archived", label: "Gồm hồ sơ đã lưu trữ", remove: () => update({ includeArchived: false }) }] : []),
   ];
   const filtered = Boolean(filters.query) || activeChips.length > 0;
-  const clearAll = () => update({ query: "", positions: [], statuses: [], certificateHealth: [], certificateTypes: [], certificateTypeMode: "any", includeArchived: false });
+  const clearAll = () => update({ query: "", positions: [], statuses: [], certificateHealth: [], certificateTypes: [], certificateTypeMode: "all", includeArchived: false });
 
   const from = pageInfo.total ? (pageInfo.page - 1) * filters.pageSize + 1 : 0;
   const to = Math.min(pageInfo.total, pageInfo.page * filters.pageSize);
@@ -201,8 +201,8 @@ export function EmployeeListView(props: {
         <FilterDropdown label="Loại chứng chỉ" selected={filters.certificateTypes} onToggle={(value) => toggleIn("certificateTypes", value)} onClear={() => update({ certificateTypes: [] })}
           options={props.certificateTypes.map((type) => ({ value: type.key, label: type.name, tone: "info" as const, count: facets.certificateTypes[type.key] ?? 0 }))}
           extra={<div className="filter-dd-mode"><span>Nhân sự có</span><span className="mode-switch" role="group" aria-label="Cách khớp loại chứng chỉ">
-            <button type="button" aria-pressed={filters.certificateTypeMode === "any"} onClick={() => update({ certificateTypeMode: "any" })}>một trong</button>
             <button type="button" aria-pressed={filters.certificateTypeMode === "all"} onClick={() => update({ certificateTypeMode: "all" })}>tất cả</button>
+            <button type="button" aria-pressed={filters.certificateTypeMode === "any"} onClick={() => update({ certificateTypeMode: "any" })}>một trong</button>
           </span><span>loại đã chọn (còn hạn)</span></div>} />
         {actor.role === "admin" && <label className="toolbar-check"><input type="checkbox" checked={filters.includeArchived} onChange={(event) => update({ includeArchived: event.target.checked })} /> Đã lưu trữ</label>}
         {filtered && <button type="button" className="link-button toolbar-clear" onClick={clearAll}>Xóa lọc</button>}
@@ -230,7 +230,7 @@ export function EmployeeListView(props: {
       <div className={`table-scroll employee-table${props.loading && rows.length ? " is-loading" : ""}`}>
         <table><thead><tr>
           <th className="select-col"><input type="checkbox" aria-label="Chọn tất cả nhân sự trong trang" checked={allVisibleSelected} ref={(element) => { if (element) element.indeterminate = !allVisibleSelected && someVisibleSelected; }} onChange={(event) => toggleAll(event.target.checked)} /></th>
-          {sortHeader("code", "Mã NV")}{sortHeader("name", "Họ và tên")}<th>Điện thoại</th><th>Chức danh</th>{sortHeader("startDate", "Ngày nhận việc")}<th>Tình trạng chứng chỉ</th><th>Tình trạng</th>
+          {sortHeader("code", "Mã NV")}{sortHeader("name", "Họ và tên")}<th>Điện thoại</th><th>Chức danh</th>{sortHeader("startDate", "Ngày làm nghề")}<th>Tình trạng chứng chỉ</th><th>Tình trạng</th>
         </tr></thead><tbody>{rows.map((employee) => {
           const health = certificateHealth[employee.id];
           const checked = selectedIds.includes(employee.id);

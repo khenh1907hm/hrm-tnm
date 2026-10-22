@@ -23,6 +23,6 @@ export function ocrFieldLabel(field: OcrFormField): string {
 }
 
 export function readinessFieldLabel(field: string): string {
-  const labels: Record<string, string> = { name: "Họ và tên", dob: "Ngày sinh", gender: "Giới tính", home: "Nguyên quán", address: "Địa chỉ thường trú", currentAddress: "Địa chỉ hiện tại", phone: "Điện thoại", startDate: "Ngày bắt đầu làm việc", emergencyContactId: "Người liên hệ khẩn cấp", signDate: "Ngày ký", signerId: "Người ký", employeeId: "Hồ sơ nhân sự" };
+  const labels: Record<string, string> = { name: "Họ và tên", dob: "Ngày sinh", gender: "Giới tính", home: "Nguyên quán", address: "Địa chỉ thường trú", currentAddress: "Địa chỉ hiện tại", phone: "Điện thoại", startDate: "Ngày làm nghề", companyStartDate: "Ngày vào TNM", emergencyContactId: "Người liên hệ khẩn cấp", signDate: "Ngày ký", signerId: "Người ký", employeeId: "Hồ sơ nhân sự" };
   return labels[field] ?? field;
 }

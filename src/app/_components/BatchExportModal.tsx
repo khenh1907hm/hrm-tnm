@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import JSZip from "jszip";
 import { FileDown, FileText, X } from "lucide-react";
 import { systemClock, todayVN } from "../../lib/clock";
 import type { Actor } from "../../modules/auth/permissions";
@@ -10,7 +9,7 @@ import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./Sig
 import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
-import { downloadBlob, downloadPdf, downloadXlsx, exportProfilePdf, exportProfileWorkbook, profileFileName, zipFileName } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfileWorkbook, profileFileName, zipFileName, zipFiles, type ProfileBundleFile } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
@@ -56,7 +55,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
       const types = await app.certificateTypes.list(actor, true);
       const typeNames = types.ok ? Object.fromEntries(types.value.map((type) => [type.key, type.name])) : {};
       const outcomes: PersonResult[] = [];
-      const output: { name: string; bytes: Uint8Array }[] = [];
+      const output: (ProfileBundleFile & { folder?: string })[] = [];
       for (const [index, employee] of employees.entries()) {
         try {
           const certificates = await app.certificates.listByEmployee(actor, employee.id);
@@ -70,24 +69,30 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
           const selected = includeAttachments ? list.filter((item) => item.state === "current" && item.expiryDate >= exportDate && template.profile.attachments.includes(item.type)).map((item) => item.id) : [];
           const overrides = { ...shared, ...Object.fromEntries(Object.entries(perPerson[employee.id] ?? {}).filter(([, value]) => value !== "")) };
           const input = { template, employee: full, commander: contact, signer: usesSigner(template.profile) ? signer : null, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, selectedCertificateIds: selected, overrides, exportDate };
-          const result = format === "pdf" ? await exportProfilePdf(input) : await exportProfileWorkbook(input);
-          output.push({ name: profileFileName(employee, exportDate, format), bytes: result.bytes });
-          outcomes.push({ employee, warnings: result.warnings });
+          if (format === "pdf") {
+            // Mỗi nhân sự một thư mục: phiếu Excel + PDF gộp chứng chỉ
+            const result = await exportProfileBundle(input);
+            const folder = profileFileName(employee, exportDate).replace(/\.xlsx$/, "");
+            output.push(...result.files.map((file) => ({ ...file, folder })));
+            outcomes.push({ employee, warnings: result.warnings });
+          } else {
+            const result = await exportProfileWorkbook(input);
+            output.push({ name: profileFileName(employee, exportDate), bytes: result.bytes });
+            outcomes.push({ employee, warnings: result.warnings });
+          }
         } catch (error) {
           outcomes.push({ employee, warnings: [], error: error instanceof Error ? error.message : "Không tạo được hồ sơ." });
         }
         setProgress(index + 1);
       }
-      if (output.length === 1) (format === "pdf" ? downloadPdf : downloadXlsx)(output[0]!.bytes, output[0]!.name);
-      else if (output.length > 1) {
-        const zip = new JSZip();
-        for (const file of output) zip.file(file.name, file.bytes);
-        downloadBlob(await zip.generateAsync({ type: "blob", compression: "DEFLATE" }), zipFileName(template.name, exportDate, output.length));
-      }
+      const done = outcomes.filter((item) => !item.error).length;
+      if (format === "pdf" && done === 1) downloadBlob(await zipFiles(output.map(({ name, bytes }) => ({ name, bytes }))), profileFileName(outcomes.find((item) => !item.error)!.employee, exportDate, "zip"));
+      else if (format === "xlsx" && output.length === 1) downloadXlsx(output[0]!.bytes, output[0]!.name);
+      else if (output.length) downloadBlob(await zipFiles(output), zipFileName(template.name, exportDate, done));
       setResults(outcomes);
       const failed = outcomes.filter((item) => item.error).length;
       const needCheck = outcomes.filter((item) => item.warnings.length).length;
-      setNotice(failed ? `Đã xuất ${output.length}/${employees.length} hồ sơ, ${failed} hồ sơ không tạo được.` : needCheck ? `Đã xuất ${output.length} hồ sơ, ${needCheck} hồ sơ còn mục cần kiểm tra.` : `Đã xuất ${output.length} hồ sơ.`);
+      setNotice(failed ? `Đã xuất ${done}/${employees.length} hồ sơ, ${failed} hồ sơ không tạo được.` : needCheck ? `Đã xuất ${done} hồ sơ, ${needCheck} hồ sơ còn mục cần kiểm tra.` : `Đã xuất ${done} hồ sơ.`);
     } finally { setBusy(null); }
   };
 
@@ -117,7 +122,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
 
             {fields.length > 0 && (
               <section>
-                <h3>Giá trị chung cho cả lô</h3>
+                <h3>Giá trị chung cho cả dự án</h3>
                 <div className="form-grid batch-fields">
                   {fields.map((field) => field.kind === "checkbox"
                     ? <label className="check-field" key={field.key}><input type="checkbox" checked={shared[field.key] === "true"} onChange={(event) => setShared({ ...shared, [field.key]: event.target.checked ? "true" : "" })} /> {field.label}</label>
@@ -174,7 +179,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
           </button>
           <button type="button" className="button primary" disabled={busy !== null || !template || !employees.length} onClick={() => void run("pdf")}>
             <FileText className="ico" size={16} aria-hidden="true" />
-            {employees.length > 1 ? `Tải PDF gộp · ${employees.length} hồ sơ (.zip)` : "Tải PDF gộp"}
+            {employees.length > 1 ? `Tải hồ sơ PDF · ${employees.length} hồ sơ (.zip)` : "Tải hồ sơ PDF (.zip)"}
           </button>
         </footer>
       </section>

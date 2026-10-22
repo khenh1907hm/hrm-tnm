@@ -54,6 +54,12 @@ describe("đọc file Excel nhân sự", () => {
     expect(parseSheet([headers, [...row({ status: "Nghỉ việc" }), "01/01/2024"]])?.rows[0]?.input).toMatchObject({ status: "resigned", endDate: "2024-01-01" });
   });
 
+  it("đọc cột Ngày vào TNM, để trống thì bỏ qua", () => {
+    const headers = [...HEADERS, "Ngày vào TNM"];
+    expect(parseSheet([headers, [...row(), "01/03/2019"]])?.rows[0]?.input).toMatchObject({ startDate: "2015-06-01", companyStartDate: "2019-03-01" });
+    expect(parseSheet([headers, [...row(), null]])?.rows[0]?.input?.companyStartDate).toBeNull();
+  });
+
   it("bỏ qua dòng trống và báo cột bắt buộc còn thiếu", () => {
     const sheet = parseSheet([["Mã NV", "Họ và tên", "Ngày sinh"], [null, null, null], ["TNM002", "Lê Văn B", "01/01/1990"]]);
     expect(sheet?.rows).toHaveLength(1);

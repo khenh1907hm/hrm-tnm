@@ -7,6 +7,7 @@ export const IMAGE_FIELDS = [
   { key: "photo3x4", label: "Ảnh 3×4 của nhân sự" },
   { key: "cccdImage", label: "Ảnh CCCD" },
   { key: "signature", label: "Ảnh chữ ký người ký" },
+  { key: "employeeSignature", label: "Chữ ký của nhân sự" },
 ] as const;
 
 /** Mẫu có dùng người ký (ô {{signer…}} hoặc vùng ảnh IMG_signature) → khi xuất cần chọn người ký. */
@@ -33,7 +34,7 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
   // Vùng ảnh: lấy theo vùng tên IMG_ trong file, trừ vùng người dùng đã sửa trong app (giữ nguyên, kể cả vùng không có trong file)
   const edited = previous?.imageSlots.filter((slot) => slot.custom) ?? [];
   const imageSlots = [
-    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (slot.field === "photo3x4" ? "cover" as const : "contain" as const) })),
+    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (slot.field === "photo3x4" || isIdCardImage(slot.field, "") ? "cover" as const : "contain" as const) })),
     ...edited,
   ];
   const certificateKeys = scan.placeholders.filter(isCertificateKey).map(certificateTypeOf);
@@ -88,4 +89,9 @@ export function fieldKeyFromLabel(label: string, taken: readonly string[]): stri
   let key = base;
   for (let index = 2; taken.includes(key); index += 1) key = `${base}${index}`;
   return key;
+}
+
+/** Vùng ảnh căn cước (IMG_cccdImage hoặc trường tự đặt có tên chứa CCCD/căn cước): ảnh luôn nằm ngang. */
+export function isIdCardImage(key: string, label: string): boolean {
+  return key === "cccdImage" || /cccd|can cuoc|cmnd|chung minh/.test(normalizeText(`${key} ${label}`));
 }

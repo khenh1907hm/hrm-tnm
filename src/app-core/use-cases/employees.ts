@@ -146,7 +146,8 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       // Cờ cũ: phải thỏa đồng thời (và)
       const requiredHealth: CertificateHealth[] = [...(input.missingRequiredCertificate ? ["missing" as const] : []), ...(input.expiringCertificates ? ["expiring" as const] : []), ...(input.expiredCertificates ? ["expired" as const] : [])];
       const typeFilter = [...(input.certificateTypes ?? []), ...(input.certificateType ? [input.certificateType] : [])];
-      const typeMode = input.certificateTypeMode ?? "any";
+      // Tick nhiều ô chứng chỉ thì người đó phải thỏa đủ tất cả (trừ khi chọn "một trong")
+      const typeMode = input.certificateTypeMode ?? "all";
 
       // Gom chứng chỉ hiện hành theo người một lần, thay vì lọc cả bảng cho từng người
       const currentByEmployee = new Map<string, Certificate[]>();
@@ -177,7 +178,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       const tests: Record<Group, (row: Row) => boolean> = {
         positions: (row) => !positions.length || positions.includes(row.employee.position),
         statuses: (row) => !statuses.length || statuses.includes(row.employee.status),
-        certificateHealth: (row) => (!healthFilter.length || healthFilter.some((value) => row.health.has(value))) && requiredHealth.every((value) => row.health.has(value)),
+        certificateHealth: (row) => healthFilter.every((value) => row.health.has(value)) && requiredHealth.every((value) => row.health.has(value)),
         certificateTypes: (row) => !typeFilter.length || (typeMode === "all" ? typeFilter.every((type) => row.validTypes.has(type)) : typeFilter.some((type) => row.validTypes.has(type))),
       };
       const groups = Object.keys(tests) as Group[];

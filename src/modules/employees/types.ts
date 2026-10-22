@@ -5,9 +5,15 @@ export type Position = (typeof POSITIONS)[number];
 export type EmploymentStatus = "active" | "on_leave" | "resigned";
 export type EmployeeInput = {
   code: string; name: string; dob: string; gender: Gender; cccd: string; phone: string;
-  home: string; address: string; currentAddress?: string; position: Position; group: number | null; startDate: string;
+  home: string; address: string; currentAddress?: string; position: Position; group: number | null;
+  /** Ngày bắt đầu làm nghề — dùng để tính kinh nghiệm. */
+  startDate: string;
+  /** Ngày bắt đầu làm việc tại TNM. */
+  companyStartDate?: string | null;
   emergencyContactId: string | null; status: EmploymentStatus; endDate: string | null;
   mismatchOverrideReason?: string; photo?: string | null;
+  /** Ảnh chữ ký của chính nhân sự (PNG nền trong suốt, dạng data URL), có thể để trống. */
+  signatureImage?: string | null;
 };
 export type Employee = EmployeeInput & {
   id: string; version: number; archivedAt: string | null; archivedBy: string | null;

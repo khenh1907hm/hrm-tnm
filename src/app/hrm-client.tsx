@@ -91,6 +91,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [exportInit, setExportInit] = useState<ExportDialogInit | null>(null);
   const [reasonDialog, setReasonDialog] = useState<{ kind: "employee" } | { kind: "certificate"; certificate: Certificate } | null>(null);
   const [showExcelModal, setShowExcelModal] = useState(false);
+  // Mở cửa sổ xuất theo mẫu ở chế độ chỉ PDF gộp (nút "Xuất hồ sơ PDF")
+  const [pdfOnlyExport, setPdfOnlyExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const templateError = useCallback((message: string) => setNotice(message, "error"), [setNotice]);
   const [templates, setTemplates] = useReportTemplates(backend.mode === "live" ? getSupabaseClient() : null, templateError);
@@ -254,10 +256,12 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         position: selected.position,
         group: selected.group,
         startDate: selected.startDate,
+        companyStartDate: selected.companyStartDate ?? null,
         emergencyContactId: selected.emergencyContactId,
         status: selected.status,
         endDate: selected.endDate,
         photo: selected.photo ?? null,
+        signatureImage: selected.signatureImage ?? null,
         mismatchOverrideReason: selected.cccdMismatchOverrideReason ?? "",
       },
     });
@@ -370,8 +374,11 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onEdit={() => void openEdit()}
           onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
-          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => setShowExcelModal(true))}
-          onExportPdf={() => void openExportDialog()}
+          onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(false); setShowExcelModal(true); })}
+          onExportPdf={() => templates.some((template) => template.profile)
+            // Có mẫu hồ sơ: phiếu Excel → PDF rồi ghép chứng chỉ; chưa có mẫu thì dùng phiếu PDF dựng sẵn
+            ? void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(true); setShowExcelModal(true); })
+            : void openExportDialog()}
           onShowFile={(file) => void showFile(file)}
           onCertificateForm={(type, certificate) => setCertificateForm({ type, editing: certificate ?? null, renewing: null })}
           onRenewCertificate={(certificate) => setCertificateForm({ type: certificate.type, editing: null, renewing: certificate })}
@@ -454,6 +461,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}
+          pdfOnly={pdfOnlyExport}
           templates={templates}
           app={app}
           actor={actor}

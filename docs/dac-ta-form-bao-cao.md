@@ -23,7 +23,7 @@ Người dùng tự thiết kế phiếu hồ sơ bằng Excel **một lần cho
 
 | Nhóm | Ví dụ | Ai cung cấp giá trị |
 |---|---|---|
-| Hệ thống | Mã NV, Họ tên, Ngày sinh, Giới tính, CCCD, Quê quán, Thường trú, Địa chỉ hiện tại, Điện thoại, Chức vụ, Ngày nhận việc, Ảnh 3×4, Chỉ huy trưởng (tên, quan hệ, SĐT, địa chỉ) | Hồ sơ nhân sự |
+| Hệ thống | Mã NV, Họ tên, Ngày sinh, Giới tính, CCCD, Quê quán, Thường trú, Địa chỉ hiện tại, Điện thoại, Chức vụ, Ngày làm nghề, Ảnh 3×4, Chỉ huy trưởng (tên, quan hệ, SĐT, địa chỉ) | Hồ sơ nhân sự |
 | Tự tính | Tuổi · Thâm niên ("6 năm 9 tháng") · Ngày xuất · "Có chứng chỉ <loại>" (☑/☐) · "Giới tính là Nam/Nữ" (☑/☐) | App tự tính tại ngày xuất |
 | Tùy chỉnh | Do người dùng tạo; kiểu **Chữ / Ngày / Ô đánh dấu / Ảnh** | Mẫu, Dự án hoặc người xuất (xem 2.2) |
 

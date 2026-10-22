@@ -9,13 +9,13 @@ import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./Sig
 import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
-import { downloadPdf, downloadXlsx, exportProfilePdf, exportProfileWorkbook, profileFileName } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfileWorkbook, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
 
 /** Xuất "Mẫu hồ sơ" cho một nhân sự: nhập trường tùy chỉnh, chọn chứng chỉ, xem cảnh báo. */
-export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined }) {
+export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean }) {
   const { app, actor, template, employee, certificates } = props;
   const { profile } = template;
   const exportDate = todayVN(systemClock);
@@ -56,11 +56,11 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         if (revealed.ok) fullEmployee = { ...employee, cccd: revealed.value };
       }
       const input = { template, employee: fullEmployee, commander, signer: needsSigner ? signer : null, certificates, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, selectedCertificateIds: selected, overrides, exportDate };
-      const label = format === "pdf" ? "PDF gộp" : "Excel";
+      const label = format === "pdf" ? "ZIP (Excel + PDF chứng chỉ)" : "Excel";
       let warningList: string[];
       if (format === "pdf") {
-        const result = await exportProfilePdf(input);
-        downloadPdf(result.bytes, profileFileName(employee, exportDate, "pdf"));
+        const result = await exportProfileBundle(input);
+        downloadBlob(await zipFiles(result.files), profileFileName(employee, exportDate, "zip"));
         warningList = result.warnings;
       } else {
         const result = await exportProfileWorkbook(input);
@@ -90,7 +90,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
       )}
       <section>
         <h3>Chứng chỉ đính kèm (ghép lần lượt sau phiếu)</h3>
-        <p className="muted">PDF gộp: phiếu được chuyển sang PDF, các chứng chỉ PDF giữ nguyên trang, ảnh scan mỗi ảnh một trang A4. Excel: chỉ chèn được chứng chỉ dạng ảnh.</p>
+        <p className="muted">Hồ sơ PDF (.zip): phiếu Excel đã điền + một tệp PDF gộp các chứng chỉ (PDF giữ nguyên trang, ảnh scan mỗi ảnh một trang A4). Excel: chỉ chèn được chứng chỉ dạng ảnh.</p>
         {ordered.length ? ordered.map((certificate) => {
           const hasBinary = Boolean(props.sessionFiles[certificate.document.id]);
           const expired = certificate.expiryDate < exportDate;
@@ -112,11 +112,11 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         </div>
       )}
       <div className="button-row" style={{ justifyContent: "flex-end" }}>
-        <button type="button" className="button" disabled={busy !== null} onClick={() => void run("xlsx")}>
+        {!props.pdfOnly && <button type="button" className="button" disabled={busy !== null} onClick={() => void run("xlsx")}>
           {busy === "xlsx" ? "Đang tạo Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải Excel (.xlsx)</>}
-        </button>
+        </button>}
         <button type="button" className="button primary" disabled={busy !== null} onClick={() => void run("pdf")}>
-          {busy === "pdf" ? "Đang chuyển sang PDF…" : <><FileText className="ico" size={16} aria-hidden="true" /> Tải PDF gộp</>}
+          {busy === "pdf" ? "Đang gộp PDF chứng chỉ…" : <><FileText className="ico" size={16} aria-hidden="true" /> Tải hồ sơ PDF (.zip)</>}
         </button>
       </div>
     </div>

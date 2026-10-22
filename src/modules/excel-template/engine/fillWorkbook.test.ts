@@ -103,6 +103,18 @@ describe("fillWorkbook", () => {
     expect(warnings).toEqual([{ location: "C7", field: "missingField" }, { location: "A8", field: "cert:atld" }, { location: "C5", field: "fullNameUpper" }, { location: "C6", field: "exportDate" }, { location: "B14:C18", field: "cccdImage" }].sort((a, b) => warnings.findIndex((w) => w.location === a.location) - warnings.findIndex((w) => w.location === b.location)));
   });
 
+  it("stretches an image over the whole slot when fit is stretch", async () => {
+    const { bytes } = await fillWorkbook({
+      template: await buildTemplate(), sheetName: "Phieu", printArea: "A1:F20", values: {},
+      imageSlots: [{ field: "cccdImage", range: "B12:F13", fit: "stretch" }],
+      images: { cccdImage: image(400, 300) }, attachments: [],
+    });
+    const placed = (await open(bytes)).getImages().find((item) => item.range.tl.row >= 11);
+    // Không căn giữa: góc trên trái ảnh trùng góc trên trái vùng B12
+    expect(placed!.range.tl.col).toBeCloseTo(1);
+    expect(placed!.range.tl.row).toBeCloseTo(11);
+  });
+
   it("appends one printed page per attachment below the form, in the given order", async () => {
     const { bytes } = await fillWorkbook({
       template: await buildTemplate(), printArea: "A1:F20", sheetName: "Khong co", values: {}, imageSlots: [], images: {},

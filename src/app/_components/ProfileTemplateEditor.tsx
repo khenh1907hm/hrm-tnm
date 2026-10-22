@@ -56,8 +56,8 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
                 </td>
                 <td><input aria-label="Vùng ô ảnh" value={slot.range} placeholder="E8:K16" onChange={(event) => updateSlot(index, { range: event.target.value.toUpperCase() })} /></td>
                 <td>
-                  <select aria-label="Cách đặt ảnh" value={slot.fit} onChange={(event) => updateSlot(index, { fit: event.target.value === "cover" ? "cover" : "contain" })}>
-                    <option value="contain">Vừa khung (giữ tỉ lệ)</option><option value="cover">Lấp đầy (cắt phần thừa)</option>
+                  <select aria-label="Cách đặt ảnh" value={slot.fit} onChange={(event) => updateSlot(index, { fit: event.target.value === "cover" || event.target.value === "stretch" ? event.target.value : "contain" })}>
+                    <option value="contain">Vừa khung (giữ tỉ lệ)</option><option value="cover">Lấp đầy (cắt phần thừa)</option><option value="stretch">Kéo giãn đủ khung</option>
                   </select>
                 </td>
                 <td><button type="button" className="button danger" onClick={() => onChange({ ...value, imageSlots: value.imageSlots.filter((_, i) => i !== index) })}>Xóa</button></td>

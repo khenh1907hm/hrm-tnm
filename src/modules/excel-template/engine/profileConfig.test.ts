@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileTemplateConfig } from "../types";
-import { certificateTypeOf, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, profileConfigFromScan, targetCellValues, usesSigner } from "./profileConfig";
+import { certificateTypeOf, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, isIdCardImage, profileConfigFromScan, targetCellValues, usesSigner } from "./profileConfig";
 import type { TemplateScan } from "./scanTemplate";
 
 const scan: TemplateScan = {
@@ -16,7 +16,7 @@ describe("profileConfigFromScan", () => {
     expect(profileConfigFromScan(scan)).toEqual({
       sheetName: "Phieu thong tin", printArea: "B1:AZ73", placeholders: scan.placeholders,
       customFields: [{ key: "projectStartDate", label: "projectStartDate", kind: "date", defaultValue: "" }, { key: "contractorName", label: "contractorName", kind: "text", defaultValue: "" }],
-      imageSlots: [{ field: "photo3x4", range: "E8:K16", fit: "cover" }, { field: "cccdImage", range: "C19:Z33", fit: "contain" }],
+      imageSlots: [{ field: "photo3x4", range: "E8:K16", fit: "cover" }, { field: "cccdImage", range: "C19:Z33", fit: "cover" }],
       slotAspect: scan.slotAspect, attachments: ["atld", "health"],
     });
   });
@@ -113,5 +113,13 @@ describe("user-defined fields", () => {
     expect(fieldKeyFromLabel("2 Ảnh thẻ", [])).toBe("anhThe");
     const previous = { ...profileConfigFromScan(scan), customFields: [...profileConfigFromScan(scan).customFields, fields.customFields[0]!] };
     expect(profileConfigFromScan(scan, previous).customFields.map((field) => field.key)).toEqual(["projectStartDate", "contractorName", "badgeNo"]);
+  });
+});
+
+describe("isIdCardImage", () => {
+  it("nhận vùng ảnh CCCD theo khóa hoặc tên trường", () => {
+    expect(isIdCardImage("cccdImage", "Ảnh CCCD")).toBe(true);
+    expect(isIdCardImage("matTruoc", "Ảnh căn cước mặt trước")).toBe(true);
+    expect(isIdCardImage("photo3x4", "Ảnh 3×4 của nhân sự")).toBe(false);
   });
 });

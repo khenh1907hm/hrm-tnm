@@ -42,7 +42,7 @@ export function filtersFromSearch(search: string): EmployeeFilters {
     statuses: pick(STATUSES, params.getAll("st")),
     certificateHealth: pick(HEALTH, params.getAll("cert")),
     certificateTypes: params.getAll("type"),
-    certificateTypeMode: params.get("mode") === "all" ? "all" : "any",
+    certificateTypeMode: params.get("mode") === "any" ? "any" : "all",
     includeArchived: params.get("archived") === "1",
     sort: sort && (SORTS as readonly string[]).includes(sort) ? sort as EmployeeSort : d.sort,
     sortDir: params.get("dir") === "desc" ? "desc" : "asc",

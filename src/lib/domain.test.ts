@@ -248,6 +248,10 @@ describe("validation boundary branches", () => {
     expect(validateEmployee({ ...base, dob: "1925-10-11" }, "2026-10-12").errors.map((item) => item.code)).toContain("EMP_AGE_TOO_OLD");
     expect(validateEmployee({ ...base, startDate: "2027-01-01" }, "2026-10-12").warnings.map((item) => item.code)).toContain("EMP_START_FUTURE");
     expect(validateEmployee({ ...base, startDate: "1990-01-01" }, "2026-10-12").errors.map((item) => item.code)).toContain("EMP_START_TOO_EARLY");
+    expect(validateEmployee({ ...base, startDate: "2015-01-01", companyStartDate: "2014-12-31" }, "2026-10-12").errors.map((item) => item.code)).toContain("EMP_COMPANY_START_BEFORE_CAREER");
+    expect(validateEmployee({ ...base, startDate: "2015-01-01", companyStartDate: "2027-01-01" }, "2026-10-12").warnings.map((item) => item.code)).toContain("EMP_COMPANY_START_FUTURE");
+    expect(validateEmployee({ ...base, companyStartDate: "bad" }, "2026-10-12").errors).toContainEqual(expect.objectContaining({ code: "DATE_INVALID", field: "companyStartDate" }));
+    expect(validateEmployee({ ...base, startDate: "2015-01-01", companyStartDate: "" }, "2026-10-12").value.companyStartDate).toBeNull();
     expect(validateEmployee({ ...base, emergencyContactId: "unknown" }, "2026-10-12").errors.map((item) => item.code)).toContain("EMP_EMERGENCY_CONTACT_INVALID");
     expect(validateEmployee({ ...base, code: "bad", phone: "bad", startDate: "bad" }, "2026-10-12").errors.map((item) => item.code)).toEqual(expect.arrayContaining(["EMP_CODE_INVALID", "DATE_INVALID", "PHONE_INVALID"]));
     expect(validateEmployee({ ...base, status: "resigned", endDate: "2027-01-01" }, "2026-10-12").errors.map((item) => item.code)).toContain("EMP_END_DATE_INVALID");

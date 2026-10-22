@@ -53,28 +53,28 @@ describe("buildEmployeeRosterWorkbook", () => {
     const workbook = await read(await buildEmployeeRosterWorkbook(data));
     const sheet = workbook.getWorksheet("Nhân sự")!;
     const headers = (sheet.getRow(1).values as unknown[]).slice(1);
-    expect(headers).toEqual(["STT", "Mã NV", "Họ và tên", "Giới tính", "Ngày sinh", "Số CCCD", "Điện thoại", "Quê quán", "Nơi thường trú", "Địa chỉ hiện tại", "Chức danh", "Nhóm ATLĐ", "Ngày nhận việc", "Tình trạng", "Ngày nghỉ việc", "Tình trạng chứng chỉ", "An toàn lao động", "Khám sức khỏe", "Chứng chỉ hàn"]);
+    expect(headers).toEqual(["STT", "Mã NV", "Họ và tên", "Giới tính", "Ngày sinh", "Số CCCD", "Điện thoại", "Quê quán", "Nơi thường trú", "Địa chỉ hiện tại", "Chức danh", "Nhóm ATLĐ", "Ngày làm nghề", "Ngày vào TNM", "Tình trạng", "Ngày nghỉ việc", "Tình trạng chứng chỉ", "An toàn lao động", "Khám sức khỏe", "Chứng chỉ hàn"]);
     const first = sheet.getRow(2);
     expect(first.getCell(6).value).toBe("079090000001");
     expect(first.getCell(6).numFmt).toBe("@");
     expect((first.getCell(5).value as Date).toISOString().slice(0, 10)).toBe("1990-05-02");
     expect(first.getCell(10).value).toBe("TP.HCM"); // không có địa chỉ hiện tại → lấy thường trú
-    expect(first.getCell(16).value).toBe("1 đã hết hạn; 1 sắp hết hạn");
-    expect(first.getCell(17).value).toBe("Nhóm 3 · Số ATLD-3 · HH 20/10/2026\nNhóm 1 · Số ATLD-1 · HH 01/05/2027");
-    expect((first.getCell(17).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFFFEDD5");
-    expect((first.getCell(18).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFFEE2E2");
-    expect(first.getCell(19).value).toBeNull();
+    expect(first.getCell(17).value).toBe("1 đã hết hạn; 1 sắp hết hạn");
+    expect(first.getCell(18).value).toBe("Nhóm 3 · Số ATLD-3 · HH 20/10/2026\nNhóm 1 · Số ATLD-1 · HH 01/05/2027");
+    expect((first.getCell(18).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFFFEDD5");
+    expect((first.getCell(19).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFFEE2E2");
+    expect(first.getCell(20).value).toBeNull();
 
     const second = sheet.getRow(3);
-    expect([second.getCell(10).value, second.getCell(12).value, second.getCell(14).value]).toEqual(["Đà Nẵng", "", "Đã nghỉ việc"]);
-    expect(second.getCell(16).value).toBe("Đầy đủ, còn hạn");
-    expect((second.getCell(19).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFDCFCE7");
+    expect([second.getCell(10).value, second.getCell(12).value, second.getCell(15).value]).toEqual(["Đà Nẵng", "", "Đã nghỉ việc"]);
+    expect(second.getCell(17).value).toBe("Đầy đủ, còn hạn");
+    expect((second.getCell(20).fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFDCFCE7");
 
     const third = sheet.getRow(4);
-    expect(third.getCell(14).value).toBe("Đã lưu trữ");
-    expect(third.getCell(16).value).toBe("Thiếu: An toàn lao động, Khám sức khỏe");
-    expect(third.getCell(17).value).toBe("Thiếu (bắt buộc)");
-    expect(sheet.getRow(5).getCell(16).value).toBe("1 sắp hết hạn");
+    expect(third.getCell(15).value).toBe("Đã lưu trữ");
+    expect(third.getCell(17).value).toBe("Thiếu: An toàn lao động, Khám sức khỏe");
+    expect(third.getCell(18).value).toBe("Thiếu (bắt buộc)");
+    expect(sheet.getRow(5).getCell(17).value).toBe("1 sắp hết hạn");
     expect(sheet.autoFilter).toBeTruthy();
   });
 

@@ -3,7 +3,8 @@ import type { ImageExtension } from "./imageSize";
 
 export type TemplateImage = { bytes: Uint8Array; extension: ImageExtension; width: number; height: number };
 /** Vùng ô đặt ảnh; ảnh luôn được co vừa khung, giữ tỉ lệ, căn giữa. */
-export type ImageSlot = { field: string; range: string };
+/** fit "stretch": kéo ảnh phủ kín cả vùng ô; mặc định co vừa và căn giữa. */
+export type ImageSlot = { field: string; range: string; fit?: "contain" | "cover" | "stretch" };
 export type AttachmentPage = { title: string; image: TemplateImage };
 export type FillWarning = { location: string; field: string };
 
@@ -72,15 +73,15 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
   const columnPx = (col: number) => Math.round((sheet.getColumn(col).width ?? sheet.properties.defaultColWidth ?? 8.43) * 7 + 5);
   const rowPx = (row: number) => ((sheet.getRow(row).height ?? sheet.properties.defaultRowHeight ?? 15) * 96) / 72;
 
-  const placeImage = (image: TemplateImage, range: string) => {
+  const placeImage = (image: TemplateImage, range: string, stretch: boolean) => {
     const [start, end] = parseRange(range);
     let width = 0;
     for (let col = start.col; col <= end.col; col += 1) width += columnPx(col);
     let height = 0;
     for (let row = start.row; row <= end.row; row += 1) height += rowPx(row);
     const scale = Math.min(width / image.width, height / image.height);
-    const imageWidth = image.width * scale;
-    const imageHeight = image.height * scale;
+    const imageWidth = stretch ? width : image.width * scale;
+    const imageHeight = stretch ? height : image.height * scale;
     // Lệch theo pixel để căn giữa → đổi ra vị trí cột/dòng phân số (đếm từ 0)
     let offsetX = (width - imageWidth) / 2;
     let col = start.col;
@@ -99,7 +100,7 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
   for (const slot of input.imageSlots) {
     const image = input.images[slot.field];
     if (!image) { warnings.push({ location: slot.range, field: slot.field }); continue; }
-    placeImage(image, slot.range);
+    placeImage(image, slot.range, slot.fit === "stretch");
   }
 
   const [printStart, printEnd] = parseRange(input.printArea);
@@ -119,7 +120,7 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     title.alignment = { vertical: "middle" };
     sheet.getRow(titleRow).height = TITLE_ROW_PT;
     for (let row = titleRow + 1; row <= titleRow + imageRows; row += 1) sheet.getRow(row).height = IMAGE_ROW_PT;
-    placeImage(page.image, `${firstColumn}${titleRow + 1}:${lastColumn}${titleRow + imageRows}`);
+    placeImage(page.image, `${firstColumn}${titleRow + 1}:${lastColumn}${titleRow + imageRows}`, false);
     lastRow = titleRow + imageRows;
   }
   sheet.pageSetup.printArea = `${firstColumn}${printStart.row}:${lastColumn}${lastRow}`;

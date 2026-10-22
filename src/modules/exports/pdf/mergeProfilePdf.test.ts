@@ -27,6 +27,13 @@ async function pdf(pages: number): Promise<Uint8Array> {
 }
 
 describe("mergeProfilePdf", () => {
+  it("merges only the certificates when there is no cover page", async () => {
+    const result = await mergeProfilePdf(null, [{ title: "ATLĐ", kind: "pdf", bytes: await pdf(2) }, { title: "Sức khỏe", kind: "image", bytes: png(40, 20), extension: "png" }]);
+    expect(result.warnings).toEqual([]);
+    expect(result.pageCount).toBe(3);
+    expect((await PDFDocument.load(result.bytes)).getPage(0).getSize()).toEqual({ width: 300, height: 400 });
+  });
+
   it("appends certificate PDFs and scans after the cover in order", async () => {
     const result = await mergeProfilePdf(await pdf(1), [
       { title: "ATLĐ", kind: "pdf", bytes: await pdf(2) },

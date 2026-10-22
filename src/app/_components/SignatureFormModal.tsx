@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Check, Copy, ExternalLink, ImagePlus, Sparkles, X } from "lucide-react";
-import { removeWhiteBackground } from "../../lib/image/removeWhiteBackground";
+import { toTransparentPng } from "../../lib/image/toTransparentPng";
 import { randomIds } from "../../lib/ids";
 import type { Actor } from "../../modules/auth/permissions";
 import type { Signature } from "../../modules/signatures/types";
@@ -16,21 +16,6 @@ const SIGNATURE_PROMPT = `I am attaching a photo of a handwritten signature. Ext
 
 Output only the final PNG file, no explanation.`;
 const SIGNATURE_PROMPT_URL = `https://chatgpt.com/?q=${encodeURIComponent(SIGNATURE_PROMPT)}`;
-
-/** Ảnh chụp chữ ký trên giấy trắng → PNG nền trong suốt (xử lý ngay trong trình duyệt). */
-async function toTransparentPng(upload: File): Promise<File> {
-  const bitmap = await createImageBitmap(upload);
-  const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width; canvas.height = bitmap.height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Không thể xử lý ảnh chữ ký.");
-  context.drawImage(bitmap, 0, 0); bitmap.close();
-  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-  pixels.data.set(removeWhiteBackground({ data: pixels.data, width: pixels.width, height: pixels.height }).data);
-  context.putImageData(pixels, 0, 0);
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Không thể tạo ảnh chữ ký PNG.")), "image/png"));
-  return new File([blob], `${upload.name.replace(/\.[^.]+$/, "")}.png`, { type: "image/png" });
-}
 
 /** Thêm mới hoặc sửa chữ ký: tên, chức danh, ảnh (khi sửa có thể giữ ảnh cũ). */
 export function SignatureFormModal(props: { app: App; actor: Actor; editing?: Signature | null; currentImageUrl?: string | undefined; onClose: () => void; onSaved: (signature: Signature, newFile: File | null) => void; setNotice: SetNotice }) {
