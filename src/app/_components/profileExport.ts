@@ -39,7 +39,7 @@ async function rotateBitmap(bitmap: ImageBitmap): Promise<ImageBitmap> {
  * - `aspect`: cắt giữa ảnh theo tỉ lệ rộng/cao này (kiểu "lấp đầy" cho ảnh 3×4).
  * - Ảnh PNG/JPEG vừa cỡ được giữ nguyên byte gốc; WebP hoặc ảnh quá lớn được vẽ lại thành PNG.
  */
-export async function toTemplateImage(blob: Blob, options: { aspect?: number; maxSide?: number; landscape?: boolean } = {}): Promise<TemplateImage | null> {
+export async function toTemplateImage(blob: Blob, options: { aspect?: number; maxSide?: number; landscape?: boolean; pad?: boolean } = {}): Promise<TemplateImage | null> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const info = readImageInfo(bytes);
   const maxSide = options.maxSide ?? MAX_SCAN_SIDE;
@@ -48,6 +48,20 @@ export async function toTemplateImage(blob: Blob, options: { aspect?: number; ma
   if (!blob.type.startsWith("image/")) return null;
   const decoded = await createImageBitmap(blob);
   const bitmap = options.landscape && decoded.height > decoded.width ? await rotateBitmap(decoded) : decoded;
+  if (options.aspect && options.pad) {
+    // Giữ nguyên cả ảnh, thêm viền trong suốt cho đủ tỉ lệ vùng → neo khít 4 góc vẫn căn giữa đều
+    const [width, height] = bitmap.width / bitmap.height > options.aspect ? [bitmap.width, bitmap.width / options.aspect] : [bitmap.height * options.aspect, bitmap.height];
+    const scale = Math.min(1, maxSide / Math.max(width, height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(width * scale));
+    canvas.height = Math.max(1, Math.round(height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) { bitmap.close(); throw new Error("Trình duyệt không xử lý được ảnh."); }
+    const drawWidth = bitmap.width * scale, drawHeight = bitmap.height * scale;
+    context.drawImage(bitmap, (canvas.width - drawWidth) / 2, (canvas.height - drawHeight) / 2, drawWidth, drawHeight);
+    bitmap.close();
+    return canvasToPng(canvas);
+  }
   let sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height;
   if (options.aspect) {
     if (sw / sh > options.aspect) { sw = Math.round(sh * options.aspect); sx = Math.round((bitmap.width - sw) / 2); }
@@ -103,10 +117,16 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   // Ảnh: 3×4 từ hồ sơ; ảnh theo nhân sự (kể cả vùng IMG_ như ảnh CCCD) từ extraFiles; ảnh cố định từ mẫu
   const imageSlots = [...profile.imageSlots, ...customImageSlots(profile)];
   const images: Record<string, TemplateImage | null> = {};
+  const paddedSlots = new Set<string>();
   for (const slot of imageSlots) {
     const fit = profile.imageSlots.find((item) => item.field === slot.field)?.fit;
-    const aspect = fit === "cover" ? profile.slotAspect[slot.field] : undefined;
-    const options = { ...(aspect ? { aspect } : {}), ...(isIdCardImage(slot.field, fieldLabel(slot.field, profile)) ? { landscape: true } : {}) };
+    const slotAspect = profile.slotAspect[slot.field];
+    // "Vừa khung": thêm viền trong suốt theo tỉ lệ vùng rồi phủ kín vùng như "Kéo giãn", để hai bên trống đều nhau
+    // (căn giữa bằng pixel ước lượng bị lệch khi Excel/LibreOffice tính độ rộng cột khác)
+    const pad = slot.field !== "signature" && fit !== "cover" && fit !== "stretch" && slotAspect !== undefined;
+    if (pad) paddedSlots.add(slot.field);
+    const aspect = fit === "cover" || pad ? slotAspect : undefined;
+    const options = { ...(aspect ? { aspect } : {}), ...(pad ? { pad: true } : {}), ...(isIdCardImage(slot.field, fieldLabel(slot.field, profile)) ? { landscape: true } : {}) };
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
     if (slot.field === "signature") {
@@ -153,7 +173,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     sheetName: profile.sheetName,
     printArea: profile.printArea,
     values,
-    imageSlots,
+    imageSlots: imageSlots.map((slot) => (paddedSlots.has(slot.field) ? { ...slot, fit: "stretch" as const } : slot)),
     images,
     attachments,
     cellValues,

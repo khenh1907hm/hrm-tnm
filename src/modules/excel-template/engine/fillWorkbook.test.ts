@@ -111,6 +111,16 @@ describe("fillWorkbook", () => {
     expect([columnWidthPx(sheet, 1), columnWidthPx(sheet, 2), columnWidthPx(sheet, 3), columnWidthPx(sheet, 4)]).toEqual([70, 19, 64, 0]);
   });
 
+  it("covers the whole slot corner to corner when fit is cover (image already cropped to the slot ratio)", async () => {
+    const { bytes } = await fillWorkbook({
+      template: await buildTemplate(), sheetName: "Phieu", printArea: "A1:F20", values: {},
+      imageSlots: [{ field: "photo3x4", range: "B12:F13", fit: "cover" }],
+      images: { photo3x4: image(300, 400) }, attachments: [],
+    });
+    const placed = (await open(bytes)).getImages().find((item) => item.range.tl.row >= 11)!;
+    expect([placed.range.tl.col, placed.range.tl.row, placed.range.br.col, placed.range.br.row].map((value) => Math.round(value * 1000) / 1000)).toEqual([1, 11, 6, 13]);
+  });
+
   it("centres a contained image horizontally inside a wide slot", async () => {
     const source = new ExcelJS.Workbook();
     const sheet = source.addWorksheet("Phieu");

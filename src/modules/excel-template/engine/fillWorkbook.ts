@@ -2,7 +2,10 @@ import ExcelJS from "exceljs";
 import type { ImageExtension } from "./imageSize";
 
 export type TemplateImage = { bytes: Uint8Array; extension: ImageExtension; width: number; height: number };
-/** Vùng ô đặt ảnh. fit "stretch": kéo ảnh phủ kín cả vùng ô; mặc định co vừa khung, giữ tỉ lệ, căn giữa. */
+/**
+ * Vùng ô đặt ảnh. "stretch" và "cover" phủ kín đúng 4 góc vùng ô ("cover" đã được cắt theo tỉ lệ vùng trước đó,
+ * nên chỉ méo vài phần trăm khi Excel/LibreOffice tính độ rộng cột khác ước lượng); mặc định co vừa khung, giữ tỉ lệ, căn giữa.
+ */
 export type ImageSlot = { field: string; range: string; fit?: "contain" | "cover" | "stretch" };
 
 /**
@@ -128,7 +131,7 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
   for (const slot of input.imageSlots) {
     const image = input.images[slot.field];
     if (!image) { warnings.push({ location: slot.range, field: slot.field }); continue; }
-    placeImage(image, slot.range, slot.fit === "stretch");
+    placeImage(image, slot.range, slot.fit === "stretch" || slot.fit === "cover");
   }
 
   const [printStart, printEnd] = parseRange(input.printArea);
