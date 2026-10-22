@@ -15,6 +15,8 @@ const eslintConfig = defineConfig([
     ".stryker-tmp/**",
     "public/tesseract/**",
     "next-env.d.ts",
+    // Edge Function chạy trên Deno, có cấu hình riêng; hoSoRules.mjs là tệp đóng gói tự động
+    "supabase/functions/**",
   ]),
 ]);
 

@@ -402,3 +402,24 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .import-table tr.import-error ul{color:var(--bad)}
 .import-progress progress{width:100%}
 .import-finished p{margin:0 0 6px}
+/* Nhập hồ sơ từ Claude */
+.hoso-card{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:14px}
+.hoso-card.is-saved{background:var(--ok-bg)}
+.hoso-photo{width:96px;height:128px;object-fit:cover;border:1px solid var(--line);border-radius:6px;background:var(--soft)}
+.hoso-main{display:grid;gap:10px;min-width:0}
+.hoso-head{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.hoso-head b{font-size:16px}
+.hoso-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px;margin:0}
+.hoso-facts div{display:grid;grid-template-columns:96px 1fr;gap:6px;padding:3px 0}
+.hoso-facts dt{color:var(--muted)}.hoso-facts dd{margin:0;overflow-wrap:anywhere}
+.hoso-inputs{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px}
+.hoso-inputs .field{margin:0;min-width:200px}
+.hoso-inputs .check-field,.hoso-include{display:flex;align-items:center;gap:6px}
+.hoso-inputs .button{display:inline-flex;align-items:center;gap:6px}
+.hoso-diff{font-size:13px;border:1px solid var(--line);border-radius:6px}
+.hoso-diff th,.hoso-diff td{padding:6px 10px}.hoso-diff tbody tr{cursor:default}
+.hoso-issues{margin:0;padding-left:18px;font-size:13px;color:var(--warn)}
+.hoso-issues.bad{color:var(--bad)}
+.hoso-result{margin:0;color:var(--ok);font-weight:600}
+.hoso-photo-empty{display:block}
+@media (max-width:640px){.hoso-card{grid-template-columns:1fr}.hoso-facts{grid-template-columns:1fr}}
