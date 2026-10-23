@@ -55,11 +55,34 @@ export function TemplatePreview(props: { fileBase64: string; sheetName: string; 
     });
   }, [preview, regions]);
 
-  // Vùng đang chọn: cuộn tới cho thấy
+  // Vùng đang chọn nằm ngoài khung: chỉ cuộn trong khung ảnh, không cuộn cả trang (cuộn trang làm chuột rơi sang mục khác → nháy liên tục)
   useEffect(() => {
-    if (!active) return;
-    frameRef.current?.querySelector(`[data-region="${CSS.escape(active)}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const frame = frameRef.current;
+    const target = active ? frame?.querySelector<HTMLElement>(`[data-region="${CSS.escape(active)}"]`) : null;
+    if (!frame || !target) return;
+    const view = frame.getBoundingClientRect(), box = target.getBoundingClientRect();
+    if (box.top < view.top) frame.scrollBy({ top: box.top - view.top - 24, behavior: "smooth" });
+    else if (box.bottom > view.bottom) frame.scrollBy({ top: Math.min(box.bottom - view.bottom + 24, box.top - view.top - 24), behavior: "smooth" });
   }, [active, boxes]);
+
+  // Phần phiếu (hàng trăm ô) chỉ vẽ lại khi đổi file/vùng in, không vẽ lại mỗi lần rê chuột
+  const sheet = useMemo(() => preview && (
+    <>
+      {preview.cells.map((cell) => (
+        <div key={cell.address} className="preview-cell" style={{
+          left: cell.x, top: cell.y, width: cell.width, height: cell.height,
+          background: cell.fill ?? undefined, color: cell.color ?? undefined,
+          fontWeight: cell.bold ? 700 : 400, fontStyle: cell.italic ? "italic" : undefined, fontSize: cell.fontSize,
+          justifyContent: cell.align === "center" ? "center" : cell.align === "right" ? "flex-end" : "flex-start",
+          alignItems: cell.valign === "top" ? "flex-start" : cell.valign === "middle" ? "center" : "flex-end",
+          textAlign: cell.align, whiteSpace: cell.wrap ? "pre-wrap" : "pre",
+          borderTopWidth: cell.border[0] ? 1 : 0, borderRightWidth: cell.border[1] ? 1 : 0, borderBottomWidth: cell.border[2] ? 1 : 0, borderLeftWidth: cell.border[3] ? 1 : 0,
+        }}>{cell.text}</div>
+      ))}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      {preview.images.map((image, index) => <img key={index} className="preview-image" src={image.src} alt="" style={{ left: image.x, top: image.y, width: image.width, height: image.height }} />)}
+    </>
+  ), [preview]);
 
   const scale = preview && width ? width / preview.width : 1;
   const missing = active && preview && !boxes.some((item) => item.region.id === active) ? regions.find((region) => region.id === active) : null;
@@ -68,26 +91,15 @@ export function TemplatePreview(props: { fileBase64: string; sheetName: string; 
       <div className="template-preview-legend">
         {(Object.keys(PREVIEW_TONE_LABELS) as PreviewTone[]).map((tone) => <span key={tone} className={`tone-${tone}`}><i />{PREVIEW_TONE_LABELS[tone]}</span>)}
       </div>
-      {missing && <p className="template-preview-note">“{missing.label}” chưa có vị trí trên phiếu (chưa nhập ô, hoặc nằm ngoài vùng in).</p>}
+      {/* Luôn giữ chỗ cho dòng nhắc để ảnh phiếu không bị đẩy lên xuống khi rê chuột */}
+      <p className="template-preview-note" style={{ visibility: missing ? "visible" : "hidden" }}>{missing ? `“${missing.label}” chưa có vị trí trên phiếu (chưa nhập ô, hoặc nằm ngoài vùng in).` : " "}</p>
       <div className="template-preview-frame" ref={frameRef}>
         {failed && <p className="muted">Không vẽ được bản xem trước của file này.</p>}
         {!preview && !failed && <p className="muted">Đang dựng bản xem trước…</p>}
         {preview && (
           <div className="template-preview-scaler" style={{ height: preview.height * scale }}>
             <div className="template-preview-sheet" style={{ width: preview.width, height: preview.height, transform: `scale(${scale})` }}>
-              {preview.cells.map((cell) => (
-                <div key={cell.address} className="preview-cell" style={{
-                  left: cell.x, top: cell.y, width: cell.width, height: cell.height,
-                  background: cell.fill ?? undefined, color: cell.color ?? undefined,
-                  fontWeight: cell.bold ? 700 : 400, fontStyle: cell.italic ? "italic" : undefined, fontSize: cell.fontSize,
-                  justifyContent: cell.align === "center" ? "center" : cell.align === "right" ? "flex-end" : "flex-start",
-                  alignItems: cell.valign === "top" ? "flex-start" : cell.valign === "middle" ? "center" : "flex-end",
-                  textAlign: cell.align, whiteSpace: cell.wrap ? "pre-wrap" : "pre",
-                  borderTopWidth: cell.border[0] ? 1 : 0, borderRightWidth: cell.border[1] ? 1 : 0, borderBottomWidth: cell.border[2] ? 1 : 0, borderLeftWidth: cell.border[3] ? 1 : 0,
-                }}>{cell.text}</div>
-              ))}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              {preview.images.map((image, index) => <img key={index} className="preview-image" src={image.src} alt="" style={{ left: image.x, top: image.y, width: image.width, height: image.height }} />)}
+              {sheet}
               {boxes.map(({ region, box }, index) => (
                 <button
                   type="button"

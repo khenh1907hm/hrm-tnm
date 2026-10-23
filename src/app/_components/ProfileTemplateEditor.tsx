@@ -60,7 +60,8 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
     <div
       className="profile-editor"
       ref={editorRef}
-      onMouseOver={(event: MouseEvent) => setHovered(previewIdOf(event.target))}
+      // Giữ mục vừa rê tới khi chuột đi qua khoảng trống giữa các mục (không tắt/bật liên tục)
+      onMouseOver={(event: MouseEvent) => { const id = previewIdOf(event.target); if (id) setHovered(id); }}
       onMouseLeave={() => setHovered(null)}
       onFocus={(event: FocusEvent) => setFocused(previewIdOf(event.target))}
     >
