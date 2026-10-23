@@ -39,7 +39,7 @@ export function TemplateSignerSection(props: { value: ProfileTemplateConfig; onC
 
   const setSlotRange = (range: string) => {
     const others = value.imageSlots.filter((item) => item.field !== "signature");
-    const next = range.trim() ? [...others, { field: "signature", range: range.toUpperCase(), fit: "contain" as const, custom: true }] : others;
+    const next = range.trim() ? [...others, { field: "signature", range: range.toUpperCase(), fit: "stretch" as const, custom: true }] : others;
     onChange({ ...value, imageSlots: next });
   };
 
@@ -75,7 +75,7 @@ export function TemplateSignerSection(props: { value: ProfileTemplateConfig; onC
             </li>
             <li className={slot?.range ? "ok" : "todo"}>
               {slot?.range ? <CheckCircle2 size={15} aria-hidden="true" /> : <CircleAlert size={15} aria-hidden="true" />}
-              <span><b>Vị trí ảnh chữ ký:</b> {slot?.range ? "ảnh được co vừa vùng ô này và căn giữa." : "chưa có. Nhập vùng ô trống phía trên dòng tên."}</span>
+              <span><b>Vị trí ảnh chữ ký:</b> {slot?.range ? "ảnh lấp đầy đúng vùng ô này (chọn vùng có tỉ lệ giống ảnh chữ ký để không bị méo)." : "chưa có. Nhập vùng ô trống phía trên dòng tên."}</span>
             </li>
           </ul>
           <label className="field signer-range">

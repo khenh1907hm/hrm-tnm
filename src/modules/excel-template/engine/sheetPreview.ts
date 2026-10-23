@@ -28,6 +28,8 @@ export type SheetPreview = {
   images: PreviewImage[];
   /** Đổi một vùng ô (vd "E8:K16", ô gộp thì lấy cả khối) ra hộp pixel trên ảnh; ngoài vùng in thì null. */
   boxOf: (range: string) => PreviewBox | null;
+  /** Vùng ô phủ hình chữ nhật kéo chuột (pixel trên ảnh), nới ra cho trọn các ô gộp; vd "E8" hoặc "E8:K16". */
+  rangeAt: (x0: number, y0: number, x1: number, y1: number) => string;
 };
 
 /** Màu "theme" mặc định của Office (đủ cho bản xem trước; tint làm sáng/tối thêm). */
@@ -149,6 +151,21 @@ export async function buildSheetPreview(bytes: Uint8Array, sheetName: string | u
     height: rowY[rowY.length - 1]!,
     cells,
     images,
+    rangeAt(x0, y0, x1, y1) {
+      const index = (edges: number[], value: number) => { let i = 0; while (i < edges.length - 2 && edges[i + 1]! <= value) i += 1; return i; };
+      let c0 = start.col + index(colX, Math.min(x0, x1)), c1 = start.col + index(colX, Math.max(x0, x1));
+      let r0 = start.row + index(rowY, Math.min(y0, y1)), r1 = start.row + index(rowY, Math.max(y0, y1));
+      // Nới vùng chọn cho trọn mọi ô gộp chạm vào (lặp vì nới ra có thể chạm thêm ô gộp khác)
+      for (let changed = true; changed;) {
+        changed = false;
+        for (const [a0, b0, a1, b1] of mergeOf.values()) {
+          if (a1 < c0 || a0 > c1 || b1 < r0 || b0 > r1) continue;
+          if (a0 < c0 || a1 > c1 || b0 < r0 || b1 > r1) { c0 = Math.min(c0, a0); c1 = Math.max(c1, a1); r0 = Math.min(r0, b0); r1 = Math.max(r1, b1); changed = true; }
+        }
+      }
+      const from = `${columnName(c0)}${r0}`, to = `${columnName(c1)}${r1}`;
+      return from === to || mergeOf.get(`${c0}:${r0}`)?.join() === [c0, r0, c1, r1].join() ? from : `${from}:${to}`;
+    },
     boxOf(range) {
       try {
         const [a, b] = parseRange(expandMergedRange(sheet, range.trim().toUpperCase().replace(/\$/g, "")));

@@ -41,5 +41,10 @@ describe("buildSheetPreview", () => {
     expect(preview.boxOf("$A$1")).toEqual({ x: 0, y: 0, width: 280, height: 40 });
     expect(preview.boxOf("E9")).toBeNull();
     expect(preview.boxOf("không phải ô")).toBeNull();
+    // Kéo chuột: một ô, nhiều ô, chạm ô gộp thì lấy trọn ô gộp (ô gộp đứng riêng trả về ô chủ)
+    expect(preview.rangeAt(75, 45, 75, 45)).toBe("B2");
+    expect(preview.rangeAt(5, 45, 135, 50)).toBe("A2:B2");
+    expect(preview.rangeAt(150, 65, 150, 65)).toBe("C3");
+    expect(preview.rangeAt(75, 65, 150, 65)).toBe("B3:D5");
   });
 });

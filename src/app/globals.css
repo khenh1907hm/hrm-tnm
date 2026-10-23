@@ -479,7 +479,7 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .tone-signer{--tone:#8a3ffc;--tone-bg:rgba(138,63,252,.18)}
 .tone-custom{--tone:#18a058;--tone-bg:rgba(24,160,88,.18)}
 .tone-print{--tone:#d63b3b;--tone-bg:transparent}
-.preview-region{position:absolute;box-sizing:border-box;margin:0;padding:0;border:2px solid var(--tone);background:var(--tone-bg);border-radius:2px;cursor:pointer}
+.preview-region{position:absolute;box-sizing:border-box;margin:0;padding:0;border:2px solid var(--tone);background:var(--tone-bg);border-radius:2px;pointer-events:none}
 .preview-region.tone-print{border-style:dashed;pointer-events:none}
 .preview-region:hover{box-shadow:0 0 0 2px var(--tone)}
 .preview-region.is-dim{opacity:.25}
@@ -487,3 +487,32 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .preview-region.tone-print.is-active{background:transparent}
 .preview-region-label{position:absolute;left:0;bottom:100%;transform-origin:0 100%;white-space:nowrap;background:var(--tone);color:#fff;font:600 12px/1.4 system-ui,sans-serif;padding:1px 6px;border-radius:4px 4px 4px 0;pointer-events:none}
 .profile-editor .preview-flash{background:rgba(255,196,0,.3);box-shadow:0 0 0 3px rgba(255,196,0,.6);border-radius:6px}
+
+/* Sửa mẫu ngay trên ảnh phiếu: chọn ô → gán dữ liệu (bảng gán nổi trên ảnh) */
+.template-preview-sheet.is-selectable{cursor:cell;touch-action:none;user-select:none}
+.preview-selection{position:absolute;box-sizing:border-box;border:2px solid #0b57d0;background:rgba(11,87,208,.14);pointer-events:none;z-index:3}
+.template-preview-body{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.template-preview-overlay{position:absolute;left:10px;right:22px;z-index:5}
+.template-preview-overlay.at-top{top:10px}.template-preview-overlay.at-bottom{bottom:10px}
+.cell-panel{border:1px solid #0b57d0;border-radius:8px;background:var(--surface);padding:10px 12px;display:grid;gap:8px;box-shadow:0 4px 14px rgba(11,87,208,.15)}
+.cell-panel .field{margin:0}
+.cell-panel-head{display:flex;align-items:center;gap:8px;min-width:0}
+.cell-panel-head .icon-button{margin-left:auto;padding:4px 6px}
+.cell-panel-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px}
+.cell-panel-current{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.cell-panel-current li{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--soft);border-radius:6px;padding:4px 4px 4px 8px;font-size:13px}
+.cell-panel-current .button{padding:3px 10px}
+.cell-panel-mode{display:grid;gap:4px;font-size:13px}
+.cell-panel-mode label{display:flex;align-items:center;gap:6px}
+.cell-panel-note{margin:0;font-size:12px}
+.cell-panel-custom{display:grid;grid-template-columns:1fr 150px;gap:8px}
+.cell-panel-actions{display:flex;justify-content:flex-end}
+.ai-setup{display:grid;gap:8px}
+.ai-setup ol{margin:0;padding-left:20px;font-size:13px}
+.ai-setup>.button{justify-self:start}
+.ai-setup .field{margin:0}
+.ai-setup textarea{width:100%;font:12px/1.4 ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:6px;padding:8px}
+.ai-setup-actions{display:flex;gap:8px}
+.ai-setup-problems{margin:0;padding-left:0;list-style:none;display:grid;gap:3px;font-size:13px}
+.warn-text{color:var(--warn)}
+.ok-text{color:var(--ok);margin:0}

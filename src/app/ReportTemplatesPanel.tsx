@@ -130,7 +130,8 @@ export function ReportTemplatesPanel({
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const scan = await scanTemplate(bytes);
-      const profile = scan.placeholders.length ? profileConfigFromScan(scan, formProfile ?? undefined) : null;
+      // File chưa có mã {{…}} cũng là mẫu hồ sơ: chọn ô cần điền ngay trên ảnh phiếu trong app
+      const profile = profileConfigFromScan(scan, formProfile ?? undefined);
       setFormFileName(file.name);
       setFormFileBase64(uint8ArrayToBase64(bytes));
       setFormProfile(profile);
@@ -526,7 +527,7 @@ export function ReportTemplatesPanel({
                 </div>
               </div>
 
-              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} fileBase64={formFileBase64} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
+              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} fileBase64={formFileBase64} onFileChange={setFormFileBase64} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
 
               {/* Bảng định nghĩa ô nào thêm trường nào */}
               {!formProfile && <><div style={{ marginBottom: "20px" }}>
