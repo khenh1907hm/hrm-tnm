@@ -526,7 +526,7 @@ export function ReportTemplatesPanel({
                 </div>
               </div>
 
-              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
+              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} fileBase64={formFileBase64} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
 
               {/* Bảng định nghĩa ô nào thêm trường nào */}
               {!formProfile && <><div style={{ marginBottom: "20px" }}>

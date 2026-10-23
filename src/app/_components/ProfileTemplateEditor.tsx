@@ -1,3 +1,4 @@
+import { useMemo, useRef, useState, type FocusEvent, type MouseEvent } from "react";
 import { ArrowDown, ArrowUp, Plus } from "lucide-react";
 import { SYSTEM_FIELDS } from "../../modules/excel-template/engine/fieldValues";
 import { IMAGE_FIELDS, isCertificateKey, isCustomKey, isIdCardImage, isPortraitImage } from "../../modules/excel-template/engine/profileConfig";
@@ -6,16 +7,43 @@ import type { Partner } from "../../modules/partners/types";
 import type { Signature } from "../../modules/signatures/types";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { SignatureFileLoader } from "./SignerPicker";
+import { TemplatePreview, type PreviewRegion } from "./TemplatePreview";
 import { TemplateSignerSection } from "./TemplateSignerSection";
 
 type CertificateTypeOption = { key: string; name: string };
 
 /** Cài đặt "Mẫu hồ sơ": trường tùy chỉnh, vùng ảnh, chứng chỉ đính kèm và vùng in. */
-export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void; certificateTypes: readonly CertificateTypeOption[]; partners?: readonly Partner[]; signatures?: readonly Signature[] | null; loadSignatureFile?: SignatureFileLoader | undefined }) {
+export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void; certificateTypes: readonly CertificateTypeOption[]; partners?: readonly Partner[]; signatures?: readonly Signature[] | null; loadSignatureFile?: SignatureFileLoader | undefined; fileBase64?: string | undefined }) {
   const { value, onChange, certificateTypes } = props;
   const systemUsed = value.placeholders.filter((key) => !isCustomKey(key) && !isCertificateKey(key));
   const certificateUsed = value.placeholders.filter(isCertificateKey);
   const typeName = (key: string) => certificateTypes.find((type) => type.key === key)?.name ?? key;
+
+  // Xem trước: mục cấu hình đang trỏ chuột / đang nhập → vùng tương ứng trên ảnh phiếu sáng lên
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [focused, setFocused] = useState<string | null>(null);
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const previewIdOf = (target: EventTarget) => (target instanceof HTMLElement ? target.closest<HTMLElement>("[data-preview]")?.dataset.preview ?? null : null);
+  const regions = useMemo<PreviewRegion[]>(() => [
+    ...value.placeholders.map((key): PreviewRegion => isCertificateKey(key)
+      ? { id: `key:${key}`, label: `Ô chứng chỉ ${typeName(key.slice(5))}`, tone: "field", placeholder: key }
+      : isCustomKey(key)
+        ? { id: `key:${key}`, label: value.customFields.find((field) => field.key === key)?.label ?? key, tone: "custom", placeholder: key }
+        : { id: `key:${key}`, label: SYSTEM_FIELDS.find((field) => field.key === key)?.label ?? key, tone: key.startsWith("signer") ? "signer" : "field", placeholder: key }),
+    ...value.imageSlots.map((slot, index): PreviewRegion => ({ id: `slot:${index}`, label: IMAGE_FIELDS.find((field) => field.key === slot.field)?.label ?? slot.field, tone: slot.field === "signature" ? "signer" : "image", range: slot.range })),
+    ...value.customFields.filter((field) => field.target).map((field): PreviewRegion => ({ id: `custom:${field.key}`, label: field.label, tone: "custom", range: field.target! })),
+    { id: "print", label: "Vùng in", tone: "print", range: value.printArea },
+  ], [value, certificateTypes]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Bấm một vùng trên ảnh → nhảy tới mục cấu hình đó và nháy sáng
+  const pick = (id: string) => {
+    setFocused(id);
+    const target = editorRef.current?.querySelector<HTMLElement>(`[data-preview="${CSS.escape(id)}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: "center", behavior: "smooth" });
+    target.classList.add("preview-flash");
+    window.setTimeout(() => target.classList.remove("preview-flash"), 1400);
+  };
+  const signatureIndex = value.imageSlots.findIndex((slot) => slot.field === "signature");
 
   // Sửa trong app → đánh dấu để lần tải lại file Excel sau không ghi đè
   const updateSlot = (index: number, patch: Partial<ProfileImageSlot>) => onChange({ ...value, imageSlots: value.imageSlots.map((slot, i) => i === index ? { ...slot, ...patch, custom: true } : slot) });
@@ -28,18 +56,27 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
   };
 
   return (
-    <div className="profile-editor">
+    <div className={props.fileBase64 ? "profile-editor-layout" : undefined}>
+    <div
+      className="profile-editor"
+      ref={editorRef}
+      onMouseOver={(event: MouseEvent) => setHovered(previewIdOf(event.target))}
+      onMouseLeave={() => setHovered(null)}
+      onFocus={(event: FocusEvent) => setFocused(previewIdOf(event.target))}
+    >
       <section>
         <h3>1. Thông tin tự điền từ hồ sơ <small>(sheet “{value.sheetName}”)</small></h3>
         <p className="muted">Các ô có mã <code>{"{{…}}"}</code> app đã nhận ra trong file Excel; khi xuất sẽ tự lấy từ hồ sơ nhân sự.</p>
         <div className="profile-chips">
-          {systemUsed.map((key) => <span className="pill ok" key={key}>{SYSTEM_FIELDS.find((field) => field.key === key)?.label ?? key}</span>)}
-          {certificateUsed.map((key) => <span className="pill ok" key={key}>☑ {typeName(key.slice(5))}</span>)}
+          {systemUsed.map((key) => <span className="pill ok" key={key} data-preview={`key:${key}`} tabIndex={0}>{SYSTEM_FIELDS.find((field) => field.key === key)?.label ?? key}</span>)}
+          {certificateUsed.map((key) => <span className="pill ok" key={key} data-preview={`key:${key}`} tabIndex={0}>☑ {typeName(key.slice(5))}</span>)}
           {!systemUsed.length && !certificateUsed.length && <span className="muted">Chưa có trường hệ thống nào.</span>}
         </div>
       </section>
 
-      <TemplateSignerSection value={value} onChange={onChange} signatures={props.signatures ?? null} loadSignatureFile={props.loadSignatureFile} />
+      <div data-preview={signatureIndex >= 0 ? `slot:${signatureIndex}` : "key:signerTitle"}>
+        <TemplateSignerSection value={value} onChange={onChange} signatures={props.signatures ?? null} loadSignatureFile={props.loadSignatureFile} />
+      </div>
 
       <section>
         <h3>3. Ảnh nhân sự trên phiếu</h3>
@@ -48,7 +85,7 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
           <thead><tr><th>Ảnh</th><th>Vùng ô</th><th>Cách đặt</th><th /></tr></thead>
           <tbody>
             {value.imageSlots.map((slot, index) => slot.field === "signature" ? null : (
-              <tr key={`${slot.field}-${index}`}>
+              <tr key={`${slot.field}-${index}`} data-preview={`slot:${index}`}>
                 <td>
                   <select aria-label="Loại ảnh" value={slot.field} onChange={(event) => updateSlot(index, { field: event.target.value })}>
                     {IMAGE_FIELDS.filter((field) => field.key !== "signature").map((field) => <option key={field.key} value={field.key}>{field.label}</option>)}
@@ -90,11 +127,19 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
       </section>
 
       <section>
-        <label className="field" style={{ maxWidth: "260px" }}>
+        <label className="field" style={{ maxWidth: "260px" }} data-preview="print">
           <span>6. Vùng in của phiếu (1 trang)</span>
           <input value={value.printArea} onChange={(event) => onChange({ ...value, printArea: event.target.value.toUpperCase() })} />
         </label>
       </section>
+    </div>
+    {props.fileBase64 && (
+      <aside className="profile-editor-preview" aria-label="Xem trước phiếu">
+        <h3>Xem trước phiếu</h3>
+        <p className="muted">Rê chuột hoặc bấm vào một mục bên trái, vùng tương ứng trên phiếu sẽ sáng lên. Bấm vào vùng trên phiếu để nhảy tới mục đó.</p>
+        <TemplatePreview fileBase64={props.fileBase64} sheetName={value.sheetName} printArea={value.printArea} regions={regions} active={hovered ?? focused} onPick={pick} />
+      </aside>
+    )}
     </div>
   );
 }

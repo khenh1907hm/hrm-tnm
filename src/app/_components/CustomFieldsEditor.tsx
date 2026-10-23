@@ -81,7 +81,7 @@ export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChan
             <thead><tr><th>Tên hiển thị</th><th>Kiểu</th><th>Gắn vào</th><th>Giá trị lấy từ</th><th>Giá trị / ảnh mặc định</th><th><span className="sr-only">Xóa</span></th></tr></thead>
             <tbody>
               {value.customFields.map((field) => (
-                <tr key={field.key}>
+                <tr key={field.key} data-preview={field.target ? `custom:${field.key}` : `key:${field.key}`}>
                   <td><input aria-label={`Tên hiển thị ${field.key}`} value={field.label} onChange={(event) => update(field.key, { label: event.target.value })} /></td>
                   <td>
                     <select aria-label={`Kiểu ${field.label}`} value={field.kind} onChange={(event) => update(field.key, { kind: event.target.value as ProfileCustomFieldKind, defaultValue: "" })}>
