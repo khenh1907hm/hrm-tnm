@@ -12,6 +12,7 @@ import type { Employee } from "../../modules/employees/types";
 import { mergeProfilePdf, type MergePart } from "../../modules/exports/pdf/mergeProfilePdf";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import { photoFile } from "./employeePhoto";
+import { formatExpiry } from "../../modules/certificates/status";
 
 /** Cạnh dài tối đa của ảnh scan khi chèn vào Excel (~150 dpi trên A4), để file không quá nặng. */
 const MAX_SCAN_SIDE = 1800;
@@ -177,8 +178,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     for (const { file, label } of files) {
       const binary = input.sessionFiles[file.id];
       if (!binary) { warnings.push(`${typeName}: chưa có dữ liệu tệp "${file.name}" trong phiên này`); continue; }
-      const [y, m, d] = certificate.expiryDate.split("-");
-      const title = `${typeName}${certificate.title ? ` (${certificate.title})` : ""} · Số ${certificate.number} · Hết hạn ${d}/${m}/${y} · ${label}`;
+      const title = `${typeName}${certificate.title ? ` (${certificate.title})` : ""} · ${certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · ${certificate.expiryDate ? `Hết hạn ${formatExpiry(certificate.expiryDate)}` : "Không thời hạn"} · ${label}`;
       if (forPdf && binary.type === "application/pdf") { mergeParts.push({ title, kind: "pdf", bytes: new Uint8Array(await binary.arrayBuffer()) }); continue; }
       if (binary.type === "application/pdf") { warnings.push(`${typeName}: tệp PDF "${file.name}" chưa hỗ trợ chèn vào Excel, hãy tải ảnh JPG/PNG`); continue; }
       const image = await toTemplateImage(binary, { opaque: true });

@@ -10,6 +10,7 @@ import type { Employee, EmployeeInput, EmploymentStatus } from "../../modules/em
 import type { Certificate, FileRef } from "../../modules/certificates/types";
 import { getCertificateChecklist, type CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import { err, type HrAppContext } from "../context";
+import { isValidOn } from "../../modules/certificates/status";
 
 /** Tình trạng chứng chỉ của một nhân sự (dùng cho bộ lọc nhiều lựa chọn). */
 export type CertificateHealth = "ok" | "missing" | "expiring" | "expired";
@@ -167,11 +168,13 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
           const health = new Set<CertificateHealth>();
           if (types.some((type) => !type.archived && type.requiredForPositions.includes(employee.position) && !current.some((certificate) => certificate.type === type.key))) health.add("missing");
           for (const certificate of current) {
+            // Không có thời hạn: luôn còn hiệu lực
+            if (certificate.expiryDate === null) continue;
             const daysLeft = diffDays(todayValue, certificate.expiryDate);
             if (daysLeft < 0) health.add("expired"); else if (daysLeft <= 30) health.add("expiring");
           }
           if (!health.size) health.add("ok");
-          return { employee, health, validTypes: new Set(current.filter((certificate) => certificate.expiryDate >= todayValue).map((certificate) => certificate.type)) };
+          return { employee, health, validTypes: new Set(current.filter((certificate) => isValidOn(certificate.expiryDate, todayValue)).map((certificate) => certificate.type)) };
         });
 
       type Group = "positions" | "statuses" | "certificateHealth" | "certificateTypes";

@@ -1,7 +1,10 @@
-import { useState, type FormEvent } from "react";
-import { X } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { ScanText, X } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import { isSafetyCertificateType, SAFETY_GROUPS, safetyGroupTitle } from "../../modules/certificates/safetyGroup";
+import { systemClock, todayVN } from "../../lib/clock";
+import { parseCertificateText } from "../../modules/ocr/parseCertificateText";
+import { readDocumentText } from "../../modules/ocr/readDocumentText";
 import type { Certificate } from "../../modules/certificates/types";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
 import type { Employee } from "../../modules/employees/types";
@@ -13,12 +16,19 @@ export type CertificateFormMode = { type: string; editing: Certificate | null; r
 
 const isGroupTitle = (title: string) => /^Nhóm [1-6]$/.test(title.trim());
 
+/** Trạng thái đọc tự động từ tệp chính: đang đọc (kèm %), đã điền, hoặc lỗi. */
+type OcrState = { status: "idle" } | { status: "reading"; percent: number } | { status: "done"; filled: string[]; missing: string[]; otherType: string | null } | { status: "error" };
+const OCR_LABELS: Readonly<Record<string, string>> = { number: "số", issueDate: "ngày cấp", expiryDate: "ngày hết hạn", title: "tên phân biệt", safetyGroup: "nhóm" };
+
 export function CertificateFormModal(props: { app: App; actor: Actor; employee: Employee; certificateTypes: CertificateTypeRecord[]; existingCertificates: readonly Certificate[]; mode: CertificateFormMode; onClose: () => void; onSaved: (files: Record<string, File>, message: string) => void; setNotice: SetNotice }) {
   const { app, actor, employee: selected, certificateTypes, setNotice } = props;
   const { type: selectedCertificateType, editing: editingCertificate, renewing: renewingCertificate } = props.mode;
   const base = editingCertificate ?? renewingCertificate;
   const type = renewingCertificate?.type ?? editingCertificate?.type ?? selectedCertificateType;
-  const typeName = certificateTypes.find((item) => item.key === type)?.name ?? "Chứng chỉ";
+  const typeRecord = certificateTypes.find((item) => item.key === type);
+  const typeName = typeRecord?.name ?? "Chứng chỉ";
+  // Loại không có thời hạn (bằng cấp…): ngày hết hạn được để trống
+  const noExpiry = typeRecord?.noExpiry === true;
   const isSafety = isSafetyCertificateType(type);
   // Nhóm đang có ở chứng chỉ ATLĐ hiện hành khác → không cho chọn trùng
   const takenGroups = new Set(props.existingCertificates.filter((item) => item.state === "current" && isSafetyCertificateType(item.type) && item.id !== base?.id && item.safetyGroup).map((item) => item.safetyGroup as number));
@@ -26,6 +36,61 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
   const [safetyGroup, setSafetyGroup] = useState<string>(() => String(base?.safetyGroup ?? props.mode.safetyGroup ?? (selected.group && !takenGroups.has(selected.group) ? selected.group : "")));
   const [files, setFiles] = useState<CertificateFileItem[]>(() => initialFileItems(base?.document, base?.supplementaryFiles));
   const customTitle = base && !(isSafety && isGroupTitle(base.title)) ? base.title : "";
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [ocr, setOcr] = useState<OcrState>({ status: "idle" });
+  const ocrAbort = useRef<AbortController | null>(null);
+  const readKeys = useRef(new Set<string>());
+  useEffect(() => () => ocrAbort.current?.abort(), []);
+
+  /**
+   * Đọc tệp chính (PDF scan / ảnh) rồi điền vào các ô còn trống: số, ngày cấp, ngày hết hạn, tên phân biệt, nhóm ATLĐ.
+   * Không đè chữ người dùng đã nhập; ô tự điền được đánh dấu để đối chiếu với giấy gốc.
+   */
+  const readFromFile = async (file: File) => {
+    ocrAbort.current?.abort();
+    const controller = new AbortController();
+    ocrAbort.current = controller;
+    setOcr({ status: "reading", percent: 0 });
+    try {
+      const text = await readDocumentText(file, controller.signal, ({ page, pages, progress }) => setOcr({ status: "reading", percent: Math.round(((page + progress) / Math.max(1, pages)) * 100) }));
+      if (controller.signal.aborted) return;
+      const parsed = parseCertificateText(text, { today: todayVN(systemClock) });
+      const form = formRef.current;
+      if (!form) return;
+      const filled: string[] = [];
+      const fill = (name: string, value: string | undefined) => {
+        const input = form.elements.namedItem(name);
+        if (!(input instanceof HTMLInputElement) || !value || input.value.trim()) return;
+        input.value = value;
+        input.classList.add("ocr-filled");
+        filled.push(name);
+      };
+      fill("number", parsed.number);
+      fill("issueDate", parsed.issueDate);
+      if (!noExpiry) fill("expiryDate", parsed.expiryDate);
+      // ATLĐ: chọn nhóm nếu chưa chọn và nhóm đó chưa có chứng chỉ khác
+      if (isSafety && parsed.safetyGroup && !takenGroups.has(parsed.safetyGroup) && !renewingCertificate && (!safetyGroup || !base)) {
+        setSafetyGroup(String(parsed.safetyGroup));
+        filled.push("safetyGroup");
+      }
+      // Tên phân biệt chỉ điền khi có thêm thông tin ngoài "Nhóm N" (lĩnh vực, bậc an toàn)
+      if (parsed.title && !(isSafety && isGroupTitle(parsed.title))) fill("title", parsed.title);
+      const wanted = ["number", "issueDate", ...(noExpiry ? [] : ["expiryDate"])];
+      const missing = wanted.filter((name) => !filled.includes(name) && !(form.elements.namedItem(name) as HTMLInputElement | null)?.value.trim());
+      const otherType = parsed.kind && parsed.kind !== type ? certificateTypes.find((item) => item.key === parsed.kind)?.name ?? null : null;
+      setOcr({ status: "done", filled: filled.map((name) => OCR_LABELS[name] ?? name), missing: missing.map((name) => OCR_LABELS[name] ?? name), otherType });
+    } catch {
+      if (!controller.signal.aborted) setOcr({ status: "error" });
+    }
+  };
+
+  // Chọn tệp chính mới → tự đọc một lần
+  const primaryFile = files.find((item) => item.primary && item.file);
+  useEffect(() => {
+    if (!primaryFile?.file || readKeys.current.has(primaryFile.key)) return;
+    readKeys.current.add(primaryFile.key);
+    void readFromFile(primaryFile.file);
+  }, [primaryFile?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveCertificate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -39,9 +104,9 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
     const title = isSafety ? String(formData.get("title") ?? customTitle) : String(formData.get("title") ?? "");
     const certificateInput = {
       type: knownType,
-      number: String(formData.get("number") ?? ""),
+      number: String(formData.get("number") ?? "").trim(),
       issueDate: String(formData.get("issueDate") ?? "") || null,
-      expiryDate: String(formData.get("expiryDate") ?? ""),
+      expiryDate: String(formData.get("expiryDate") ?? "") || (noExpiry ? null : ""),
       document,
       title: renewingCertificate ? renewingCertificate.title : title,
       supplementaryFiles,
@@ -64,7 +129,7 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
   const heading = renewingCertificate ? "Gia hạn chứng chỉ" : editingCertificate ? "Sửa chứng chỉ" : "Thêm chứng chỉ";
   return (
     <div className="modal-backdrop" role="presentation">
-      <form className="modal-card cert-form" onSubmit={(event) => void saveCertificate(event)} aria-labelledby="cert-form-title">
+      <form ref={formRef} className="modal-card cert-form" onSubmit={(event) => void saveCertificate(event)} aria-labelledby="cert-form-title">
         <header>
           <div><h2 id="cert-form-title">{heading}</h2><p className="muted cert-form-type">{typeName}{base?.title ? ` · ${base.title}` : ""}</p></div>
           <button type="button" className="close" aria-label="Đóng" onClick={props.onClose}><X size={20} aria-hidden="true" /></button>
@@ -97,10 +162,25 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
               {errors.title && <small>{errors.title}</small>}
             </label>
           )}
-          <label className="field"><span>Số chứng chỉ <abbr title="Bắt buộc">*</abbr></span><input name="number" required minLength={3} maxLength={50} defaultValue={editingCertificate?.number ?? ""} />{errors.number && <small>{errors.number}</small>}</label>
+          <label className="field"><span>Số chứng chỉ</span><input name="number" maxLength={50} placeholder="Để trống nếu giấy không ghi số" defaultValue={editingCertificate?.number ?? ""} />{errors.number && <small>{errors.number}</small>}</label>
           <label className="field"><span>Ngày cấp</span><input name="issueDate" type="date" defaultValue={editingCertificate?.issueDate ?? ""} />{errors.issueDate && <small>{errors.issueDate}</small>}</label>
-          <label className="field"><span>Ngày hết hạn <abbr title="Bắt buộc">*</abbr></span><input name="expiryDate" type="date" required defaultValue={editingCertificate?.expiryDate ?? ""} />{errors.expiryDate && <small>{errors.expiryDate}</small>}</label>
+          <label className="field"><span>Ngày hết hạn{noExpiry ? "" : <> <abbr title="Bắt buộc">*</abbr></>}</span><input name="expiryDate" type="date" required={!noExpiry} defaultValue={editingCertificate?.expiryDate ?? ""} />{noExpiry && !errors.expiryDate && <small className="field-help">{typeName} không có thời hạn, để trống là luôn còn hiệu lực.</small>}{errors.expiryDate && <small>{errors.expiryDate}</small>}</label>
           <CertificateFilesField items={files} onChange={setFiles} error={errors.document ?? errors.supplementaryFiles} />
+          {(ocr.status !== "idle" || primaryFile) && (
+            <div className={`ocr-result${ocr.status === "done" && (ocr.otherType || ocr.missing.length) ? " is-warning" : ""}`} role="status">
+              <ScanText className="ico" size={16} aria-hidden="true" />
+              <div>
+                {ocr.status === "reading" && <span>Đang đọc thông tin từ tệp… {ocr.percent}%</span>}
+                {ocr.status === "error" && <span>Không đọc được tệp này, vui lòng nhập tay.</span>}
+                {ocr.status === "done" && <>
+                  <span>{ocr.filled.length ? <>Đã tự điền <b>{ocr.filled.join(", ")}</b> từ tệp. Máy đọc có thể nhầm chữ số, hãy đối chiếu với giấy gốc trước khi lưu.</> : "Không đọc được thông tin nào từ tệp (chữ viết tay hoặc ảnh mờ), vui lòng nhập tay."}</span>
+                  {ocr.filled.length > 0 && ocr.missing.length > 0 && <span> Chưa đọc được: {ocr.missing.join(", ")}.</span>}
+                  {ocr.otherType && <span> Tệp này có vẻ là <b>{ocr.otherType}</b>, không phải {typeName}.</span>}
+                </>}
+              </div>
+              {primaryFile?.file && ocr.status !== "reading" && <button type="button" className="button" onClick={() => void readFromFile(primaryFile.file!)}>Đọc lại từ tệp</button>}
+            </div>
+          )}
           {errors.form && <p className="form-error">{errors.form}</p>}
         </div>
         <footer>

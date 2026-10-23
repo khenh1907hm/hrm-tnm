@@ -12,8 +12,28 @@ export function certificateStatus(expiryDate: string | null, today: string): { s
   return { status: "valid", daysLeft };
 }
 
-export function profileCertificateStatus(expiries: string[], today: string): CertificateStatus {
+/** Còn hiệu lực tại ngày `date`. Chứng chỉ không có thời hạn (expiryDate null) luôn còn hiệu lực. */
+export function isValidOn(expiryDate: string | null, date: string): boolean {
+  return expiryDate === null || expiryDate >= date;
+}
+
+/** Khóa sắp xếp theo hạn: không có thời hạn coi như hạn xa nhất. */
+export const expirySortKey = (expiryDate: string | null) => expiryDate ?? "9999-12-31";
+
+/** Hiển thị ngày hết hạn dd/mm/yyyy, hoặc "Không thời hạn". */
+export function formatExpiry(expiryDate: string | null): string {
+  if (expiryDate === null) return "Không thời hạn";
+  const [year, month, day] = expiryDate.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+/** Trạng thái hạn của một chứng chỉ đã có: không có thời hạn thì là "valid", không đếm số ngày. */
+export function expiryStatus(expiryDate: string | null, today: string): { status: Exclude<CertificateStatus, "none">; daysLeft: number | null } {
+  return expiryDate === null ? { status: "valid", daysLeft: null } : certificateStatus(expiryDate, today);
+}
+
+export function profileCertificateStatus(expiries: (string | null)[], today: string): CertificateStatus {
   if (!expiries.length) return "none";
   const rank: Record<CertificateStatus, number> = { none: 0, valid: 1, expiring: 2, expired: 3 };
-  return expiries.map((expiry) => certificateStatus(expiry, today).status).reduce<CertificateStatus>((worst, current) => rank[current] > rank[worst] ? current : worst, "none");
+  return expiries.map((expiry) => expiryStatus(expiry, today).status).reduce<CertificateStatus>((worst, current) => rank[current] > rank[worst] ? current : worst, "none");
 }

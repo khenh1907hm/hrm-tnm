@@ -454,3 +454,6 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 @media (max-width:640px){.hoso-card{grid-template-columns:1fr}.hoso-facts{grid-template-columns:1fr}}
 /* Người ký trong form xuất: xem trước ảnh chữ ký, nút Xóa nền */
 .signer-picker{display:grid;gap:6px;margin-bottom:12px}.signer-picker>.field{margin:0}.signer-image{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.signer-image-stage{width:220px;height:90px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;padding:6px}.signer-image-stage img{max-width:100%;max-height:100%;object-fit:contain}.signer-image-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.signer-image-actions .button{display:inline-flex;align-items:center;gap:6px}
+/* Tự đọc thông tin chứng chỉ từ tệp (OCR) */
+.ocr-result{grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid var(--info-bg);background:var(--info-bg);color:var(--info);border-radius:8px;font-size:13px}.ocr-result>div{flex:1}.ocr-result.is-warning{border-color:var(--warn-bg);background:var(--warn-bg);color:var(--warn)}.ocr-result .button{flex-shrink:0;padding:4px 10px;font-size:13px}.ocr-result .ico{flex-shrink:0;margin-top:2px}
+.field input.ocr-filled{border-color:var(--brand);background:var(--brand-soft)}

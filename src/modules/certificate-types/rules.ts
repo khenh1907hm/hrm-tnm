@@ -25,14 +25,15 @@ export function createCertificateType(input: CertificateTypeInput, existing: rea
   const nextOrder = existing.reduce((max, type) => Math.max(max, type.sortOrder), 0) + 1;
   const key = `custom-${id}`;
   if (existing.some((type) => type.id === id || type.key === key)) return failure([issue("CTYPE_ID_DUPLICATE", "id")]);
-  return success({ id, key, ...validation.value, sortOrder: nextOrder, system: false, archived: false, archiveReason: null, version: 1 });
+  return success({ id, key, ...validation.value, noExpiry: input.noExpiry === true, sortOrder: nextOrder, system: false, archived: false, archiveReason: null, version: 1 });
 }
 
 export function updateCertificateType(before: CertificateTypeRecord, input: CertificateTypeInput, sortOrder: number, existing: readonly CertificateTypeRecord[]): Result<CertificateTypeRecord> {
   const validation = validateCertificateTypeInput(input, existing, before.id);
   if (!validation.ok) return validation;
   if (!Number.isInteger(sortOrder) || sortOrder < 1) return failure([issue("CTYPE_SORT_ORDER_INVALID", "sortOrder")]);
-  return success({ ...before, ...validation.value, sortOrder, version: before.version + 1 });
+  // Không gửi noExpiry (form cũ) thì giữ nguyên thiết lập; chứng chỉ đã lưu không hạn vẫn còn hiệu lực nếu sau này tắt
+  return success({ ...before, ...validation.value, noExpiry: input.noExpiry ?? before.noExpiry ?? false, sortOrder, version: before.version + 1 });
 }
 
 export function archiveCertificateType(before: CertificateTypeRecord, reason: string, hasCurrentCertificates: boolean): Result<CertificateTypeRecord> {

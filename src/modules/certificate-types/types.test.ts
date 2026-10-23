@@ -40,7 +40,7 @@ describe("certificate type rules", () => {
 
   it("CTYPE_03 applies one shared input contract to every certificate category", () => {
     const shape = Object.keys(certificateTypeInputSchema.shape).sort();
-    expect(shape).toEqual(["englishName", "name", "requiredForPositions"]);
+    expect(shape).toEqual(["englishName", "name", "noExpiry", "requiredForPositions"]);
     for (const type of SYSTEM_CERTIFICATE_TYPES) {
       expect(Object.keys(type).sort()).toEqual(["archiveReason", "archived", "englishName", "id", "key", "name", "requiredForPositions", "sortOrder", "system", "version"]);
     }

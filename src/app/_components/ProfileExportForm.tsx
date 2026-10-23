@@ -11,6 +11,7 @@ import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
+import { expirySortKey, formatExpiry, isValidOn } from "../../modules/certificates/status";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
 
@@ -28,7 +29,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   const [contactChoice, setContactChoice] = useState<ContactChoice>(EMPTY_CONTACT);
   const selfIds = useMemo(() => [employee.id], [employee.id]);
   const current = useMemo(() => certificates.filter((certificate) => certificate.state === "current"), [certificates]);
-  const [selected, setSelected] = useState<string[]>(() => current.filter((certificate) => certificate.expiryDate >= exportDate && profile.attachments.includes(certificate.type)).map((certificate) => certificate.id));
+  const [selected, setSelected] = useState<string[]>(() => current.filter((certificate) => isValidOn(certificate.expiryDate, exportDate) && profile.attachments.includes(certificate.type)).map((certificate) => certificate.id));
   const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
   const [warnings, setWarnings] = useState<string[] | null>(null);
 
@@ -43,7 +44,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
 
   const ordered = [...current].sort((a, b) => {
     const rank = (type: string) => { const index = profile.attachments.indexOf(type); return index < 0 ? 99 : index; };
-    return rank(a.type) - rank(b.type) || a.expiryDate.localeCompare(b.expiryDate);
+    return rank(a.type) - rank(b.type) || expirySortKey(a.expiryDate).localeCompare(expirySortKey(b.expiryDate));
   });
 
   const run = async (format: "xlsx" | "pdf") => {
@@ -103,11 +104,11 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         <p className="muted">Hồ sơ PDF (.zip): phiếu Excel đã điền + một tệp PDF gộp các chứng chỉ (PDF giữ nguyên trang, ảnh scan mỗi ảnh một trang A4). Excel: chỉ chèn được chứng chỉ dạng ảnh.</p>
         {ordered.length ? ordered.map((certificate) => {
           const hasBinary = Boolean(props.sessionFiles[certificate.document.id]);
-          const expired = certificate.expiryDate < exportDate;
+          const expired = !isValidOn(certificate.expiryDate, exportDate);
           return (
             <label className="check-field profile-export-cert" key={certificate.id}>
               <input type="checkbox" checked={selected.includes(certificate.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, certificate.id] : selected.filter((id) => id !== certificate.id))} />
-              <span><b>{typeNames[certificate.type] ?? certificate.type}{certificate.title ? ` (${certificate.title})` : ""}</b> · Số {certificate.number} · Hết hạn {certificate.expiryDate.split("-").reverse().join("/")}</span>
+              <span><b>{typeNames[certificate.type] ?? certificate.type}{certificate.title ? ` (${certificate.title})` : ""}</b> · {certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · {certificate.expiryDate ? `Hết hạn ${formatExpiry(certificate.expiryDate)}` : "Không thời hạn"}</span>
               {expired && <span className="pill bad">Đã hết hạn</span>}
               {!profile.attachments.includes(certificate.type) && <span className="pill">Ngoài danh sách của mẫu</span>}
               {!hasBinary && <span className="pill warn">Chưa có tệp trong phiên</span>}

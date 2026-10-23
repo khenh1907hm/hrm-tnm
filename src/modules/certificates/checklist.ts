@@ -28,7 +28,9 @@ const statusLabels: Record<ChecklistStatus, string> = {
   not_required: "Chưa có",
 };
 
-function statusForExpiry(daysLeft: number): Exclude<ChecklistStatus, "missing" | "not_required"> {
+function statusForExpiry(daysLeft: number | null): Exclude<ChecklistStatus, "missing" | "not_required"> {
+  // Không có thời hạn: luôn còn hiệu lực
+  if (daysLeft === null) return "valid";
   if (daysLeft < 0) return "expired";
   if (daysLeft <= 30) return "expiring";
   return "valid";
@@ -55,7 +57,7 @@ export function getCertificateChecklist(
       }];
     }
     return current.map((certificate) => {
-      const daysLeft = diffDays(today, certificate.expiryDate);
+      const daysLeft = certificate.expiryDate === null ? null : diffDays(today, certificate.expiryDate);
       const status = statusForExpiry(daysLeft);
       return {
         type: type.key, title: certificate.title, displayName: certificateDisplayName(type, certificate.title), number: certificate.number,

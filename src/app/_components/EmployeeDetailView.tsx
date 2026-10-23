@@ -3,6 +3,7 @@ import { Paperclip, Plus, Star } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../../modules/certificates/types";
+import { formatExpiry } from "../../modules/certificates/status";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
 import type { Employee } from "../../modules/employees/types";
 import { usePhotoUrl } from "./employeePhoto";
@@ -64,8 +65,8 @@ export function EmployeeDetailView(props: {
             return (
               <tr key={`${row.type}:${certificate?.id ?? "missing"}`} className={row.status === "missing" ? "certificate-missing" : undefined}>
                 <td><b>{row.displayName}</b>{certificate?.safetyGroup && certificate.title !== `Nhóm ${certificate.safetyGroup}` ? <span className="pill info safety-pill">Nhóm {certificate.safetyGroup}</span> : null}</td>
-                <td>{row.number ?? "—"}</td>
-                <td>{row.expiryDate ? row.expiryDate.split("-").reverse().join("/") : "—"}</td>
+                <td>{row.number === null ? "—" : row.number || "Không ghi số"}</td>
+                <td>{row.expiryDate ? formatExpiry(row.expiryDate) : row.number === null ? "—" : "Không thời hạn"}</td>
                 <td><span className={`pill ${row.status === "valid" ? "ok" : row.status === "expiring" ? "warn" : row.status === "expired" || row.status === "missing" ? "bad" : "none"}`}>{row.statusLabel}{row.status === "expiring" && row.daysLeft !== null ? ` (còn ${row.daysLeft} ngày)` : ""}</span></td>
                 <td>{certificate ? (
                   <div className="file-chips">
@@ -87,7 +88,7 @@ export function EmployeeDetailView(props: {
           {certificateTypes.filter((type) => !type.archived).map((type) => <button className="button" key={type.id} onClick={() => props.onCertificateForm(type.key)}><Plus className="ico" size={14} aria-hidden="true" /> {type.key === "atld" ? "Nhóm ATLĐ khác" : type.name}</button>)}
         </div>
       )}
-      {showCertificateHistory && employeeCertificates.filter((item) => item.state !== "current").map((certificate) => <div className="certificate-row" key={certificate.id}><b>{certificateTypes.find((type) => type.key === certificate.type)?.name ?? "Chứng chỉ"}{certificate.title ? ` (${certificate.title})` : ""}</b><span>{certificate.number} · {certificate.state === "replaced" ? "Đã thay thế" : "Đã ẩn"}</span>{actor.role === "admin" && certificate.state === "archived" && <button className="button" onClick={() => props.onRestoreCertificate(certificate)}>Khôi phục</button>}</div>)}
+      {showCertificateHistory && employeeCertificates.filter((item) => item.state !== "current").map((certificate) => <div className="certificate-row" key={certificate.id}><b>{certificateTypes.find((type) => type.key === certificate.type)?.name ?? "Chứng chỉ"}{certificate.title ? ` (${certificate.title})` : ""}</b><span>{certificate.number || "Không ghi số"} · {certificate.state === "replaced" ? "Đã thay thế" : "Đã ẩn"}</span>{actor.role === "admin" && certificate.state === "archived" && <button className="button" onClick={() => props.onRestoreCertificate(certificate)}>Khôi phục</button>}</div>)}
     </section>
   </>;
 }

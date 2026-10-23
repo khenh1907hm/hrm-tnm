@@ -3,10 +3,13 @@ import type { Certificate } from "../certificates/types";
 import type { Employee } from "../employees/types";
 
 export type ReminderKey = { certificateId: string; kind: "EXPIRING_30" | "EXPIRED"; expiryDate: string };
-export function computeDueReminders(certificates: Certificate[], employees: Employee[], today: string, sendExpiredNotice: boolean, sentKeys: string[]): { certificate: Certificate; employee: Employee; key: ReminderKey; daysLeft: number }[] {
-  const results: { certificate: Certificate; employee: Employee; key: ReminderKey; daysLeft: number }[] = [];
-  for (const certificate of certificates) {
-    if (certificate.state !== "current") continue;
+type Expiring = Certificate & { expiryDate: string };
+export function computeDueReminders(certificates: Certificate[], employees: Employee[], today: string, sendExpiredNotice: boolean, sentKeys: string[]): { certificate: Expiring; employee: Employee; key: ReminderKey; daysLeft: number }[] {
+  const results: { certificate: Expiring; employee: Employee; key: ReminderKey; daysLeft: number }[] = [];
+  for (const candidate of certificates) {
+    // Chứng chỉ không có thời hạn không cần nhắc
+    if (candidate.state !== "current" || candidate.expiryDate === null) continue;
+    const certificate: Expiring = { ...candidate, expiryDate: candidate.expiryDate };
     const employee = employees.find((entry) => entry.id === certificate.employeeId);
     if (!employee || employee.archivedAt !== null || !["active", "on_leave"].includes(employee.status)) continue;
     const { status, daysLeft } = certificateStatus(certificate.expiryDate, today);

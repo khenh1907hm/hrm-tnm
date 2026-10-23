@@ -5,5 +5,6 @@ export const certificateTypeInputSchema = z.object({
   name: z.string(),
   englishName: z.string().nullable().optional(),
   requiredForPositions: z.array(z.enum(POSITIONS)),
+  noExpiry: z.boolean().optional(),
 });
 

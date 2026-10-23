@@ -15,7 +15,7 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
       const all = await repositories.certificateTypes.list();
       return success(includeArchived && actor.role === "admin" ? all.sort((a, b) => a.sortOrder - b.sortOrder || compareNormalizedText(a.name, b.name) || compareNormalizedText(a.id, b.id)) : sortCertificateTypes(all));
     },
-    create: async (actor: Actor, input: { name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"] }): Promise<Result<CertificateTypeRecord>> => {
+    create: async (actor: Actor, input: { name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; noExpiry?: boolean | undefined }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
       const shape = certificateTypeInputSchema.safeParse(input);
       if (!shape.success) return failure(shape.error.issues.map((item) => issue("CTYPE_INPUT_INVALID", String(item.path[0] ?? "form"))));
@@ -26,7 +26,7 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
       await writeAudit(actor, "certificateType.create", "certificateType", result.value.id, null, result.value);
       return result;
     },
-    update: async (actor: Actor, input: { id: string; expectedVersion: number; name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; sortOrder: number }): Promise<Result<CertificateTypeRecord>> => {
+    update: async (actor: Actor, input: { id: string; expectedVersion: number; name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; sortOrder: number; noExpiry?: boolean | undefined }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
       const shape = certificateTypeInputSchema.safeParse(input);
       if (!shape.success) return failure(shape.error.issues.map((item) => issue("CTYPE_INPUT_INVALID", String(item.path[0] ?? "form"))));

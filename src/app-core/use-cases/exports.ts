@@ -6,6 +6,7 @@ import { buildWorkerProfileData } from "../../modules/exports/workerProfile";
 import type { RosterData } from "../../modules/exports/employeeRoster";
 import { currentSafetyGroup } from "../../modules/certificates/safetyGroup";
 import { err, type HrAppContext } from "../context";
+import { isValidOn } from "../../modules/certificates/status";
 
 export function createExportUseCases(ctx: HrAppContext) {
   const { repositories, has, getEmployee, writeAudit, today } = ctx;
@@ -23,7 +24,7 @@ export function createExportUseCases(ctx: HrAppContext) {
       const signatures = await signatureRepository.list();
       if (!signatures.some((signature) => signature.id === input.signerId)) errors.push({ field: "signerId", code: "SIGNATURE_NOT_FOUND" });
       if (employee.archivedAt !== null) errors.push({ field: "employeeId", code: "EMP_NOT_READY" });
-      const atld = (await repositories.certificates.list()).find((certificate) => certificate.employeeId === employee.id && certificate.type === "atld" && certificate.state === "current" && certificate.expiryDate >= input.signDate);
+      const atld = (await repositories.certificates.list()).find((certificate) => certificate.employeeId === employee.id && certificate.type === "atld" && certificate.state === "current" && isValidOn(certificate.expiryDate, input.signDate));
       const warnings = atld && currentSafetyGroup(employee, [atld]) === null ? ["EMP_GROUP_INVALID"] : [];
       return success({ errors, warnings });
     },
