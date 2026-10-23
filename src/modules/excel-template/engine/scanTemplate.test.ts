@@ -32,6 +32,18 @@ describe("scanTemplate", () => {
     expect(scan.slotAspect.cccdImage).toBeCloseTo(64 / 20);
   });
 
+  it("measures a slot declared on a merged cell over the whole merge (IMG_3x4 on E8 of E8:K16)", async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Phieu");
+    sheet.columns = [{ width: 10 }, { width: 10 }, { width: 10 }];
+    sheet.mergeCells("A1:C4");
+    workbook.definedNames.add("'Phieu'!$A$1", "IMG_3x4");
+    const scan = await scanTemplate(await bytesOf(workbook));
+    expect(scan.imageSlots).toEqual([{ field: "3x4", range: "A1" }]);
+    // 3 cột × 70px, 4 dòng × 20px
+    expect(scan.slotAspect["3x4"]).toBeCloseTo(210 / 80);
+  });
+
   it("falls back to the first sheet when there is no placeholder and handles missing print area", async () => {
     const workbook = new ExcelJS.Workbook();
     workbook.addWorksheet("Trang 1");

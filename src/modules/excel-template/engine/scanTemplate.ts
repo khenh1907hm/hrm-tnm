@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import { columnWidthPx, parseRange, rowHeightPx, type ImageSlot } from "./fillWorkbook";
+import { columnWidthPx, expandMergedRange, parseRange, rowHeightPx, type ImageSlot } from "./fillWorkbook";
 
 export const IMAGE_SLOT_PREFIX = "IMG_";
 
@@ -43,7 +43,7 @@ export async function scanTemplate(template: Uint8Array): Promise<TemplateScan> 
   const rowPx = (row: number) => rowHeightPx(sheet, row);
   const slotAspect: Record<string, number> = {};
   for (const slot of imageSlots) {
-    const [start, end] = parseRange(slot.range);
+    const [start, end] = parseRange(expandMergedRange(sheet, slot.range));
     let width = 0;
     for (let col = start.col; col <= end.col; col += 1) width += columnPx(col);
     let height = 0;

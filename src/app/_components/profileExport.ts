@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { buildSystemValues, resolveLayers, type Signer } from "../../modules/excel-template/engine/fieldValues";
 import { fillWorkbook, type AttachmentPage, type TemplateImage } from "../../modules/excel-template/engine/fillWorkbook";
 import { readImageInfo } from "../../modules/excel-template/engine/imageSize";
-import { customImageSlots, customValues, fieldLabel, isIdCardImage } from "../../modules/excel-template/engine/profileConfig";
+import { customImageSlots, customValues, fieldLabel, isIdCardImage, isPortraitImage, withoutDuplicatePortraits } from "../../modules/excel-template/engine/profileConfig";
 import { normalizeText } from "../../lib/text";
 import { base64ToUint8Array } from "../../modules/excel-template/templateStorage";
 import type { ExcelReportTemplate } from "../../modules/excel-template/types";
@@ -15,10 +15,19 @@ import { photoFile } from "./employeePhoto";
 
 /** Cạnh dài tối đa của ảnh scan khi chèn vào Excel (~150 dpi trên A4), để file không quá nặng. */
 const MAX_SCAN_SIDE = 1800;
+/**
+ * Cạnh dài tối đa của ảnh trong vùng IMG_ (3×4, CCCD, chữ ký): vùng lớn nhất trên phiếu cỡ nửa trang A4,
+ * 1200px vẫn trên 200 dpi khi in. File Excel phải dưới 4 MB mới gửi đi đổi PDF được (giới hạn của Vercel).
+ */
+const SLOT_MAX_SIDE = 1200;
+/** Ảnh gốc nặng hơn mức này thì luôn vẽ lại cho nhẹ, kể cả khi kích thước đã vừa. */
+const MAX_PASSTHROUGH_BYTES = 600 * 1024;
 
-async function canvasToPng(canvas: HTMLCanvasElement): Promise<TemplateImage> {
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Không tạo được ảnh PNG.")), "image/png"));
-  return { bytes: new Uint8Array(await blob.arrayBuffer()), extension: "png", width: canvas.width, height: canvas.height };
+/** PNG giữ nền trong suốt (chữ ký, logo); JPEG cho ảnh chụp không cần trong suốt (3×4, CCCD, scan) — nhẹ hơn 5–10 lần. */
+async function canvasToImage(canvas: HTMLCanvasElement, opaque: boolean): Promise<TemplateImage> {
+  const type = opaque ? "image/jpeg" : "image/png";
+  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Không tạo được ảnh.")), type, opaque ? 0.9 : undefined));
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), extension: opaque ? "jpeg" : "png", width: canvas.width, height: canvas.height };
 }
 
 /** Xoay 90° theo chiều kim đồng hồ (ảnh CCCD chụp dọc → nằm ngang). */
@@ -37,14 +46,17 @@ async function rotateBitmap(bitmap: ImageBitmap): Promise<ImageBitmap> {
  * Đổi tệp ảnh thành ảnh chèn được vào Excel.
  * - `landscape`: ảnh đang dọc thì xoay cho nằm ngang (ảnh CCCD).
  * - `aspect`: cắt giữa ảnh theo tỉ lệ rộng/cao này (kiểu "lấp đầy" cho ảnh 3×4).
- * - Ảnh PNG/JPEG vừa cỡ được giữ nguyên byte gốc; WebP hoặc ảnh quá lớn được vẽ lại thành PNG.
+ * - `opaque`: ảnh chụp không cần nền trong suốt → vẽ lại thành JPEG (nhẹ), nền trắng.
+ * - Ảnh PNG/JPEG vừa cỡ và nhẹ được giữ nguyên byte gốc; WebP, ảnh quá lớn hoặc quá nặng được vẽ lại.
  */
-export async function toTemplateImage(blob: Blob, options: { aspect?: number; maxSide?: number; landscape?: boolean; pad?: boolean } = {}): Promise<TemplateImage | null> {
+export async function toTemplateImage(blob: Blob, options: { aspect?: number; maxSide?: number; landscape?: boolean; pad?: boolean; opaque?: boolean } = {}): Promise<TemplateImage | null> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   const info = readImageInfo(bytes);
   const maxSide = options.maxSide ?? MAX_SCAN_SIDE;
+  // Viền thêm khi "Vừa khung" phải trong suốt → luôn PNG
+  const opaque = Boolean(options.opaque && !options.pad);
   // landscape luôn vẽ lại: byte gốc có thể mang cờ xoay EXIF mà Excel bỏ qua
-  if (info && !options.aspect && !options.landscape && Math.max(info.width, info.height) <= maxSide) return { bytes, ...info };
+  if (info && !options.aspect && !options.landscape && Math.max(info.width, info.height) <= maxSide && bytes.length <= MAX_PASSTHROUGH_BYTES) return { bytes, ...info };
   if (!blob.type.startsWith("image/")) return null;
   const decoded = await createImageBitmap(blob);
   const bitmap = options.landscape && decoded.height > decoded.width ? await rotateBitmap(decoded) : decoded;
@@ -60,7 +72,7 @@ export async function toTemplateImage(blob: Blob, options: { aspect?: number; ma
     const drawWidth = bitmap.width * scale, drawHeight = bitmap.height * scale;
     context.drawImage(bitmap, (canvas.width - drawWidth) / 2, (canvas.height - drawHeight) / 2, drawWidth, drawHeight);
     bitmap.close();
-    return canvasToPng(canvas);
+    return canvasToImage(canvas, false);
   }
   let sx = 0, sy = 0, sw = bitmap.width, sh = bitmap.height;
   if (options.aspect) {
@@ -73,9 +85,10 @@ export async function toTemplateImage(blob: Blob, options: { aspect?: number; ma
   canvas.height = Math.max(1, Math.round(sh * scale));
   const context = canvas.getContext("2d");
   if (!context) { bitmap.close(); throw new Error("Trình duyệt không xử lý được ảnh."); }
+  if (opaque) { context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height); }
   context.drawImage(bitmap, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
   bitmap.close();
-  return canvasToPng(canvas);
+  return canvasToImage(canvas, opaque);
 }
 
 const dataUrlToBlob = async (dataUrl: string) => (await fetch(dataUrl)).blob();
@@ -115,30 +128,33 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     .map((field) => ({ address: field.target!.toUpperCase(), field: field.key, value: values[field.key] ?? "" }));
 
   // Ảnh: 3×4 từ hồ sơ; ảnh theo nhân sự (kể cả vùng IMG_ như ảnh CCCD) từ extraFiles; ảnh cố định từ mẫu
-  const imageSlots = [...profile.imageSlots, ...customImageSlots(profile)];
+  const imageSlots = withoutDuplicatePortraits([...profile.imageSlots, ...customImageSlots(profile)], profile);
   const images: Record<string, TemplateImage | null> = {};
   // Vùng ảnh được phủ kín đúng 4 góc ô khi điền (fillWorkbook "stretch")
   const filledSlots = new Set<string>();
   for (const slot of imageSlots) {
     const slotAspect = profile.slotAspect[slot.field];
     const idCard = isIdCardImage(slot.field, fieldLabel(slot.field, profile));
-    // Ảnh chân dung 3×4 luôn "Lấp đầy": kín khung cả ngang lẫn dọc, chỉ cắt bớt nền, không làm méo khuôn mặt
-    const fit = slot.field === "photo3x4" ? "cover" : profile.imageSlots.find((item) => item.field === slot.field)?.fit;
+    const portrait = isPortraitImage(slot.field, fieldLabel(slot.field, profile));
+    const fit = profile.imageSlots.find((item) => item.field === slot.field)?.fit;
     // "Vừa khung": thêm viền trong suốt theo tỉ lệ vùng rồi phủ kín vùng như "Kéo giãn", để hai bên trống đều nhau
     // (căn giữa bằng pixel ước lượng bị lệch khi Excel/LibreOffice tính độ rộng cột khác).
-    // Ảnh CCCD luôn kéo giãn vừa khít ô: không cắt mất chữ trên thẻ, không chừa trống hai bên.
-    const pad = !idCard && slot.field !== "signature" && fit !== "cover" && fit !== "stretch" && slotAspect !== undefined;
-    if (idCard || pad || fit === "cover" || fit === "stretch") filledSlots.add(slot.field);
-    const aspect = !idCard && (fit === "cover" || pad) ? slotAspect : undefined;
-    const options = { ...(aspect ? { aspect } : {}), ...(pad ? { pad: true } : {}), ...(idCard ? { landscape: true } : {}) };
+    // Ảnh CCCD và ảnh 3×4 luôn kéo giãn vừa khít ô: không cắt theo tỉ lệ ước lượng, không chừa trống hai bên.
+    const fitted = idCard || portrait;
+    const pad = !fitted && slot.field !== "signature" && fit !== "cover" && fit !== "stretch" && slotAspect !== undefined;
+    if (fitted || pad || fit === "cover" || fit === "stretch") filledSlots.add(slot.field);
+    const aspect = !fitted && (fit === "cover" || pad) ? slotAspect : undefined;
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
+    // Ảnh chụp của nhân sự (3×4, CCCD, ảnh scan riêng) không cần trong suốt → JPEG; chữ ký, ảnh cố định của mẫu giữ PNG
+    const opaque = idCard || portrait || (Boolean(stored) && !fixed && slot.field !== "employeeSignature");
+    const options = { maxSide: SLOT_MAX_SIDE, ...(aspect ? { aspect } : {}), ...(pad ? { pad: true } : {}), ...(idCard ? { landscape: true } : {}), ...(opaque ? { opaque: true } : {}) };
     if (slot.field === "signature") {
       // Thiếu ảnh thì fillWorkbook tự báo "vùng ảnh chưa có ảnh" như các vùng khác
-      if (input.signer?.image) images[slot.field] = await toTemplateImage(input.signer.image);
+      if (input.signer?.image) images[slot.field] = await toTemplateImage(input.signer.image, { maxSide: SLOT_MAX_SIDE });
       continue;
     }
-    if (slot.field === "photo3x4" && input.employee.photo) {
+    if ((slot.field === "photo3x4" || (portrait && !fixed && !stored)) && input.employee.photo) {
       const photo = photoFile(input.employee.photo, input.sessionFiles);
       if (photo) images[slot.field] = await toTemplateImage(photo, options);
       else warnings.push(`${fieldLabel(slot.field, profile)}: chưa tải được ảnh chân dung`);
@@ -165,7 +181,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
       const title = `${typeName}${certificate.title ? ` (${certificate.title})` : ""} · Số ${certificate.number} · Hết hạn ${d}/${m}/${y} · ${label}`;
       if (forPdf && binary.type === "application/pdf") { mergeParts.push({ title, kind: "pdf", bytes: new Uint8Array(await binary.arrayBuffer()) }); continue; }
       if (binary.type === "application/pdf") { warnings.push(`${typeName}: tệp PDF "${file.name}" chưa hỗ trợ chèn vào Excel, hãy tải ảnh JPG/PNG`); continue; }
-      const image = await toTemplateImage(binary);
+      const image = await toTemplateImage(binary, { opaque: true });
       if (!image) { warnings.push(`${typeName}: không đọc được ảnh "${file.name}"`); continue; }
       if (forPdf) mergeParts.push({ title, kind: "image", bytes: image.bytes, extension: image.extension });
       else attachments.push({ title, image });
@@ -186,17 +202,25 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   return { bytes: result.bytes, warnings: [...fieldWarnings, ...warnings], mergeParts };
 }
 
-/** Gửi file Excel lên /api/convert-pdf (máy chủ LibreOffice) và nhận lại PDF. */
+/** Lỗi chuyển PDF kèm mã từ /api/convert-pdf (vd PDF_CONVERTER_MISSING khi chưa cài ComPDF / Gotenberg). */
+export class PdfConvertError extends Error {
+  constructor(message: string, readonly code: string) { super(message); }
+}
+
+/** Gửi file Excel lên /api/convert-pdf (ComPDF hoặc máy chủ LibreOffice) và nhận lại PDF. */
 export async function convertXlsxToPdf(bytes: Uint8Array): Promise<Uint8Array> {
   const session = await getSupabaseClient()?.auth.getSession();
   const token = session?.data.session?.access_token;
   const response = await fetch("/api/convert-pdf", { method: "POST", body: bytes.slice().buffer, headers: { "content-type": "application/octet-stream", ...(token ? { authorization: `Bearer ${token}` } : {}) } });
   if (!response.ok) {
-    const problem = await response.json().catch(() => null) as { message?: string } | null;
-    throw new Error(problem?.message ?? `Không chuyển được sang PDF (${response.status}).`);
+    const problem = await response.json().catch(() => null) as { code?: string; message?: string } | null;
+    throw new PdfConvertError(problem?.message ?? `Không chuyển được sang PDF (${response.status}).`, problem?.code ?? "PDF_CONVERTER_FAILED");
   }
   return new Uint8Array(await response.arrayBuffer());
 }
+
+/** Chưa cài máy chuyển PDF trên máy chủ → quay về bộ hồ sơ ZIP (phiếu Excel + PDF gộp chứng chỉ). */
+export const isConverterMissing = (error: unknown) => error instanceof PdfConvertError && error.code === "PDF_CONVERTER_MISSING";
 
 /** Hồ sơ PDF gộp: phiếu (Excel → PDF) rồi lần lượt các chứng chỉ được chọn, từ trên xuống dưới. */
 export async function exportProfilePdf(input: ProfileExportInput): Promise<{ bytes: Uint8Array; warnings: string[]; pageCount: number }> {

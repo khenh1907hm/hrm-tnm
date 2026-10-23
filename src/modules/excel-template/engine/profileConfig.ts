@@ -30,11 +30,11 @@ const guessKind = (key: string): ProfileCustomField["kind"] => (/date|ngay/i.tes
 export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemplateConfig): ProfileTemplateConfig {
   const fromPlaceholders = scan.placeholders.filter(isCustomKey).map((key) => previous?.customFields.find((field) => field.key === key) ?? { key, label: key, kind: guessKind(key), defaultValue: "" });
   // Trường người dùng tự thêm (có ô đích) không nằm trong file → giữ nguyên khi tải lại file mẫu
-  const customFields = [...fromPlaceholders, ...(previous?.customFields.filter((field) => field.target && !scan.placeholders.includes(field.key)) ?? [])];
+  const customFields = [...fromPlaceholders, ...(previous?.customFields.filter((field) => field.target && isCustomKey(field.key) && !scan.placeholders.includes(field.key)) ?? [])];
   // Vùng ảnh: lấy theo vùng tên IMG_ trong file, trừ vùng người dùng đã sửa trong app (giữ nguyên, kể cả vùng không có trong file)
   const edited = previous?.imageSlots.filter((slot) => slot.custom) ?? [];
   const imageSlots = [
-    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (isIdCardImage(slot.field, "") ? "stretch" as const : slot.field === "photo3x4" ? "cover" as const : "contain" as const) })),
+    ...scan.imageSlots.filter((slot) => !edited.some((item) => item.field === slot.field)).map((slot) => ({ ...slot, fit: previous?.imageSlots.find((item) => item.field === slot.field)?.fit ?? (isIdCardImage(slot.field, "") || isPortraitImage(slot.field, "") ? "stretch" as const : "contain" as const) })),
     ...edited,
   ];
   const certificateKeys = scan.placeholders.filter(isCertificateKey).map(certificateTypeOf);
@@ -48,6 +48,14 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
     attachments: previous?.attachments ?? certificateKeys,
     ...(previous?.signatureId ? { signatureId: previous.signatureId } : {}),
   };
+}
+
+/**
+ * Bỏ các trường tùy chỉnh trùng khóa trường hệ thống. Mẫu tạo từ trước khi khóa đó thành trường hệ thống
+ * (vd signerName, signerRole trước khi có chọn người ký) còn lưu chúng như ô nhập tay → form xuất hiện thừa ô.
+ */
+export function cleanProfileConfig(config: ProfileTemplateConfig): ProfileTemplateConfig {
+  return config.customFields.every((field) => isCustomKey(field.key)) ? config : { ...config, customFields: config.customFields.filter((field) => isCustomKey(field.key)) };
 }
 
 /** Nhãn dễ đọc cho một khóa trường, dùng trong cảnh báo và giao diện. */
@@ -89,6 +97,25 @@ export function fieldKeyFromLabel(label: string, taken: readonly string[]): stri
   let key = base;
   for (let index = 2; taken.includes(key); index += 1) key = `${base}${index}`;
   return key;
+}
+
+/** Vùng ảnh chân dung 3×4 (IMG_photo3x4 hoặc vùng tự đặt có tên chứa 3x4 / chân dung / ảnh thẻ): lấy ảnh 3×4 trong hồ sơ. */
+export function isPortraitImage(key: string, label: string): boolean {
+  return key === "photo3x4" || /3x4|3×4|chan dung|anh the/.test(normalizeText(`${key} ${label}`));
+}
+
+/**
+ * Mẫu đã có vùng IMG_photo3x4 thì các vùng tên kiểu 3x4 / chân dung / ảnh thẻ khác chỉ là khai báo trùng
+ * (vd IMG_3x4 đặt trên ô đầu của khối gộp E8:K16) → bỏ, kẻo ảnh 3×4 bị chèn hai lần chồng lên nhau.
+ */
+export function withoutDuplicatePortraits<T extends { field: string }>(slots: readonly T[], config: Pick<ProfileTemplateConfig, "customFields">): T[] {
+  if (!slots.some((slot) => slot.field === "photo3x4")) return [...slots];
+  return slots.filter((slot) => slot.field === "photo3x4" || !isPortraitImage(slot.field, fieldLabel(slot.field, config)));
+}
+
+/** Ảnh chữ ký (người ký, nhân sự, hoặc trường tự đặt có tên chứa "chữ ký"): cần tách nền trước khi chèn. */
+export function isSignatureImage(key: string, label: string): boolean {
+  return key === "signature" || key === "employeeSignature" || /chu ky|signature/.test(normalizeText(`${key} ${label}`));
 }
 
 /** Vùng ảnh căn cước (IMG_cccdImage hoặc trường tự đặt có tên chứa CCCD/căn cước): ảnh luôn nằm ngang. */

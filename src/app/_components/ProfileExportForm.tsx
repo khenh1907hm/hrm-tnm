@@ -9,7 +9,7 @@ import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./Sig
 import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
-import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfileWorkbook, profileFileName, zipFiles } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
@@ -56,12 +56,22 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         if (revealed.ok) fullEmployee = { ...employee, cccd: revealed.value };
       }
       const input = { template, employee: fullEmployee, commander, signer: needsSigner ? signer : null, certificates, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, selectedCertificateIds: selected, overrides, exportDate };
-      const label = format === "pdf" ? "ZIP (Excel + PDF chứng chỉ)" : "Excel";
+      let label = format === "pdf" ? "PDF" : "Excel";
       let warningList: string[];
       if (format === "pdf") {
-        const result = await exportProfileBundle(input);
-        downloadBlob(await zipFiles(result.files), profileFileName(employee, exportDate, "zip"));
-        warningList = result.warnings;
+        // Một file PDF: phiếu (Excel → PDF trên máy chủ) rồi các chứng chỉ đã chọn ở dưới
+        try {
+          const result = await exportProfilePdf(input);
+          downloadBlob(new Blob([result.bytes.slice().buffer], { type: "application/pdf" }), profileFileName(employee, exportDate, "pdf"));
+          warningList = result.warnings;
+        } catch (error) {
+          if (!isConverterMissing(error)) throw error;
+          // Máy chủ chưa cài ComPDF / Gotenberg: vẫn tải được phiếu Excel + PDF gộp chứng chỉ
+          const result = await exportProfileBundle(input);
+          downloadBlob(await zipFiles(result.files), profileFileName(employee, exportDate, "zip"));
+          warningList = ["Máy chủ chưa cài máy chuyển PDF nên phiếu vẫn là file Excel (đã nén ZIP kèm PDF chứng chỉ)", ...result.warnings];
+          label = "ZIP (Excel + PDF chứng chỉ)";
+        }
       } else {
         const result = await exportProfileWorkbook(input);
         downloadXlsx(result.bytes, profileFileName(employee, exportDate));
@@ -116,7 +126,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
           {busy === "xlsx" ? "Đang tạo Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải Excel (.xlsx)</>}
         </button>}
         <button type="button" className="button primary" disabled={busy !== null} onClick={() => void run("pdf")}>
-          {busy === "pdf" ? "Đang gộp PDF chứng chỉ…" : <><FileText className="ico" size={16} aria-hidden="true" /> Tải hồ sơ PDF (.zip)</>}
+          {busy === "pdf" ? "Đang tạo PDF…" : <><FileText className="ico" size={16} aria-hidden="true" /> Tải hồ sơ PDF</>}
         </button>
       </div>
     </div>

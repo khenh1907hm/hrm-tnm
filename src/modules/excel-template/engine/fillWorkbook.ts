@@ -44,7 +44,7 @@ export type FillWarning = { location: string; field: string };
 export type FillWorkbookInput = {
   template: Uint8Array;
   sheetName?: string;
-  /** Vùng in của phiếu (vd "B1:AZ73"); chiều cao vùng này là chiều cao một trang chứng chỉ. */
+  /** Vùng in của phiếu (vd "B1:AZ73"); khi xuất luôn được thu vừa đúng 1 trang. */
   printArea: string;
   values: Readonly<Record<string, string>>;
   imageSlots: readonly ImageSlot[];
@@ -57,6 +57,13 @@ export type FillWorkbookInput = {
 const PLACEHOLDER = /\{\{([^{}]+)\}\}/g;
 const TITLE_ROW_PT = 20;
 const IMAGE_ROW_PT = 12;
+/**
+ * Trang chứng chỉ chia nhiều cột hẹp thay vì một cột rộng: ExcelJS đổi phần lẻ trong một ô ra độ lệch theo đơn vị
+ * nhỏ hơn thực tế nhiều lần, cột càng rộng ảnh càng lệch; cột hẹp thì sai số chỉ trong vài pixel.
+ */
+const ATTACHMENT_COLUMNS = 40;
+/** Khổ giấy theo mã paperSize của Excel (điểm, dọc): 9 = A4, 1 = Letter. */
+const PAPER_PT: Readonly<Record<number, [number, number]>> = { 1: [612, 792], 9: [595.28, 841.89] };
 
 type CellRef = { col: number; row: number };
 
@@ -72,11 +79,28 @@ export function parseRange(range: string): [CellRef, CellRef] {
   return [parseCellRef(start!), parseCellRef(end!)];
 }
 
-const columnLetter = (col: number): string => {
-  let letters = "";
-  for (let rest = col; rest > 0; rest = Math.floor((rest - 1) / 26)) letters = String.fromCharCode(65 + ((rest - 1) % 26)) + letters;
-  return letters;
-};
+/** Vùng ảnh khai báo một ô đã gộp (vd IMG_ đặt trên E8 của khối gộp E8:K16) → dùng cả khối gộp. */
+export function expandMergedRange(sheet: ExcelJS.Worksheet, range: string): string {
+  if (range.includes(":")) return range;
+  const address = range.trim().toUpperCase();
+  return sheet.model.merges.find((merge) => merge.toUpperCase().startsWith(`${address}:`)) ?? range;
+}
+
+/**
+ * Vùng in để ExcelJS ghi ra đúng dạng tuyệt đối. ExcelJS chỉ thêm "$" trước mỗi nửa vùng ("B1:AZ73" → "$B1:$AZ73");
+ * Excel vẫn hiểu nhưng LibreOffice và các web đổi sang PDF đọc sai, in cả ô ngoài vùng → tràn trang, cắt đôi chữ ký.
+ * Đưa "B$1:AZ$73" để file ghi ra "$B$1:$AZ$73".
+ */
+export function absolutePrintArea(range: string): string {
+  return range.split(":").map((part) => part.replace(/^\$?([A-Z]+)\$?(\d+)$/i, (_, col: string, row: string) => `${col.toUpperCase()}$${row}`)).join(":");
+}
+
+/** Thu cả vùng in vào đúng 1 trang khi in / đổi sang PDF, dù phần mềm tính font, độ rộng cột lệch so với Excel. */
+function fitToOnePage(sheet: ExcelJS.Worksheet) {
+  sheet.pageSetup.fitToPage = true;
+  sheet.pageSetup.fitToWidth = 1;
+  sheet.pageSetup.fitToHeight = 1;
+}
 
 /** Điền mẫu: chỉ thay ô giữ chỗ {{truong}} và thêm ảnh; mọi định dạng khác giữ nguyên. */
 export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: Uint8Array; warnings: FillWarning[] }> {
@@ -103,10 +127,9 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     if (!item.value) warnings.push({ location: target.address, field: item.field });
   }
 
-  const columnPx = (col: number) => columnWidthPx(sheet, col);
-  const rowPx = (row: number) => rowHeightPx(sheet, row);
-
-  const placeImage = (image: TemplateImage, range: string, stretch: boolean) => {
+  const placeImage = (target: ExcelJS.Worksheet, image: TemplateImage, range: string, stretch: boolean) => {
+    const columnPx = (col: number) => columnWidthPx(target, col);
+    const rowPx = (row: number) => rowHeightPx(target, row);
     const [start, end] = parseRange(range);
     let width = 0;
     for (let col = start.col; col <= end.col; col += 1) width += columnPx(col);
@@ -121,7 +144,7 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
     const left = (width - imageWidth) / 2;
     const top = (height - imageHeight) / 2;
     const imageId = workbook.addImage({ buffer: image.bytes.slice().buffer, extension: image.extension });
-    sheet.addImage(imageId, {
+    target.addImage(imageId, {
       tl: { col: anchorAt(start.col, end.col, left, columnPx), row: anchorAt(start.row, end.row, top, rowPx) } as ExcelJS.Anchor,
       br: { col: anchorAt(start.col, end.col, left + imageWidth, columnPx), row: anchorAt(start.row, end.row, top + imageHeight, rowPx) } as ExcelJS.Anchor,
       editAs: "twoCell",
@@ -131,30 +154,36 @@ export async function fillWorkbook(input: FillWorkbookInput): Promise<{ bytes: U
   for (const slot of input.imageSlots) {
     const image = input.images[slot.field];
     if (!image) { warnings.push({ location: slot.range, field: slot.field }); continue; }
-    placeImage(image, slot.range, slot.fit === "stretch" || slot.fit === "cover");
+    placeImage(sheet, image, expandMergedRange(sheet, slot.range), slot.fit === "stretch" || slot.fit === "cover");
   }
 
-  const [printStart, printEnd] = parseRange(input.printArea);
-  let pageHeightPt = 0;
-  for (let row = printStart.row; row <= printEnd.row; row += 1) pageHeightPt += sheet.getRow(row).height ?? sheet.properties.defaultRowHeight ?? 15;
-  const firstColumn = columnLetter(printStart.col);
-  const lastColumn = columnLetter(printEnd.col);
-  const imageRows = Math.max(1, Math.floor((pageHeightPt - TITLE_ROW_PT) / IMAGE_ROW_PT) - 1);
-  let lastRow = printEnd.row;
-  for (const page of input.attachments) {
-    sheet.getRow(lastRow).addPageBreak();
-    const titleRow = lastRow + 1;
-    sheet.mergeCells(`${firstColumn}${titleRow}:${lastColumn}${titleRow}`);
-    const title = sheet.getCell(`${firstColumn}${titleRow}`);
+  sheet.pageSetup.printArea = absolutePrintArea(input.printArea);
+  fitToOnePage(sheet);
+
+  // Mỗi chứng chỉ một sheet riêng, cũng vừa đúng 1 trang (cùng khổ giấy, lề với phiếu). Không nối dưới phiếu bằng
+  // ngắt trang được: khi đã thu vừa 1 trang, Excel bỏ qua ngắt trang thủ công và ép cả chứng chỉ vào trang phiếu.
+  const { margins, paperSize, orientation } = sheet.pageSetup;
+  const [paperWidth, paperHeight] = PAPER_PT[paperSize ?? 9] ?? PAPER_PT[9]!;
+  const [pageWidth, pageHeight] = orientation === "landscape" ? [paperHeight, paperWidth] : [paperWidth, paperHeight];
+  const printableWidth = pageWidth - ((margins?.left ?? 0.7) + (margins?.right ?? 0.7)) * 72;
+  const printableHeight = pageHeight - ((margins?.top ?? 0.75) + (margins?.bottom ?? 0.75)) * 72;
+  input.attachments.forEach((page, index) => {
+    const attachment = workbook.addWorksheet(`Chứng chỉ ${index + 1}`, { properties: { defaultRowHeight: IMAGE_ROW_PT }, views: [{ showGridLines: false }] });
+    // Các cột cộng lại rộng đúng khổ in (điểm → ký tự theo 7px/ký tự của Excel), số dòng ảnh lấp hết chiều cao trang
+    for (let col = 1; col <= ATTACHMENT_COLUMNS; col += 1) attachment.getColumn(col).width = (printableWidth * 96) / 72 / ATTACHMENT_COLUMNS / 7;
+    const lastColumn = attachment.getColumn(ATTACHMENT_COLUMNS).letter;
+    const imageRows = Math.max(1, Math.floor((printableHeight - TITLE_ROW_PT) / IMAGE_ROW_PT) - 1);
+    attachment.mergeCells(`A1:${lastColumn}1`);
+    const title = attachment.getCell("A1");
     title.value = page.title;
     title.font = { name: "Tahoma", size: 10, bold: true };
     title.alignment = { vertical: "middle" };
-    sheet.getRow(titleRow).height = TITLE_ROW_PT;
-    for (let row = titleRow + 1; row <= titleRow + imageRows; row += 1) sheet.getRow(row).height = IMAGE_ROW_PT;
-    placeImage(page.image, `${firstColumn}${titleRow + 1}:${lastColumn}${titleRow + imageRows}`, false);
-    lastRow = titleRow + imageRows;
-  }
-  sheet.pageSetup.printArea = `${firstColumn}${printStart.row}:${lastColumn}${lastRow}`;
+    attachment.getRow(1).height = TITLE_ROW_PT;
+    for (let row = 2; row <= imageRows + 1; row += 1) attachment.getRow(row).height = IMAGE_ROW_PT;
+    placeImage(attachment, page.image, `A2:${lastColumn}${imageRows + 1}`, false);
+    attachment.pageSetup = { paperSize: paperSize ?? 9, orientation: orientation ?? "portrait", ...(margins ? { margins } : {}), horizontalCentered: true, printArea: absolutePrintArea(`A1:${lastColumn}${imageRows + 1}`) };
+    fitToOnePage(attachment);
+  });
   // exceljs ghi useFirstPageNumber theo firstPageNumber (luôn có sau khi đọc) → giữ đúng cờ gốc của mẫu
   if (!(sheet.pageSetup as { useFirstPageNumber?: boolean }).useFirstPageNumber) delete sheet.pageSetup.firstPageNumber;
 

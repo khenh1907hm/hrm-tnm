@@ -9,7 +9,7 @@ import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./Sig
 import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
-import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfileWorkbook, profileFileName, zipFileName, zipFiles, type ProfileBundleFile } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFileName, zipFiles, type ProfileBundleFile } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
@@ -56,6 +56,8 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
       const typeNames = types.ok ? Object.fromEntries(types.value.map((type) => [type.key, type.name])) : {};
       const outcomes: PersonResult[] = [];
       const output: (ProfileBundleFile & { folder?: string })[] = [];
+      // Chưa cài máy chuyển PDF thì biết ngay ở người đầu tiên, những người sau xuất thẳng bộ ZIP
+      let converterReady = true;
       for (const [index, employee] of employees.entries()) {
         try {
           const certificates = await app.certificates.listByEmployee(actor, employee.id);
@@ -69,13 +71,24 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
           const selected = includeAttachments ? list.filter((item) => item.state === "current" && item.expiryDate >= exportDate && template.profile.attachments.includes(item.type)).map((item) => item.id) : [];
           const overrides = { ...shared, ...Object.fromEntries(Object.entries(perPerson[employee.id] ?? {}).filter(([, value]) => value !== "")) };
           const input = { template, employee: full, commander: contact, signer: usesSigner(template.profile) ? signer : null, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, selectedCertificateIds: selected, overrides, exportDate };
-          if (format === "pdf") {
-            // Mỗi nhân sự một thư mục: phiếu Excel + PDF gộp chứng chỉ
+          if (format === "pdf" && converterReady) {
+            // Mỗi nhân sự một file PDF: phiếu rồi các chứng chỉ ở dưới
+            try {
+              const result = await exportProfilePdf(input);
+              output.push({ name: profileFileName(employee, exportDate, "pdf"), bytes: result.bytes });
+              outcomes.push({ employee, warnings: result.warnings });
+            } catch (error) {
+              if (!isConverterMissing(error)) throw error;
+              converterReady = false;
+            }
+          }
+          if (format === "pdf" && !converterReady) {
+            // Chưa cài máy chuyển PDF: mỗi nhân sự một thư mục gồm phiếu Excel + PDF gộp chứng chỉ
             const result = await exportProfileBundle(input);
             const folder = profileFileName(employee, exportDate).replace(/\.xlsx$/, "");
             output.push(...result.files.map((file) => ({ ...file, folder })));
-            outcomes.push({ employee, warnings: result.warnings });
-          } else {
+            outcomes.push({ employee, warnings: ["Máy chủ chưa cài máy chuyển PDF nên phiếu vẫn là file Excel", ...result.warnings] });
+          } else if (format === "xlsx") {
             const result = await exportProfileWorkbook(input);
             output.push({ name: profileFileName(employee, exportDate), bytes: result.bytes });
             outcomes.push({ employee, warnings: result.warnings });
@@ -86,7 +99,8 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
         setProgress(index + 1);
       }
       const done = outcomes.filter((item) => !item.error).length;
-      if (format === "pdf" && done === 1) downloadBlob(await zipFiles(output.map(({ name, bytes }) => ({ name, bytes }))), profileFileName(outcomes.find((item) => !item.error)!.employee, exportDate, "zip"));
+      if (format === "pdf" && output.length === 1 && output[0]!.name.endsWith(".pdf")) downloadBlob(new Blob([output[0]!.bytes.slice().buffer], { type: "application/pdf" }), output[0]!.name);
+      else if (format === "pdf" && done === 1) downloadBlob(await zipFiles(output.map(({ name, bytes }) => ({ name, bytes }))), profileFileName(outcomes.find((item) => !item.error)!.employee, exportDate, "zip"));
       else if (format === "xlsx" && output.length === 1) downloadXlsx(output[0]!.bytes, output[0]!.name);
       else if (output.length) downloadBlob(await zipFiles(output), zipFileName(template.name, exportDate, done));
       setResults(outcomes);
@@ -179,7 +193,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
           </button>
           <button type="button" className="button primary" disabled={busy !== null || !template || !employees.length} onClick={() => void run("pdf")}>
             <FileText className="ico" size={16} aria-hidden="true" />
-            {employees.length > 1 ? `Tải hồ sơ PDF · ${employees.length} hồ sơ (.zip)` : "Tải hồ sơ PDF (.zip)"}
+            {employees.length > 1 ? `Tải hồ sơ PDF · ${employees.length} hồ sơ (.zip)` : "Tải hồ sơ PDF"}
           </button>
         </footer>
       </section>
