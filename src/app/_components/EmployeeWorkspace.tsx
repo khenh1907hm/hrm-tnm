@@ -2,6 +2,7 @@ import { useCallback, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { LogOut, Sparkles, Wrench, type LucideIcon } from "lucide-react";
 import SkillsClient from "../skills/SkillsClient";
+import { BackgroundRemoverTool } from "./BackgroundRemoverTool";
 import { EMPLOYEE_VIEWS, parseRoute, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
 
@@ -10,16 +11,12 @@ const NAV_ITEMS: readonly (readonly [PageView, string, LucideIcon])[] = [
   ["tools", "Công cụ", Wrench],
 ];
 
-/** Trang Công cụ: chỗ để sau này thêm các công cụ dùng chung. */
+/** Trang Công cụ: các công cụ làm việc dùng chung. */
 export function ToolsPage() {
   return (
     <section className="tools-page">
       <div className="page-head"><div><h1>Công cụ</h1><p>Các công cụ làm việc dùng chung của công ty.</p></div></div>
-      <div className="panel tools-empty">
-        <Wrench size={28} aria-hidden="true" />
-        <b>Đang chuẩn bị</b>
-        <p className="muted">Các công cụ sẽ được thêm vào đây.</p>
-      </div>
+      <BackgroundRemoverTool />
     </section>
   );
 }

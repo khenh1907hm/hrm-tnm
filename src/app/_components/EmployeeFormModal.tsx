@@ -1,6 +1,5 @@
 import { BriefcaseBusiness, Camera, Check, Copy, ExternalLink, IdCard, Image as ImageIcon, Lightbulb, Sparkles, UserRound } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
-import { toTransparentPng } from "../../lib/image/toTransparentPng";
 import type { Actor } from "../../modules/auth/permissions";
 import type { FileRef } from "../../modules/certificates/types";
 import { isLegacyPhoto, MAX_PHOTO_SIZE, PHOTO_MIMES } from "../../modules/employees/photo";
@@ -10,6 +9,7 @@ import { applyOcrToForm, type OcrFormField, type OcrRejectedValue } from "../../
 import { checkIdImages } from "../../modules/ocr/imageFiles";
 import { mergeParsed, parseIdText } from "../../modules/ocr/parseIdText";
 import { readIdImages, type OcrProgress } from "../../modules/ocr/readIdImages";
+import { BackgroundRemover } from "./BackgroundRemover";
 import { dataUrlToFile, newPhotoRef, preparePhoto, usePhotoUrl } from "./employeePhoto";
 import { Field } from "./Field";
 import { issueText, ocrFieldLabel, type App, type SetNotice } from "./shared";
@@ -60,7 +60,6 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
   const [promptCopied, setPromptCopied] = useState(false);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
   const idImageInputRef = useRef<HTMLInputElement | null>(null);
-  const signatureInputRef = useRef<HTMLInputElement | null>(null);
 
   const handlePhotoSelect = (file: File | undefined) => {
     if (!file) return;
@@ -79,24 +78,14 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
   };
   const removePhoto = () => { setPendingPhoto(null); setPendingPhotoUrl(null); setForm((cur) => ({ ...cur, photo: null })); };
 
-  const handleSignatureSelect = async (file: File | undefined) => {
-    if (!file) return;
-    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setNotice("Chỉ nhận ảnh chữ ký JPG, PNG hoặc WebP.");
-      return;
-    }
-    try {
-      // Thu nhỏ còn 800px cho nhẹ vì ảnh lưu ngay trong hồ sơ
-      const png = await toTransparentPng(file, 800);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result;
-        if (typeof dataUrl === "string") setForm((cur) => ({ ...cur, signatureImage: dataUrl }));
-      };
-      reader.readAsDataURL(png);
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Không thể xử lý ảnh chữ ký.");
-    }
+  // Ảnh chữ ký đã tách nền (thu nhỏ còn 800px cho nhẹ vì lưu ngay trong hồ sơ) → data URL
+  const handleSignatureChange = (png: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result;
+      if (typeof dataUrl === "string") setForm((cur) => ({ ...cur, signatureImage: dataUrl }));
+    };
+    reader.readAsDataURL(png);
   };
 
   const copyPhotoPrompt = async () => {
@@ -371,25 +360,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
             <Field label="Ngày vào TNM" name="companyStartDate" type="date" value={form.companyStartDate ?? ""} error={errors.companyStartDate} onChange={(value) => setForm({ ...form, companyStartDate: value })} />
             <div className="field employee-signature-field">
               <span>Chữ ký nhân viên (không bắt buộc)</span>
-              <input
-                ref={signatureInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  void handleSignatureSelect(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-              {form.signatureImage ? (
-                <div className="employee-signature-preview"><img src={form.signatureImage} alt="Chữ ký nhân viên" /></div>
-              ) : (
-                <small className="employee-signature-hint">Chụp chữ ký trên giấy trắng, nền trắng sẽ được xóa tự động.</small>
-              )}
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button type="button" className="button" onClick={() => signatureInputRef.current?.click()}>{form.signatureImage ? "Đổi chữ ký" : "Tải chữ ký lên"}</button>
-                {form.signatureImage && <button type="button" className="button danger" onClick={() => setForm({ ...form, signatureImage: null })}>Xóa</button>}
-              </div>
+              <BackgroundRemover compact maxWidth={800} currentImage={form.signatureImage} onChange={handleSignatureChange} onRemove={() => setForm((cur) => ({ ...cur, signatureImage: null }))} />
             </div>
             {errors.form && <p className="form-error">{errors.form}</p>}
           </div>

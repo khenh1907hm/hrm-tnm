@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ProfileTemplateConfig } from "../types";
-import { certificateTypeOf, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, isIdCardImage, profileConfigFromScan, targetCellValues, usesSigner } from "./profileConfig";
+import { certificateTypeOf, cleanProfileConfig, customImageSlots, customValues, fieldKeyFromLabel, fieldLabel, isCertificateKey, isCustomKey, isIdCardImage, isPortraitImage, isSignatureImage, profileConfigFromScan, withoutDuplicatePortraits, targetCellValues, usesSigner } from "./profileConfig";
 import type { TemplateScan } from "./scanTemplate";
 
 const scan: TemplateScan = {
@@ -16,7 +16,7 @@ describe("profileConfigFromScan", () => {
     expect(profileConfigFromScan(scan)).toEqual({
       sheetName: "Phieu thong tin", printArea: "B1:AZ73", placeholders: scan.placeholders,
       customFields: [{ key: "projectStartDate", label: "projectStartDate", kind: "date", defaultValue: "" }, { key: "contractorName", label: "contractorName", kind: "text", defaultValue: "" }],
-      imageSlots: [{ field: "photo3x4", range: "E8:K16", fit: "cover" }, { field: "cccdImage", range: "C19:Z33", fit: "stretch" }],
+      imageSlots: [{ field: "photo3x4", range: "E8:K16", fit: "stretch" }, { field: "cccdImage", range: "C19:Z33", fit: "stretch" }],
       slotAspect: scan.slotAspect, attachments: ["atld", "health"],
     });
   });
@@ -121,5 +121,53 @@ describe("isIdCardImage", () => {
     expect(isIdCardImage("cccdImage", "Ảnh CCCD")).toBe(true);
     expect(isIdCardImage("matTruoc", "Ảnh căn cước mặt trước")).toBe(true);
     expect(isIdCardImage("photo3x4", "Ảnh 3×4 của nhân sự")).toBe(false);
+  });
+});
+
+describe("isPortraitImage", () => {
+  it("nhận vùng ảnh 3×4 theo khóa hoặc tên vùng (vd IMG_3x4 trong Excel)", () => {
+    expect(isPortraitImage("photo3x4", "")).toBe(true);
+    expect(isPortraitImage("3x4", "3x4")).toBe(true);
+    expect(isPortraitImage("anhThe", "Ảnh thẻ")).toBe(true);
+    expect(isPortraitImage("cccdImage", "Ảnh CCCD")).toBe(false);
+  });
+});
+
+describe("cleanProfileConfig", () => {
+  it("bỏ trường tùy chỉnh trùng khóa trường hệ thống (mẫu cũ lưu signerName, signerRole như ô nhập tay)", () => {
+    const stale: ProfileTemplateConfig = {
+      ...profileConfigFromScan(scan),
+      customFields: [
+        { key: "projectStartDate", label: "Ngày bắt đầu ở dự án", kind: "date", defaultValue: "" },
+        { key: "signerName", label: "signerName", kind: "text", defaultValue: "" },
+        { key: "signerRole", label: "signerRole", kind: "text", defaultValue: "" },
+      ],
+    };
+    expect(cleanProfileConfig(stale).customFields.map((field) => field.key)).toEqual(["projectStartDate"]);
+    const clean = profileConfigFromScan(scan);
+    expect(cleanProfileConfig(clean)).toBe(clean);
+  });
+});
+
+describe("withoutDuplicatePortraits", () => {
+  const config = { customFields: [] };
+  it("bỏ vùng 3x4 trùng khi mẫu đã có IMG_photo3x4, để ảnh 3×4 không bị chèn hai lần", () => {
+    const slots = [{ field: "photo3x4", range: "E8:K16" }, { field: "cccdImage", range: "C19:Z33" }, { field: "3x4", range: "E8" }];
+    expect(withoutDuplicatePortraits(slots, config).map((slot) => slot.field)).toEqual(["photo3x4", "cccdImage"]);
+  });
+
+  it("giữ vùng 3x4 khi mẫu không có IMG_photo3x4", () => {
+    const slots = [{ field: "3x4", range: "E8" }, { field: "cccdImage", range: "C19:Z33" }];
+    expect(withoutDuplicatePortraits(slots, config)).toEqual(slots);
+  });
+});
+
+describe("isSignatureImage", () => {
+  it("nhận ảnh chữ ký theo khóa hoặc tên trường", () => {
+    expect(isSignatureImage("signature", "Ảnh chữ ký người ký")).toBe(true);
+    expect(isSignatureImage("employeeSignature", "")).toBe(true);
+    expect(isSignatureImage("chuKyChiHuy", "Chữ ký chỉ huy trưởng")).toBe(true);
+    expect(isSignatureImage("cccdImage", "Ảnh CCCD")).toBe(false);
+    expect(isSignatureImage("photo3x4", "Ảnh 3×4 của nhân sự")).toBe(false);
   });
 });

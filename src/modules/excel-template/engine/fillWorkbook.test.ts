@@ -2,7 +2,7 @@ import { deflateSync } from "node:zlib";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
-import { columnWidthPx, fillWorkbook, parseCellRef, parseRange, type TemplateImage } from "./fillWorkbook";
+import { absolutePrintArea, columnWidthPx, fillWorkbook, parseCellRef, parseRange, type TemplateImage } from "./fillWorkbook";
 
 /** PNG RGB một màu, đủ để Excel nhúng như ảnh thật. */
 function solidPng(width: number, height: number): Uint8Array {
@@ -73,8 +73,12 @@ describe("fillWorkbook", () => {
     }
     expect(after.columns.map((column) => column.width)).toEqual(before.columns.map((column) => column.width));
     expect(Object.keys((after as unknown as { _merges: object })._merges).sort()).toEqual(Object.keys((before as unknown as { _merges: object })._merges).sort());
-    expect({ ...after.pageSetup, printArea: undefined }).toEqual({ ...before.pageSetup, printArea: undefined });
+    // Thiết lập in giữ nguyên, chỉ thêm "vừa đúng 1 trang"
+    expect({ ...after.pageSetup, printArea: undefined }).toEqual({ ...before.pageSetup, printArea: undefined, fitToPage: true, fitToWidth: 1, fitToHeight: 1 });
     expect(after.pageSetup.printArea).toBe("A1:F20");
+    // Vùng in ghi dạng tuyệt đối cả cột lẫn dòng (LibreOffice / web đổi PDF đọc sai dạng "$A1:$F20")
+    const workbookXml = await (await JSZip.loadAsync(bytes)).file("xl/workbook.xml")!.async("string");
+    expect(workbookXml).toContain("!$A$1:$F$20</definedName>");
 
     expect(after.getCell("C5").value).toBe("NGUYỄN MINH AN");
     expect(after.getCell("C6").value).toBe("Date/Ngày:  14/10/2026");
@@ -154,26 +158,32 @@ describe("fillWorkbook", () => {
     expect(placed!.range.br.row).toBeCloseTo(13);
   });
 
-  it("appends one printed page per attachment below the form, in the given order", async () => {
+  it("puts each attachment on its own one-page sheet after the form, in the given order", async () => {
     const { bytes } = await fillWorkbook({
       template: await buildTemplate(), printArea: "A1:F20", sheetName: "Khong co", values: {}, imageSlots: [], images: {},
       attachments: [{ title: "An toàn lao động · Số ATLD-01", image: image(1100, 760) }, { title: "Khám sức khỏe · Số KSK-02", image: image(760, 1100) }],
     });
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(bytes.slice().buffer);
-    const sheet = workbook.worksheets[0]!;
-    expect(sheet.name).toBe("Ghi chu");
-    const zip = await JSZip.loadAsync(bytes);
-    const sheetXml = await zip.file(Object.keys(zip.files).find((name) => /^xl\/worksheets\/sheet\d+\.xml$/.test(name) && name.endsWith("1.xml"))!)!.async("string");
-    const breaks = [...sheetXml.matchAll(/<brk id="(\d+)"/g)].map((match) => Number(match[1]));
-    expect(breaks[0]).toBe(20);
-    expect(breaks).toHaveLength(2);
-    expect(sheet.getCell(`A${breaks[0]! + 1}`).value).toBe("An toàn lao động · Số ATLD-01");
-    expect(sheet.getCell(`A${breaks[1]! + 1}`).value).toBe("Khám sức khỏe · Số KSK-02");
-    expect(sheet.getCell(`A${breaks[1]! + 1}`).font.bold).toBe(true);
-    expect(sheet.pageSetup.printArea).toMatch(/^A1:F\d+$/);
-    expect(Number(sheet.pageSetup.printArea!.split(":F")[1])).toBeGreaterThan(breaks[1]!);
-    expect(sheet.getImages()).toHaveLength(2);
+    const form = workbook.worksheets[0]!;
+    expect(form.name).toBe("Ghi chu");
+    expect(form.pageSetup.printArea).toBe("A1:F20");
+    expect(form.getImages()).toHaveLength(0);
+    const pages = workbook.worksheets.slice(-2);
+    expect(pages.map((sheet) => sheet.name)).toEqual(["Chứng chỉ 1", "Chứng chỉ 2"]);
+    expect(pages.map((sheet) => sheet.getCell("A1").value)).toEqual(["An toàn lao động · Số ATLD-01", "Khám sức khỏe · Số KSK-02"]);
+    for (const sheet of pages) {
+      expect(sheet.getCell("A1").font.bold).toBe(true);
+      expect(sheet.getImages()).toHaveLength(1);
+      expect(sheet.pageSetup).toMatchObject({ paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 1 });
+      expect(sheet.pageSetup.printArea).toMatch(/^A1:AN\d+$/);
+    }
+  });
+
+  it("writes print areas absolute in both column and row", () => {
+    expect(absolutePrintArea("B1:AZ73")).toBe("B$1:AZ$73");
+    expect(absolutePrintArea("$B1:$AZ73")).toBe("B$1:AZ$73");
+    expect(absolutePrintArea("b$1:az$73")).toBe("B$1:AZ$73");
   });
 
   it("writes custom field values straight into target cells, keeping their format", async () => {

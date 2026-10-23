@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { profileConfigFromScan } from "../../modules/excel-template/engine/profileConfig";
+import { cleanProfileConfig, profileConfigFromScan } from "../../modules/excel-template/engine/profileConfig";
 import { scanTemplate } from "../../modules/excel-template/engine/scanTemplate";
 import type { ExcelReportTemplate, ProfileCustomField } from "../../modules/excel-template/types";
 import { createDefaultDemoTemplate, loadTemplates, saveTemplates, uint8ArrayToBase64 } from "../../modules/excel-template/templateStorage";
@@ -40,10 +40,11 @@ async function loadSeedTemplates(existingIds: ReadonlySet<string>): Promise<Exce
 function templateStore(client: SupabaseClient | null) {
   return {
     async load(): Promise<ExcelReportTemplate[]> {
-      if (!client) return loadTemplates();
+      const clean = (template: ExcelReportTemplate) => (template.profile ? { ...template, profile: cleanProfileConfig(template.profile) } : template);
+      if (!client) return loadTemplates().map(clean);
       const { data, error } = await client.from("report_templates").select("doc").order("created_at", { ascending: true });
       if (error) throw new Error(error.message);
-      return (data ?? []).map((row: { doc: unknown }) => row.doc as ExcelReportTemplate);
+      return (data ?? []).map((row: { doc: unknown }) => clean(row.doc as ExcelReportTemplate));
     },
     async save(next: ExcelReportTemplate[], previous: readonly ExcelReportTemplate[]): Promise<void> {
       if (!client) { saveTemplates(next); return; }
