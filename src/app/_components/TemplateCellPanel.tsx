@@ -7,7 +7,7 @@ import type { PreviewSelection } from "./TemplatePreview";
 export type CellAssignment =
   | { type: "field"; field: string; mode: PlacementMode }
   | { type: "image"; field: string }
-  | { type: "custom"; label: string; kind: "text" | "date" | "checkbox" }
+  | { type: "custom"; label: string; kind: "text" | "date" | "checkbox" | "image" }
   | { type: "print" };
 
 /** Bảng nhỏ trên ảnh xem trước: ô đang chọn có gì, gỡ ra, hoặc chọn dữ liệu cần điền vào. */
@@ -25,7 +25,7 @@ export function TemplateCellPanel(props: {
   const [choice, setChoice] = useState("");
   const [mode, setMode] = useState<PlacementMode>("append");
   const [customLabel, setCustomLabel] = useState("");
-  const [customKind, setCustomKind] = useState<"text" | "date" | "checkbox">("text");
+  const [customKind, setCustomKind] = useState<"text" | "date" | "checkbox" | "image">(selection.range.includes(":") ? "image" : "text");
   // Chữ có sẵn trong ô (bỏ các mã đã gán) → hỏi thay cả ô hay điền sau chữ
   const label = selection.text.replace(/\{\{[^{}]*\}\}/g, "").trim();
   const field = choice.startsWith("f:") ? catalog.find((item) => item.key === choice.slice(2)) : undefined;
@@ -37,7 +37,9 @@ export function TemplateCellPanel(props: {
     else if (choice === "custom") { if (customLabel.trim()) props.onAssign({ type: "custom", label: customLabel.trim(), kind: customKind }); }
     else if (field) props.onAssign(isImage ? { type: "image", field: field.key } : { type: "field", field: field.key, mode: label ? mode : "replace" });
   };
-  const groups = Object.keys(CATALOG_GROUP_LABELS) as CatalogField["group"][];
+  // Chọn cả vùng ô thường là khung ảnh → đưa nhóm Ảnh lên đầu danh sách
+  const allGroups = Object.keys(CATALOG_GROUP_LABELS) as CatalogField["group"][];
+  const groups = multi ? ["image" as const, ...allGroups.filter((group) => group !== "image")] : allGroups;
 
   return (
     <div className="cell-panel" role="dialog" aria-label={`Ô ${selection.range}`}>
@@ -62,7 +64,7 @@ export function TemplateCellPanel(props: {
             return items.length ? <optgroup key={group} label={CATALOG_GROUP_LABELS[group]}>{items.map((item) => <option key={item.key} value={`f:${item.key}`}>{item.label}</option>)}</optgroup> : null;
           })}
           <optgroup label="Khác">
-            <option value="custom">＋ Ô nhập thêm mới (thông tin không có trong hồ sơ)</option>
+            <option value="custom">＋ Ô nhập thêm mới: chữ, ngày, ô đánh dấu hoặc ảnh (logo, ảnh dự án…)</option>
             <option value="print">Đặt vùng này làm vùng in</option>
           </optgroup>
         </select>
@@ -77,10 +79,10 @@ export function TemplateCellPanel(props: {
       {field && !isImage && multi && <p className="muted cell-panel-note">Dữ liệu ghi vào ô đầu {selection.range.split(":")[0]} của vùng.</p>}
       {choice === "custom" && (
         <div className="cell-panel-custom">
-          <label className="field"><span>Tên trường</span><input value={customLabel} placeholder="vd: Ngày bắt đầu dự án" onChange={(event) => setCustomLabel(event.target.value)} /></label>
+          <label className="field"><span>Tên trường</span><input value={customLabel} placeholder={customKind === "image" ? "vd: Logo nhà thầu" : "vd: Ngày bắt đầu dự án"} onChange={(event) => setCustomLabel(event.target.value)} /></label>
           <label className="field"><span>Kiểu</span>
             <select value={customKind} onChange={(event) => setCustomKind(event.target.value as typeof customKind)}>
-              <option value="text">Chữ</option><option value="date">Ngày</option><option value="checkbox">Ô đánh dấu ☑/☐</option>
+              <option value="text">Chữ</option><option value="date">Ngày</option><option value="checkbox">Ô đánh dấu ☑/☐</option><option value="image">Ảnh (logo, ảnh dự án…)</option>
             </select>
           </label>
         </div>

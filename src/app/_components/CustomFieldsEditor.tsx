@@ -73,7 +73,7 @@ export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChan
 
   return (
     <section>
-      <h3>4. Ô nhập thêm <small>(ngày bắt đầu dự án, logo/ảnh dự án…)</small></h3>
+      <h3>3. Ô nhập thêm <small>(ngày bắt đầu dự án, logo/ảnh dự án…)</small></h3>
       <p className="muted">Thông tin không có sẵn trong hồ sơ. Gõ <code>{"{{mã}}"}</code> vào ô trong Excel, hoặc bấm <b>Thêm trường</b> bên dưới rồi chọn ô cần điền, không cần sửa file Excel.</p>
       {value.customFields.length > 0 && (
         <div className="table-scroll">

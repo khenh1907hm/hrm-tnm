@@ -45,7 +45,7 @@ export function TemplateSignerSection(props: { value: ProfileTemplateConfig; onC
 
   return (
     <section className="template-signer">
-      <h3><PenLine className="ico" size={15} aria-hidden="true" /> 2. Người ký</h3>
+      <h3><PenLine className="ico" size={15} aria-hidden="true" /> 1. Người ký</h3>
       <p className="muted">Chữ ký lấy từ <b>Thư viện chữ ký</b>. Chọn người ký mặc định cho mẫu này; lúc xuất vẫn đổi được.</p>
 
       <div className="template-signer-body">

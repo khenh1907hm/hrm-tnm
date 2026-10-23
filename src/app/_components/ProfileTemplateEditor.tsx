@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState, type FocusEvent, type MouseEvent } from "react";
-import { ArrowDown, ArrowUp, Plus } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent } from "react";
+import { ArrowDown, ArrowUp, Maximize2, Minimize2, Plus } from "lucide-react";
 import { SYSTEM_FIELDS } from "../../modules/excel-template/engine/fieldValues";
-import type { MappingPlan } from "../../modules/excel-template/engine/mappingPlan";
+import type { AiTemplateMerge } from "../../modules/excel-template/engine/mappingPlan";
 import { fieldKeyFromLabel, IMAGE_FIELDS, isCertificateKey, isCustomKey, profileConfigFromScan } from "../../modules/excel-template/engine/profileConfig";
 import { scanTemplate } from "../../modules/excel-template/engine/scanTemplate";
 import { placeFieldCodes, removeFieldCode, templateFieldCatalog } from "../../modules/excel-template/engine/templateEdits";
@@ -21,8 +21,6 @@ type CertificateTypeOption = { key: string; name: string };
 /** Cài đặt "Mẫu hồ sơ": trường tùy chỉnh, vùng ảnh, chứng chỉ đính kèm và vùng in. */
 export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void; certificateTypes: readonly CertificateTypeOption[]; partners?: readonly Partner[]; signatures?: readonly Signature[] | null; loadSignatureFile?: SignatureFileLoader | undefined; fileBase64?: string | undefined; onFileChange?: ((fileBase64: string) => void) | undefined }) {
   const { value, onChange, certificateTypes } = props;
-  const systemUsed = value.placeholders.filter((key) => !isCustomKey(key) && !isCertificateKey(key));
-  const certificateUsed = value.placeholders.filter(isCertificateKey);
   const typeName = (key: string) => certificateTypes.find((type) => type.key === key)?.name ?? key;
 
   // Xem trước: mục cấu hình đang trỏ chuột / đang nhập → vùng tương ứng trên ảnh phiếu sáng lên
@@ -65,7 +63,8 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
   const withImage = (config: ProfileTemplateConfig, field: string, range: string): ProfileTemplateConfig => ({ ...config, imageSlots: [...config.imageSlots.filter((slot) => slot.field !== field), { field, range, fit: "stretch", custom: true }] });
   const withCustom = (config: ProfileTemplateConfig, cell: string, label: string, kind: ProfileCustomField["kind"]): ProfileTemplateConfig => {
     const key = fieldKeyFromLabel(label, [...config.placeholders, ...config.customFields.map((field) => field.key)]);
-    return { ...config, customFields: [...config.customFields, { key, label, kind, target: cell, scope: "export", defaultValue: "" }] };
+    // Ảnh mới (logo, ảnh dự án) mặc định cố định theo mẫu: tải ảnh một lần ở mục "Ô nhập thêm"
+    return { ...config, customFields: [...config.customFields, { key, label, kind, target: cell, scope: kind === "image" ? "template" : "export", defaultValue: "" }] };
   };
   const assign = (assignment: CellAssignment) => {
     if (!selection) return;
@@ -76,7 +75,7 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
         await rewrite((bytes) => placeFieldCodes(bytes, value.sheetName, [{ cell: first, field: assignment.field, mode: assignment.mode }]));
         setFocused(`key:${assignment.field}`);
       } else if (assignment.type === "image") onChange(withImage(value, assignment.field, range));
-      else if (assignment.type === "custom") onChange(withCustom(value, first, assignment.label, assignment.kind));
+      else if (assignment.type === "custom") onChange(withCustom(value, assignment.kind === "image" ? range : first, assignment.label, assignment.kind));
       else onChange({ ...value, printArea: range });
       setSelection(null);
     });
@@ -91,15 +90,43 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
       setSelection({ ...selection, regionIds: selection.regionIds.filter((item) => item !== id) });
     });
   };
-  const applyPlan = (plan: MappingPlan) => run(() => rewrite(
-    (bytes) => (plan.fields.length ? placeFieldCodes(bytes, value.sheetName, plan.fields) : Promise.resolve(bytes)),
-    (config) => {
-      let next = plan.printArea ? { ...config, printArea: plan.printArea } : config;
-      for (const image of plan.images) next = withImage(next, image.field, image.range);
-      for (const field of plan.customFields) if (!next.customFields.some((item) => item.target === field.cell)) next = withCustom(next, field.cell, field.label, field.kind);
-      return next;
-    },
-  ));
+  // File Excel AI trả về: mã đã được ghi vào file gốc (mergeAiTemplate); ở đây đọc lại file và thêm vùng ảnh, vùng in
+  const applyAi = (merge: AiTemplateMerge) => run(async () => {
+    const next = profileConfigFromScan(await scanTemplate(merge.bytes), value);
+    props.onFileChange!(uint8ArrayToBase64(merge.bytes));
+    let config: ProfileTemplateConfig = { ...next, imageSlots: value.imageSlots, ...(merge.printArea ? { printArea: merge.printArea } : {}) };
+    for (const image of merge.images) {
+      if (IMAGE_FIELDS.some((field) => field.key === image.field)) config = withImage(config, image.field, image.range);
+      // Ảnh mới (IMG_logoNhaThau…) → ô nhập thêm kiểu ảnh cố định theo mẫu
+      else if (!config.customFields.some((field) => field.key === image.field)) config = { ...config, customFields: [...config.customFields, { key: image.field, label: image.field, kind: "image", target: image.range, scope: "template", defaultValue: "" }] };
+    }
+    onChange(config);
+  });
+  // Mở rộng ảnh phiếu: phóng từ đúng chỗ đang đứng ra gần kín màn hình (FLIP: đo vị trí cũ/mới rồi chạy transform)
+  const [expanded, setExpanded] = useState(false);
+  const asideRef = useRef<HTMLElement | null>(null);
+  const fromRect = useRef<DOMRect | null>(null);
+  const toggleExpanded = () => { fromRect.current = asideRef.current?.getBoundingClientRect() ?? null; setExpanded((open) => !open); };
+  useLayoutEffect(() => {
+    const aside = asideRef.current, from = fromRect.current;
+    fromRect.current = null;
+    if (!aside || !from || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const to = aside.getBoundingClientRect();
+    aside.animate([
+      { transformOrigin: "0 0", transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})` },
+      { transformOrigin: "0 0", transform: "none" },
+    ], { duration: 360, easing: "cubic-bezier(.2,.8,.2,1)" });
+  }, [expanded]);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      fromRect.current = asideRef.current?.getBoundingClientRect() ?? null;
+      setExpanded(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [expanded]);
   const signatureIndex = value.imageSlots.findIndex((slot) => slot.field === "signature");
 
   // Sửa trong app → đánh dấu để lần tải lại file Excel sau không ghi đè
@@ -122,25 +149,13 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
       onMouseLeave={() => setHovered(null)}
       onFocus={(event: FocusEvent) => setFocused(previewIdOf(event.target))}
     >
-      {editable && <TemplateAiSetup catalog={catalog} sheetName={value.sheetName} busy={busy} onApply={applyPlan} />}
-
-      <section>
-        <h3>1. Thông tin tự điền từ hồ sơ <small>(sheet “{value.sheetName}”)</small></h3>
-        <p className="muted">{editable ? <>Bấm vào ô trên ảnh phiếu bên cạnh rồi chọn dữ liệu cần điền; app tự ghi vào file mẫu. </> : null}Các ô có mã <code>{"{{…}}"}</code> app đã nhận ra trong file Excel; khi xuất sẽ tự lấy từ hồ sơ nhân sự.</p>
-        <div className="profile-chips">
-          {systemUsed.map((key) => <span className="pill ok" key={key} data-preview={`key:${key}`} tabIndex={0}>{SYSTEM_FIELDS.find((field) => field.key === key)?.label ?? key}</span>)}
-          {certificateUsed.map((key) => <span className="pill ok" key={key} data-preview={`key:${key}`} tabIndex={0}>☑ {typeName(key.slice(5))}</span>)}
-          {!systemUsed.length && !certificateUsed.length && <span className="muted">Chưa có trường hệ thống nào.</span>}
-        </div>
-      </section>
-
       <div data-preview={signatureIndex >= 0 ? `slot:${signatureIndex}` : "key:signerTitle"}>
         <TemplateSignerSection value={value} onChange={onChange} signatures={props.signatures ?? null} loadSignatureFile={props.loadSignatureFile} />
       </div>
 
       <section>
-        <h3>3. Ảnh nhân sự trên phiếu</h3>
-        <p className="muted">Vùng ô đặt ảnh 3×4 hoặc ảnh CCCD, ví dụ <code>E8:K16</code> (hoặc kéo chuột chọn khung ảnh trên ảnh phiếu). Ảnh luôn lấp đầy đúng vùng ô này. App tự đọc từ vùng tên <code>IMG_photo3x4</code>, <code>IMG_cccdImage</code> trong Excel; sửa ở đây thì giữ theo giá trị bạn nhập, tải lại file cũng không mất. Ảnh chữ ký cài ở mục 2.</p>
+        <h3>2. Ảnh nhân sự trên phiếu</h3>
+        <p className="muted">Vùng ô đặt ảnh 3×4 hoặc ảnh CCCD, ví dụ <code>E8:K16</code> (hoặc kéo chuột chọn khung ảnh trên ảnh phiếu). Ảnh luôn lấp đầy đúng vùng ô này. App tự đọc từ vùng tên <code>IMG_photo3x4</code>, <code>IMG_cccdImage</code> trong Excel; sửa ở đây thì giữ theo giá trị bạn nhập, tải lại file cũng không mất. Ảnh chữ ký cài ở mục 1.</p>
         <table className="profile-table">
           <thead><tr><th>Ảnh</th><th>Vùng ô (ảnh lấp đầy vùng này)</th><th /></tr></thead>
           <tbody>
@@ -163,7 +178,7 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
       <CustomFieldsEditor value={value} onChange={onChange} partners={props.partners} />
 
       <section>
-        <h3>5. Chứng chỉ đính kèm <small>(in sau phiếu, theo thứ tự này)</small></h3>
+        <h3>4. Chứng chỉ đính kèm <small>(in sau phiếu, theo thứ tự này)</small></h3>
         <div className="profile-attachments">
           {value.attachments.map((key, index) => (
             <div className="profile-attachment" key={key}>
@@ -181,19 +196,29 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
 
       <section>
         <label className="field" style={{ maxWidth: "260px" }} data-preview="print">
-          <span>6. Vùng in của phiếu (1 trang)</span>
+          <span>5. Vùng in của phiếu (1 trang)</span>
           <input value={value.printArea} onChange={(event) => onChange({ ...value, printArea: event.target.value.toUpperCase() })} />
         </label>
       </section>
+
+      {editable && <TemplateAiSetup catalog={catalog} fileBase64={props.fileBase64!} sheetName={value.sheetName} busy={busy} onApply={applyAi} />}
     </div>
     {props.fileBase64 && (
-      <aside className="profile-editor-preview" aria-label="Xem trước phiếu">
-        <h3>Xem trước phiếu</h3>
+      <>
+      {expanded && <div className="preview-backdrop" onClick={toggleExpanded} />}
+      <aside className={`profile-editor-preview${expanded ? " is-expanded" : ""}`} aria-label="Xem trước phiếu" ref={asideRef}>
+        <div className="profile-editor-preview-head">
+          <h3>Xem trước phiếu</h3>
+          <button type="button" className="button preview-expand" onClick={toggleExpanded} aria-label={expanded ? "Thu nhỏ ảnh phiếu" : "Mở rộng ảnh phiếu"} title={expanded ? "Thu nhỏ (Esc)" : "Mở rộng"}>
+            {expanded ? <Minimize2 size={16} aria-hidden="true" /> : <Maximize2 size={16} aria-hidden="true" />}<span>{expanded ? "Thu nhỏ" : "Mở rộng"}</span>
+          </button>
+        </div>
         <p className="muted">{editable ? "Bấm một ô (hoặc kéo chuột chọn nhiều ô) để chọn dữ liệu điền vào. " : ""}Rê chuột vào một mục bên trái, vùng tương ứng trên phiếu sẽ sáng lên.</p>
         <TemplatePreview fileBase64={props.fileBase64} sheetName={value.sheetName} printArea={value.printArea} regions={regions} active={hovered ?? (selection?.regionIds[0] ?? focused)} selection={selection?.range ?? null}
           overlay={selection ? <TemplateCellPanel key={selection.range} selection={selection} catalog={catalog} regionLabel={regionLabel} busy={busy} error={cellError} onAssign={assign} onRemove={removeRegion} onClose={() => setSelection(null)} /> : null}
           {...(editable ? { onSelect: (next: PreviewSelection) => { setSelection(next); setCellError(""); } } : {})} />
       </aside>
+      </>
     )}
     </div>
   );

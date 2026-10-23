@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
-import { buildMappingRules, parseMappingPlan } from "./mappingPlan";
+import { buildMappingRules, fieldsWithoutAlias, mergeAiTemplate } from "./mappingPlan";
 import { scanTemplate } from "./scanTemplate";
 import { placeFieldCodes, removeFieldCode, templateFieldCatalog } from "./templateEdits";
 
@@ -49,49 +49,58 @@ describe("placeFieldCodes / removeFieldCode", () => {
   });
 });
 
-describe("parseMappingPlan", () => {
-  it("đọc khối JSON trong câu trả lời, giữ dòng hợp lệ, báo dòng sai", () => {
-    const answer = `Đây là kết quả:\n\`\`\`json\n${JSON.stringify({
-      sheet: "Phieu",
-      printArea: "$A$1:$D$20",
-      fields: [
-        { cell: "b1", field: "fullNameUpper", mode: "replace" },
-        { cell: "A2", field: "dob", mode: "append" },
-        { cell: "C5", field: "cert:atld" },
-        { cell: "C6", field: "khongCo" },
-        { cell: "B1", field: "phone" },
-        { cell: "Z99", field: "home" },
-      ],
-      images: [{ range: "E2:F6", field: "photo3x4" }, { range: "A1", field: "logo" }],
-      customFields: [{ cell: "B9", label: "Ngày bắt đầu dự án", kind: "date" }],
-    })}\n\`\`\``;
-    const { plan, problems } = parseMappingPlan(answer, catalog);
-    expect(plan).toMatchObject({ sheet: "Phieu", printArea: "A1:D20" });
-    expect(plan!.fields).toEqual([
-      { cell: "B1", field: "fullNameUpper", mode: "replace" },
-      { cell: "A2", field: "dob", mode: "append" },
-      { cell: "C5", field: "cert:atld", mode: "replace" },
-      { cell: "Z99", field: "home", mode: "replace" },
-    ]);
-    expect(plan!.images).toEqual([{ range: "E2:F6", field: "photo3x4" }]);
-    expect(plan!.customFields).toEqual([{ cell: "B9", label: "Ngày bắt đầu dự án", kind: "date" }]);
-    const messages = problems.map((problem) => `${problem.level}: ${problem.message}`);
-    expect(messages.some((message) => message.startsWith("error") && message.includes("khongCo"))).toBe(true);
-    expect(messages.some((message) => message.startsWith("error") && message.includes("B1 bị gán hai lần"))).toBe(true);
-    expect(messages.some((message) => message.startsWith("warning") && message.includes("Z99"))).toBe(true);
-    expect(messages.some((message) => message.includes("logo"))).toBe(true);
+describe("mergeAiTemplate", () => {
+  it("lấy mã, vùng IMG_, vùng in từ file AI, ghi vào file gốc và giữ định dạng gốc", async () => {
+    const original = await rawTemplate();
+    // File "AI trả về": gõ mã, xóa mất nhãn A2, đổi màu ô (không được lấy), thêm tên vùng ảnh và vùng in
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(original.slice().buffer);
+    const sheet = workbook.getWorksheet("Phieu")!;
+    sheet.getCell("B1").value = "{{fullNameUpper}}";
+    sheet.getCell("B1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFFF0000" } };
+    sheet.getCell("A2").value = "{{dob}}";
+    sheet.getCell("C5").value = "{{cert:atld}}";
+    sheet.getCell("C6").value = "{{soTheCongTruong}}";
+    sheet.getCell("C7").value = "{{cert:khongCo}}";
+    workbook.definedNames.add("'Phieu'!$E$2:$F$6", "IMG_photo3x4");
+    workbook.definedNames.add("'Phieu'!$A$10:$B$11", "IMG_logoNhaThau");
+    sheet.pageSetup.printArea = "A1:F20";
+    const ai = new Uint8Array(await workbook.xlsx.writeBuffer());
+
+    const merge = await mergeAiTemplate(original, ai, "Phieu", catalog);
+    const result = await cells(merge.bytes);
+    expect(result.getCell("B1").value).toBe("{{fullNameUpper}}");
+    expect((result.getCell("B1").fill as ExcelJS.FillPattern).fgColor?.argb).toBe("FFFFFF00");
+    // Nhãn bị AI xóa được giữ lại, mã điền phía sau
+    expect(result.getCell("A2").value).toBe("Ngày sinh: {{dob}}");
+    expect(merge.images).toEqual([{ field: "photo3x4", range: "E2:F6" }, { field: "logoNhaThau", range: "A10:B11" }]);
+    expect(merge.printArea).toBe("A1:F20");
+    // B1 là ô chủ của vùng gộp B1:D1: chỉ tính một lần
+    expect(merge.cells.map((cell) => cell.address)).toEqual(["B1", "A2", "C5", "C6", "C7"]);
+    expect(merge.newKeys).toEqual(["soTheCongTruong", "cert:khongCo"]);
+    const messages = merge.problems.map((problem) => `${problem.level}: ${problem.message}`);
+    expect(messages.some((message) => message.startsWith("warning") && message.includes("Ngày sinh:"))).toBe(true);
+    expect(messages.some((message) => message.startsWith("error") && message.includes("cert:khongCo"))).toBe(true);
+    expect(messages.some((message) => message.includes("IMG_logoNhaThau"))).toBe(true);
+    expect((await scanTemplate(merge.bytes)).placeholders).toEqual(["fullNameUpper", "dob", "cert:atld", "soTheCongTruong", "cert:khongCo"]);
   });
 
-  it("báo lỗi khi không có JSON hoặc JSON hỏng", () => {
-    expect(parseMappingPlan("chưa có gì", catalog).plan).toBeNull();
-    expect(parseMappingPlan("{ fields: [", catalog).problems[0]!.level).toBe("error");
+  it("báo lỗi khi gửi nhầm file không có mã", async () => {
+    const original = await rawTemplate();
+    const merge = await mergeAiTemplate(original, original, "Phieu", catalog);
+    expect(merge.problems[0]).toMatchObject({ level: "error" });
   });
 });
 
-describe("buildMappingRules", () => {
-  it("liệt kê đủ mã trường hiện có của app, kể cả loại chứng chỉ", () => {
+describe("bộ quy tắc", () => {
+  it("mọi mã của app đều có mô tả nhãn (thêm biến mới phải bổ sung FIELD_ALIASES)", () => {
+    expect(fieldsWithoutAlias()).toEqual([]);
+  });
+
+  it("prompt liệt kê đủ mã, ảnh ghi bằng tên vùng IMG_, yêu cầu trả về file Excel", () => {
     const rules = buildMappingRules(catalog);
-    for (const field of catalog) expect(rules).toContain(`\`${field.key}\``);
+    for (const field of catalog) expect(rules).toContain(field.kind === "image" ? `\`IMG_${field.key}\`` : `\`{{${field.key}}}\``);
     expect(rules).toContain("hỏi lại");
+    expect(rules).toContain("-da-gan-ma.xlsx");
   });
 });

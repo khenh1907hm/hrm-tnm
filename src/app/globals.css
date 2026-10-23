@@ -516,3 +516,34 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .ai-setup-problems{margin:0;padding-left:0;list-style:none;display:grid;gap:3px;font-size:13px}
 .warn-text{color:var(--warn)}
 .ok-text{color:var(--ok);margin:0}
+
+/* Mở rộng ảnh phiếu */
+.profile-editor-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.profile-editor-preview-head .preview-expand{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;white-space:nowrap;flex-shrink:0}
+.profile-editor-preview.is-expanded{position:fixed;inset:20px;z-index:60;max-height:none;background:var(--surface);border-radius:12px;padding:16px 18px;box-shadow:0 24px 70px rgba(10,18,26,.35);will-change:transform}
+.profile-editor-preview.is-expanded .template-preview-frame{background:#dde3ea}
+.preview-backdrop{position:fixed;inset:0;z-index:59;background:rgba(10,18,26,.45);animation:preview-fade .3s ease-out}
+@keyframes preview-fade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.preview-backdrop{animation:none}}
+
+/* Cài nhanh bằng AI: thẻ đóng sẵn, bấm mới mở. */
+details.ai-setup{border:1px solid var(--line);border-radius:8px;padding:0;margin-top:12px;background:var(--surface)}
+details.ai-setup>summary{cursor:pointer;padding:10px 14px;font-weight:600;display:flex;align-items:center;gap:6px;list-style:none}
+details.ai-setup>summary::-webkit-details-marker{display:none}
+details.ai-setup>summary::after{content:"▸";margin-left:auto;color:var(--muted);transition:transform .2s}
+details.ai-setup[open]>summary::after{transform:rotate(90deg)}
+details.ai-setup>summary small{font-weight:400;color:var(--muted)}
+details.ai-setup[open]{padding-bottom:12px}
+.ai-tabs{display:flex;flex-wrap:wrap;gap:4px;padding:0 14px;border-bottom:1px solid var(--line)}
+.ai-tabs button{border:0;background:none;padding:8px 12px;border-bottom:2px solid transparent;color:var(--muted);font-weight:600}
+.ai-tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.ai-tab-panel{padding:12px 14px 0;display:grid;gap:10px}
+.ai-tab-panel>p,.ai-tab-panel ol{margin:0;font-size:13px}
+.ai-rules{max-height:420px}
+.ai-rules td,.ai-rules th{padding:6px 10px;font-size:13px}
+.ai-rules-group th{background:var(--soft);color:var(--ink);font-weight:600}
+.ai-prompt{max-height:320px;overflow:auto;margin:0;padding:10px 12px;background:#f6f8fa;border:1px solid var(--line);border-radius:6px;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+.ai-file{justify-self:start;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.ai-merge{display:grid;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.ai-merge>p{margin:0;font-size:13px}
+details.ai-setup>[role=status]{padding:8px 14px 0}
