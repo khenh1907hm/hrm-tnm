@@ -699,12 +699,36 @@ function openCam(it, slot){
   camEl.classList.add('on');
   document.getElementById('camErr').hidden = true;
   updateCamUI();
+  startStream();
+}
+// Mở camera trực tiếp. Thông báo "Không mở được camera" chỉ hiện khi thật sự không có hình;
+// có hình (kể cả sau khi người dùng vừa bấm Cho phép) là ẩn ngay.
+function startStream(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ camFail(); return; }
   navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1440} }, audio:false })
-    .then(function(st){ if(!camEl.classList.contains('on')){ st.getTracks().forEach(function(t){ t.stop(); }); return; } Cam.stream = st; video.srcObject = st; return video.play(); })
-    .catch(camFail);
+    .then(function(st){
+      if(!camEl.classList.contains('on')){ st.getTracks().forEach(function(t){ t.stop(); }); return; }
+      if(Cam.stream) Cam.stream.getTracks().forEach(function(t){ t.stop(); });
+      Cam.stream = st; video.srcObject = st; camOk();
+      var p = video.play(); if(p && p.catch) p.catch(function(){}); // lỗi tự phát không phải lỗi camera
+    })
+    .catch(function(){ if(!Cam.stream) camFail(); });
 }
+function camOk(){ document.getElementById('camErr').hidden = true; }
 function camFail(){ document.getElementById('camErr').hidden = false; }
+video.addEventListener('playing', camOk);
+video.addEventListener('loadedmetadata', camOk);
+// Người dùng cho phép camera sau khi thông báo đã hiện (vd mở cài đặt trình duyệt) → tự mở lại camera.
+try{
+  if(navigator.permissions && navigator.permissions.query){
+    navigator.permissions.query({ name:'camera' }).then(function(st){
+      st.onchange = function(){ if(st.state === 'granted' && camEl.classList.contains('on') && !Cam.stream) startStream(); };
+    }).catch(function(){});
+  }
+}catch(e){}
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState === 'visible' && camEl.classList.contains('on') && !Cam.stream) startStream();
+});
 function closeCam(){
   camEl.classList.remove('on');
   if(Cam.stream){ Cam.stream.getTracks().forEach(function(t){ t.stop(); }); Cam.stream = null; }
