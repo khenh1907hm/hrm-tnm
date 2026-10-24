@@ -207,7 +207,7 @@ td .timg{width:100%;max-width:210px;aspect-ratio:4/3;object-fit:cover;border-rad
 .mini span{position:absolute;left:0;right:0;bottom:0;text-align:center;font-size:10px;font-weight:700;background:rgba(0,0,0,.7);padding:2px 0}
 .camctl{background:#0A0B0D;padding:14px 16px calc(18px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px}
 .camrow{display:flex;align-items:center;gap:12px}
-.camseg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:#1F2226;flex:1}
+.camseg{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;padding:4px;border-radius:14px;background:#1F2226;flex:1}
 .camseg button{height:40px;border:0;border-radius:10px;background:transparent;color:#FFFFFF;font-weight:600}
 .camseg button[aria-pressed="true"]{background:#FFFFFF;color:#0F172A}
 .camseg button:disabled{opacity:.35}
@@ -239,7 +239,6 @@ td .timg{width:100%;max-width:210px;aspect-ratio:4/3;object-fit:cover;border-rad
   <div class="view">
     <video id="video" playsinline muted autoplay></video>
     <img class="ov" id="ovGhost" alt="" hidden>
-    <img class="ov" id="ovEdge" alt="" hidden>
     <div class="grid3" id="gridOv"></div>
     <div class="camerr" id="camErr" hidden>
       <span>Không mở được camera trực tiếp. Hãy cho phép quyền camera trong trình duyệt, hoặc dùng camera của máy.</span>
@@ -259,7 +258,6 @@ td .timg{width:100%;max-width:210px;aspect-ratio:4/3;object-fit:cover;border-rad
       <span style="font-size:13px;color:#C9CDD3;flex:none">Canh góc</span>
       <div class="camseg" role="group" aria-label="Chế độ canh góc">
         <button data-act="mode" data-v="off">Tắt</button>
-        <button data-act="mode" data-v="edge">Viền</button>
         <button data-act="mode" data-v="ghost">Mờ</button>
       </div>
     </div>
@@ -678,55 +676,24 @@ function fileToShot(file){
   var url = URL.createObjectURL(file);
   return loadImg(url).then(function(i){ return compress(i, i.naturalWidth, i.naturalHeight).then(function(r){ URL.revokeObjectURL(url); return r; }); });
 }
-var edgeCache = {};
-function edgeMap(ph){
-  var key = ph.path || ph.time;
-  if(edgeCache[key]) return Promise.resolve(edgeCache[key]);
-  var u = src(ph);
-  var p = u ? Promise.resolve(u) : B.ensure([ph.path]).then(function(){ return src(ph); });
-  return p.then(loadImg).then(function(i){
-    var W = 360, H = Math.round(360 * i.naturalHeight / i.naturalWidth);
-    var c = document.createElement('canvas'); c.width = W; c.height = H;
-    var x = c.getContext('2d'); x.drawImage(i, 0, 0, W, H);
-    var d = x.getImageData(0, 0, W, H), px = d.data, g = new Float32Array(W*H), m = new Float32Array(W*H), b = new Float32Array(W*H);
-    var j, y, xx, o;
-    for(j=0;j<W*H;j++) g[j] = px[j*4]*.299 + px[j*4+1]*.587 + px[j*4+2]*.114;
-    for(y=1;y<H-1;y++) for(xx=1;xx<W-1;xx++){ o=y*W+xx; b[o]=(g[o]*4+g[o-1]+g[o+1]+g[o-W]+g[o+W])/8; }
-    var vals = [];
-    for(y=1;y<H-1;y++) for(xx=1;xx<W-1;xx++){
-      o = y*W+xx;
-      var gx = -b[o-W-1]-2*b[o-1]-b[o+W-1]+b[o-W+1]+2*b[o+1]+b[o+W+1];
-      var gy = -b[o-W-1]-2*b[o-W]-b[o-W+1]+b[o+W-1]+2*b[o+W]+b[o+W+1];
-      m[o] = Math.sqrt(gx*gx+gy*gy); if((o & 7) === 0) vals.push(m[o]);
-    }
-    vals.sort(function(a,c2){ return a-c2; });
-    var th = Math.max(40, vals[Math.floor(vals.length*0.9)] || 60);
-    for(j=0;j<W*H;j++){ if(m[j] > th){ px[j*4]=251; px[j*4+1]=146; px[j*4+2]=60; px[j*4+3]=255; } else px[j*4+3]=0; }
-    x.putImageData(d, 0, 0);
-    edgeCache[key] = c.toDataURL('image/png');
-    return edgeCache[key];
-  });
-}
 
 /* ---------- camera ---------- */
-var Cam = { item:null, slot:null, stream:null, mode:'edge', pref:null, opacity:35, grid:true };
+var Cam = { item:null, slot:null, stream:null, mode:'off', pref:null, opacity:35, grid:true };
 var camEl = document.getElementById('cam'), video = document.getElementById('video');
 function openCam(it, slot){
   Cam.item = it; Cam.slot = slot;
   var hasRef = slot === 'after' && !!it.before;
-  Cam.mode = hasRef ? (Cam.pref || 'edge') : 'off';
+  Cam.mode = hasRef ? (Cam.pref || 'off') : 'off';
   var lab = document.getElementById('camLabel');
   lab.textContent = slot === 'before' ? 'ĐANG CHỤP ẢNH TRƯỚC' : 'ĐANG CHỤP ẢNH SAU';
   lab.style.color = slot === 'before' ? '#93C5FD' : '#FDBA74';
   document.getElementById('shutter').classList.toggle('after', slot === 'after');
   document.getElementById('camName').textContent = it.name;
   document.getElementById('camMini').hidden = !hasRef;
-  document.getElementById('ovEdge').removeAttribute('src');
   document.getElementById('ovGhost').removeAttribute('src');
   if(hasRef){
     var setRef = function(){ var u = src(it.before); if(u){ document.getElementById('camMiniImg').src = u; document.getElementById('ovGhost').src = u; } };
     setRef(); if(!src(it.before)) B.ensure([it.before.path]).then(setRef);
-    edgeMap(it.before).then(function(u){ document.getElementById('ovEdge').src = u; }).catch(function(){});
   }
   document.querySelectorAll('.camseg button').forEach(function(b){ b.disabled = !hasRef && b.dataset.v !== 'off'; });
   camEl.classList.add('on');
@@ -747,17 +714,15 @@ function updateCamUI(){
   var hasRef = Cam.slot === 'after' && Cam.item && Cam.item.before;
   document.querySelectorAll('.camseg button').forEach(function(b){ b.setAttribute('aria-pressed', String(b.dataset.v === Cam.mode)); });
   var g = document.getElementById('ovGhost'); g.hidden = Cam.mode !== 'ghost'; g.style.opacity = Cam.opacity / 100;
-  document.getElementById('ovEdge').hidden = Cam.mode !== 'edge';
   document.getElementById('gridOv').hidden = !Cam.grid;
   document.getElementById('gridBtn').setAttribute('aria-pressed', String(Cam.grid));
   var h = document.getElementById('camHint');
   if(!hasRef) h.textContent = Cam.slot === 'before' ? 'Chụp ảnh hiện trạng. Ảnh này làm mốc để canh góc khi chụp ảnh Sau.' : '';
-  else if(Cam.mode === 'edge') h.textContent = 'Viền cam là ảnh Trước. Xoay máy cho vật khớp viền rồi chụp.';
   else if(Cam.mode === 'ghost'){
     h.innerHTML = '<label style="display:flex;align-items:center;gap:12px;width:100%">Độ mờ<input type="range" id="opRange" min="10" max="70" value="'+Cam.opacity+'"><span id="opVal" style="width:40px;text-align:right">'+Cam.opacity+'%</span></label>';
     document.getElementById('opRange').oninput = function(e){ Cam.opacity = Number(e.target.value); document.getElementById('opVal').textContent = Cam.opacity+'%'; g.style.opacity = Cam.opacity/100; };
   }
-  else h.textContent = 'Màn hình sạch. Ảnh Trước ở góc trên bên phải để đối chiếu.';
+  else h.textContent = 'Ảnh Trước ở góc trên bên phải để đối chiếu. Bật "Mờ" để chồng ảnh Trước lên khung hình khi cần canh góc.';
 }
 function shoot(){
   if(!Cam.stream || !video.videoWidth){ document.getElementById('fileCam').click(); return; }

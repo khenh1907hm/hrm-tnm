@@ -12,7 +12,7 @@ export function BeforeAfterTool() {
         <Camera size={20} aria-hidden="true" />
         <div>
           <h2>Ảnh Trước / Sau công trình</h2>
-          <p className="muted">Chụp ảnh hiện trạng và sau thi công theo từng hạng mục, canh đúng góc cũ (bật/tắt được), xem hai ảnh cạnh nhau, lập bảng Before / After kèm ghi chú địa chỉ rồi xuất Word hoặc Excel. Ảnh lưu lên hệ thống, cả đội cùng xem.</p>
+          <p className="muted">Chụp ảnh hiện trạng và sau thi công theo từng hạng mục, đối chiếu ảnh cũ khi chụp (chồng mờ bật/tắt được), xem hai ảnh cạnh nhau, lập bảng Before / After kèm ghi chú địa chỉ rồi xuất Word hoặc Excel. Ảnh lưu lên hệ thống, cả đội cùng xem.</p>
         </div>
       </header>
       <div>
