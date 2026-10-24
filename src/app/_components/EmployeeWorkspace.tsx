@@ -3,6 +3,7 @@ import { usePathname } from "next/navigation";
 import { LogOut, Sparkles, Wrench, type LucideIcon } from "lucide-react";
 import SkillsClient from "../skills/SkillsClient";
 import { BackgroundRemoverTool } from "./BackgroundRemoverTool";
+import { BeforeAfterTool } from "./BeforeAfterTool";
 import { EMPLOYEE_VIEWS, parseRoute, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
 
@@ -16,6 +17,7 @@ export function ToolsPage() {
   return (
     <section className="tools-page">
       <div className="page-head"><div><h1>Công cụ</h1><p>Các công cụ làm việc dùng chung của công ty.</p></div></div>
+      <BeforeAfterTool />
       <BackgroundRemoverTool />
     </section>
   );
