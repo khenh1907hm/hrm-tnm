@@ -4,13 +4,14 @@ import { createHrApp } from "../../app-core/createHrApp";
 import { fixedClock, systemClock } from "../../lib/clock";
 import { randomIds, sequentialIds } from "../../lib/ids";
 import { getSupabaseClient } from "../../lib/supabase/client";
-import type { Actor, Role } from "../../modules/auth/permissions";
+import type { Actor } from "../../modules/auth/permissions";
 import { cacheRepositories, TAB_REFRESH_GAP_MS, type CacheStatus, type RepositoryCache } from "../../repositories/cached";
 import { createDemoRepositories } from "../../repositories/memory/seedDemo";
 import { createSupabaseRepositories } from "../../repositories/supabase/createSupabaseRepositories";
 import { createStorageFileStore, type FileStore } from "./fileStore";
 import { readyLive, reconcileLive, type LiveBinding } from "./liveSession";
 import type { App } from "./shared";
+import { isLimitedRole, parseProfileRole, type LimitedRole, type ProfileRole } from "./workspaceRole";
 
 const DEMO_NOW = "2026-10-12T09:00:00+07:00";
 /** Dữ liệu cũ hơn mức này thì tải lại (ngầm nếu đã có dữ liệu). */
@@ -22,8 +23,8 @@ export type Backend =
   | { status: "signedOut"; signIn: (email: string, password: string) => Promise<string | null> }
   /** Đã đăng nhập nhưng chưa được admin cấp quyền (vai trò pending / không có hồ sơ). */
   | { status: "pending"; email: string | null; signOut: () => Promise<void> }
-  /** Vai trò Nhân viên: chỉ Kho Skill AI và Công cụ, không dựng app nhân sự. */
-  | { status: "employee"; mode: "demo" | "live"; email: string | null; signOut: () => Promise<void>; exitPreview?: () => void }
+  /** Vai trò Kỹ sư / Nhân viên: chỉ Công cụ và Kho Skill AI, không dựng app nhân sự. */
+  | { status: "employee"; role: LimitedRole; mode: "demo" | "live"; email: string | null; signOut: () => Promise<void>; exitPreview?: () => void }
   | {
     status: "ready"; mode: "demo" | "live"; app: App; actor: Actor; setActor: (actor: Actor) => void; email: string | null; fileStore: FileStore | null; signOut: () => Promise<void>;
     /** stale: dữ liệu có thể chưa mới nhất (tải ngầm lỗi); revision tăng mỗi khi dữ liệu nền thật sự được thay. */
@@ -33,13 +34,13 @@ export type Backend =
   };
 
 type Live = LiveBinding<App> & { cache: RepositoryCache };
-type Profile = { userId: string; role: Role | "employee" | "pending" };
+type Profile = { userId: string; role: ProfileRole };
 type SupabaseClientLike = NonNullable<ReturnType<typeof getSupabaseClient>>;
 
-/** Vai trò của người dùng: admin/hr vào app nhân sự, employee chỉ Kho Skill AI và Công cụ, còn lại → chờ cấp quyền. */
+/** Vai trò của người dùng: admin/hr vào app nhân sự, engineer/employee chỉ Công cụ và Kho Skill AI, còn lại → chờ cấp quyền. */
 async function fetchRole(client: SupabaseClientLike, id: string): Promise<Profile["role"]> {
   const { data } = await client.from("profiles").select("role").eq("id", id).single();
-  return data?.role === "admin" || data?.role === "hr" || data?.role === "employee" ? data.role as Profile["role"] : "pending";
+  return parseProfileRole(data?.role);
 }
 const sameProfile = (id: string, role: Profile["role"]) => (current: Profile | null): Profile | null => current?.userId === id && current.role === role ? current : { userId: id, role };
 
@@ -59,8 +60,8 @@ export function useBackend(): Backend {
   const liveRef = useRef<Live | null>(null);
   const userId = session?.user.id ?? null;
   const currentRole = profile && profile.userId === userId && (profile.role === "admin" || profile.role === "hr") ? profile.role : null;
-  // Bị hạ về "chờ cấp quyền" hoặc "nhân viên" cũng phải xóa bộ nhớ tạm dữ liệu nhân sự như khi đăng xuất
-  const revoked = profile !== null && profile.userId === userId && (profile.role === "pending" || profile.role === "employee");
+  // Bị hạ về "chờ cấp quyền", "kỹ sư" hoặc "nhân viên" cũng phải xóa bộ nhớ tạm dữ liệu nhân sự như khi đăng xuất
+  const revoked = profile !== null && profile.userId === userId && (profile.role === "pending" || isLimitedRole(profile.role));
 
   // Chế độ demo: nạp dữ liệu mẫu
   useEffect(() => {
@@ -139,12 +140,12 @@ export function useBackend(): Backend {
     await client?.auth.signOut();
   }, [client]);
 
-  if (!client && demoEmployee) return { status: "employee", mode: "demo", email: null, signOut: async () => undefined, exitPreview: () => setDemoEmployee(false) };
+  if (!client && demoEmployee) return { status: "employee", role: "employee", mode: "demo", email: null, signOut: async () => undefined, exitPreview: () => setDemoEmployee(false) };
   if (!client) return demoApp ? { status: "ready", mode: "demo", app: demoApp, actor: demoActor, setActor: setDemoActor, email: null, fileStore: null, signOut: async () => undefined, dataStatus: NO_STATUS, previewEmployee: () => setDemoEmployee(true) } : { status: "loading" };
   if (session === undefined) return { status: "loading" };
   if (session === null) return { status: "signedOut", signIn };
   if (profile?.userId === session.user.id && profile.role === "pending") return { status: "pending", email: session.user.email ?? null, signOut };
-  if (profile?.userId === session.user.id && profile.role === "employee") return { status: "employee", mode: "live", email: session.user.email ?? null, signOut };
+  if (profile?.userId === session.user.id && isLimitedRole(profile.role)) return { status: "employee", role: profile.role, mode: "live", email: session.user.email ?? null, signOut };
   // Chỉ trả app dựng cho đúng người và đúng vai trò hiện tại; trong lúc dựng lại thì hiện "đang tải"
   const ready = readyLive(live, { userId: session.user.id, role: currentRole });
   if (!ready || !currentRole) return { status: "loading" };

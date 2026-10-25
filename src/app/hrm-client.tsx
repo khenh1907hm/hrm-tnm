@@ -48,7 +48,7 @@ export default function HrmClient() {
   // Kho Skill xem công khai được, không bắt đăng nhập
   if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
   if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
-  if (backend.status === "employee") return <EmployeeWorkspace mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
+  if (backend.status === "employee") return <EmployeeWorkspace role={backend.role} mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
   return <HrmWorkspace backend={backend} />;
 }
 
