@@ -61,10 +61,10 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
     try { await work(); } catch { setCellError("Không ghi được vào file mẫu, thử lại."); } finally { setBusy(false); }
   };
   const withImage = (config: ProfileTemplateConfig, field: string, range: string): ProfileTemplateConfig => ({ ...config, imageSlots: [...config.imageSlots.filter((slot) => slot.field !== field), { field, range, fit: "stretch", custom: true }] });
-  const withCustom = (config: ProfileTemplateConfig, cell: string, label: string, kind: ProfileCustomField["kind"]): ProfileTemplateConfig => {
+  const withCustom = (config: ProfileTemplateConfig, cell: string, label: string, kind: ProfileCustomField["kind"], image = ""): ProfileTemplateConfig => {
     const key = fieldKeyFromLabel(label, [...config.placeholders, ...config.customFields.map((field) => field.key)]);
-    // Ảnh mới (logo, ảnh dự án) mặc định cố định theo mẫu: tải ảnh một lần ở mục "Ô nhập thêm"
-    return { ...config, customFields: [...config.customFields, { key, label, kind, target: cell, scope: kind === "image" ? "template" : "export", defaultValue: "" }] };
+    // Ảnh mới (logo thầu, ảnh dự án) cố định theo mẫu: ảnh chọn/tải ngay khi gán, đổi sau ở mục "Ô nhập thêm"
+    return { ...config, customFields: [...config.customFields, { key, label, kind, target: cell, scope: kind === "image" ? "template" : "export", defaultValue: kind === "image" ? image : "" }] };
   };
   const assign = (assignment: CellAssignment) => {
     if (!selection) return;
@@ -75,7 +75,7 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
         await rewrite((bytes) => placeFieldCodes(bytes, value.sheetName, [{ cell: first, field: assignment.field, mode: assignment.mode }]));
         setFocused(`key:${assignment.field}`);
       } else if (assignment.type === "image") onChange(withImage(value, assignment.field, range));
-      else if (assignment.type === "custom") onChange(withCustom(value, assignment.kind === "image" ? range : first, assignment.label, assignment.kind));
+      else if (assignment.type === "custom") onChange(withCustom(value, assignment.kind === "image" ? range : first, assignment.label, assignment.kind, assignment.image));
       else onChange({ ...value, printArea: range });
       setSelection(null);
     });
@@ -215,7 +215,7 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
         </div>
         <p className="muted">{editable ? "Bấm một ô (hoặc kéo chuột chọn nhiều ô) để chọn dữ liệu điền vào. " : ""}Rê chuột vào một mục bên trái, vùng tương ứng trên phiếu sẽ sáng lên.</p>
         <TemplatePreview fileBase64={props.fileBase64} sheetName={value.sheetName} printArea={value.printArea} regions={regions} active={hovered ?? (selection?.regionIds[0] ?? focused)} selection={selection?.range ?? null}
-          overlay={selection ? <TemplateCellPanel key={selection.range} selection={selection} catalog={catalog} regionLabel={regionLabel} busy={busy} error={cellError} onAssign={assign} onRemove={removeRegion} onClose={() => setSelection(null)} /> : null}
+          overlay={selection ? <TemplateCellPanel key={selection.range} selection={selection} catalog={catalog} partners={props.partners} regionLabel={regionLabel} busy={busy} error={cellError} onAssign={assign} onRemove={removeRegion} onClose={() => setSelection(null)} /> : null}
           {...(editable ? { onSelect: (next: PreviewSelection) => { setSelection(next); setCellError(""); } } : {})} />
       </aside>
       </>

@@ -520,8 +520,10 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 /* Mở rộng ảnh phiếu */
 .profile-editor-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .profile-editor-preview-head .preview-expand{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;white-space:nowrap;flex-shrink:0}
-.profile-editor-preview.is-expanded{position:fixed;inset:20px;z-index:60;max-height:none;background:var(--surface);border-radius:12px;padding:16px 18px;box-shadow:0 24px 70px rgba(10,18,26,.35);will-change:transform}
-.profile-editor-preview.is-expanded .template-preview-frame{background:#dde3ea}
+.profile-editor-preview.is-expanded{position:fixed;inset:24px;margin:0 auto;width:min(1240px,calc(100vw - 48px));z-index:60;max-height:none;background:var(--surface);border-radius:12px;padding:18px 24px;box-shadow:0 24px 70px rgba(10,18,26,.35);will-change:transform}
+/* Phiếu nằm giữa nền xám, chừa lề hai bên như tờ giấy */
+.profile-editor-preview.is-expanded .template-preview-frame{background:#dde3ea;padding:24px clamp(16px,6vw,88px)}
+@media (max-width:640px){.profile-editor-preview.is-expanded{inset:12px;width:calc(100vw - 24px);padding:14px}}
 .preview-backdrop{position:fixed;inset:0;z-index:59;background:rgba(10,18,26,.45);animation:preview-fade .3s ease-out}
 @keyframes preview-fade{from{opacity:0}}
 @media (prefers-reduced-motion:reduce){.preview-backdrop{animation:none}}

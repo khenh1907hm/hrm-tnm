@@ -7,9 +7,9 @@ import type { Partner } from "../../modules/partners/types";
 
 const KIND_LABELS: Record<ProfileCustomFieldKind, string> = { text: "Chữ", date: "Ngày (dd/mm/yyyy)", checkbox: "Ô đánh dấu ☑/☐", image: "Ảnh" };
 const SCOPE_LABELS: Record<ProfileFieldScope, string> = { employee: "Lưu theo từng nhân sự", template: "Cố định theo mẫu", export: "Nhập khi xuất" };
-const MAX_FIXED_IMAGE = 2 * 1024 * 1024;
+export const MAX_FIXED_IMAGE = 2 * 1024 * 1024;
 
-const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
+export const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
 
 /** Kiểm tra ô đích: trường ảnh cần vùng ô, trường khác cần đúng một ô. */
 function targetError(kind: ProfileCustomFieldKind, target: string): string | null {
