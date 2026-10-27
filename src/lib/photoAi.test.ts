@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { handlePhotoAiRequest, MAX_PHOTO_AI_BYTES, PHOTO_AI_MODEL } from "./photoAi";
+import { handlePhotoAiRequest, MAX_PHOTO_AI_BYTES, PHOTO_AI_FALLBACK_MODEL, PHOTO_AI_MODEL } from "./photoAi";
 
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
 const env = { cloudflareAccountId: "acc", cloudflareApiToken: "tok" };
@@ -25,6 +25,15 @@ describe("handlePhotoAiRequest", () => {
     expect(body.get("input_image_0")).toBeInstanceOf(Blob);
     expect([body.get("width"), body.get("height")]).toEqual(["768", "1024"]);
     expect(String(body.get("prompt"))).toContain("3:4");
+  });
+
+  it("retries with the smaller fallback model when Workers AI has an internal error", async () => {
+    const fetcher = vi.fn(async (url: string) => url.endsWith(PHOTO_AI_MODEL)
+      ? Response.json({ success: false, errors: [{ code: 3043, message: "AiError: Internal server error" }] }, { status: 500 })
+      : Response.json({ success: true, result: { image: btoa(String.fromCharCode(...JPEG)) } }));
+    const response = await handlePhotoAiRequest(request(photo()), env, fetcher);
+    expect(response.status).toBe(200);
+    expect(fetcher.mock.calls.map((call) => (call as unknown as [string])[0].split("/run/")[1])).toEqual([PHOTO_AI_MODEL, PHOTO_AI_FALLBACK_MODEL]);
   });
 
   it("rejects when not configured or the upload is invalid", async () => {

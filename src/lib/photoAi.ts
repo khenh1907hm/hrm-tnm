@@ -6,6 +6,8 @@ import { authorized } from "./officeToPdf";
  */
 export const MAX_PHOTO_AI_BYTES = 4 * 1024 * 1024;
 export const PHOTO_AI_MODEL = "@cf/black-forest-labs/flux-2-klein-9b";
+/** Workers AI thỉnh thoảng báo "Internal server error": thử lại bằng bản 4B nhỏ hơn trước khi báo lỗi. */
+export const PHOTO_AI_FALLBACK_MODEL = "@cf/black-forest-labs/flux-2-klein-4b";
 const PHOTO_AI_MIMES = ["image/jpeg", "image/png", "image/webp"];
 
 export const PHOTO_AI_PROMPT = `Turn this photo into a standard professional 3:4 ID portrait of the same person.
@@ -35,18 +37,24 @@ export async function handlePhotoAiRequest(request: Request, env: PhotoAiEnv, fe
   if (!PHOTO_AI_MIMES.includes(image.type)) return fail(415, "PHOTO_AI_TYPE", "Chỉ nhận ảnh JPG, PNG hoặc WebP.");
   if (image.size > MAX_PHOTO_AI_BYTES) return fail(413, "PHOTO_AI_TOO_LARGE", "Ảnh vượt quá 4 MB.");
 
-  const body = new FormData();
-  body.set("prompt", PHOTO_AI_PROMPT);
-  body.set("input_image_0", image, image.name || "photo");
-  body.set("width", "768");
-  body.set("height", "1024");
-  const url = `https://api.cloudflare.com/client/v4/accounts/${env.cloudflareAccountId}/ai/run/${PHOTO_AI_MODEL}`;
-  const response = await fetcher(url, { method: "POST", body, headers: { authorization: `Bearer ${env.cloudflareApiToken}` } }).catch(() => null);
-  const payload = await response?.json().catch(() => null) as { success?: boolean; result?: { image?: string }; errors?: { code?: number; message?: string }[] } | null;
-  const output = payload?.result?.image;
-  if (!response?.ok || !output) {
+  const run = async (model: string) => {
+    const body = new FormData();
+    body.set("prompt", PHOTO_AI_PROMPT);
+    body.set("input_image_0", image, image.name || "photo");
+    body.set("width", "768");
+    body.set("height", "1024");
+    const url = `https://api.cloudflare.com/client/v4/accounts/${env.cloudflareAccountId}/ai/run/${model}`;
+    const response = await fetcher(url, { method: "POST", body, headers: { authorization: `Bearer ${env.cloudflareApiToken}` } }).catch(() => null);
+    const payload = await response?.json().catch(() => null) as { success?: boolean; result?: { image?: string }; errors?: { code?: number; message?: string }[] } | null;
     // Workers AI báo hết 10.000 neurons miễn phí trong ngày (làm mới lúc 0h UTC)
-    if (payload?.errors?.some((item) => /neuron|allocation/i.test(item.message ?? ""))) return fail(429, "PHOTO_AI_QUOTA", "Đã hết lượt AI chỉnh ảnh miễn phí hôm nay, hãy thử lại sau 7 giờ sáng.");
+    const quota = payload?.errors?.some((item) => /neuron|allocation/i.test(item.message ?? "")) ?? false;
+    return { output: response?.ok ? payload?.result?.image : undefined, quota };
+  };
+  let attempt = await run(PHOTO_AI_MODEL);
+  if (!attempt.output && !attempt.quota) attempt = await run(PHOTO_AI_FALLBACK_MODEL);
+  const output = attempt.output;
+  if (!output) {
+    if (attempt.quota) return fail(429, "PHOTO_AI_QUOTA", "Đã hết lượt AI chỉnh ảnh miễn phí hôm nay, hãy thử lại sau 7 giờ sáng.");
     return fail(502, "PHOTO_AI_FAILED", "AI chỉnh ảnh đang gặp lỗi, hãy thử lại sau ít phút.");
   }
   const bytes = Uint8Array.from(atob(output), (char) => char.charCodeAt(0));
