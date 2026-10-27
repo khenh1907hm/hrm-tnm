@@ -48,6 +48,7 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
     slotAspect: scan.slotAspect,
     attachments: previous?.attachments ?? certificateKeys,
     ...(previous?.signatureId ? { signatureId: previous.signatureId } : {}),
+    ...(previous?.fileNamePattern ? { fileNamePattern: previous.fileNamePattern } : {}),
   };
 }
 

@@ -76,7 +76,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
             // Mỗi nhân sự một file PDF: phiếu rồi các chứng chỉ ở dưới
             try {
               const result = await exportProfilePdf(input);
-              output.push({ name: profileFileName(employee, exportDate, "pdf"), bytes: result.bytes });
+              output.push({ name: profileFileName(employee, exportDate, "pdf", template.profile.fileNamePattern), bytes: result.bytes });
               outcomes.push({ employee, warnings: result.warnings });
             } catch (error) {
               if (!isConverterMissing(error)) throw error;
@@ -86,12 +86,12 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
           if (format === "pdf" && !converterReady) {
             // Chưa cài máy chuyển PDF: mỗi nhân sự một thư mục gồm phiếu Excel + PDF gộp chứng chỉ
             const result = await exportProfileBundle(input);
-            const folder = profileFileName(employee, exportDate).replace(/\.xlsx$/, "");
+            const folder = profileFileName(employee, exportDate, "xlsx", template.profile.fileNamePattern).replace(/\.xlsx$/, "");
             output.push(...result.files.map((file) => ({ ...file, folder })));
             outcomes.push({ employee, warnings: ["Máy chủ chưa cài máy chuyển PDF nên phiếu vẫn là file Excel", ...result.warnings] });
           } else if (format === "xlsx") {
             const result = await exportProfileWorkbook(input);
-            output.push({ name: profileFileName(employee, exportDate), bytes: result.bytes });
+            output.push({ name: profileFileName(employee, exportDate, "xlsx", template.profile.fileNamePattern), bytes: result.bytes });
             outcomes.push({ employee, warnings: result.warnings });
           }
         } catch (error) {
@@ -101,7 +101,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
       }
       const done = outcomes.filter((item) => !item.error).length;
       if (format === "pdf" && output.length === 1 && output[0]!.name.endsWith(".pdf")) downloadBlob(new Blob([output[0]!.bytes.slice().buffer], { type: "application/pdf" }), output[0]!.name);
-      else if (format === "pdf" && done === 1) downloadBlob(await zipFiles(output.map(({ name, bytes }) => ({ name, bytes }))), profileFileName(outcomes.find((item) => !item.error)!.employee, exportDate, "zip"));
+      else if (format === "pdf" && done === 1) downloadBlob(await zipFiles(output.map(({ name, bytes }) => ({ name, bytes }))), profileFileName(outcomes.find((item) => !item.error)!.employee, exportDate, "zip", template.profile.fileNamePattern));
       else if (format === "xlsx" && output.length === 1) downloadXlsx(output[0]!.bytes, output[0]!.name);
       else if (output.length) downloadBlob(await zipFiles(output), zipFileName(template.name, exportDate, done));
       setResults(outcomes);
