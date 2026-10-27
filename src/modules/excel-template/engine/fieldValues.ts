@@ -3,6 +3,7 @@ import { currentSafetyGroups, formatSafetyGroups } from "../../certificates/safe
 import type { Certificate } from "../../certificates/types";
 import type { Commander } from "../../commanders/types";
 import type { Employee } from "../../employees/types";
+import { isValidOn } from "../../certificates/status";
 
 export type SystemFieldKind = "text" | "date" | "checkbox";
 export type SystemField = { key: string; label: string; kind: SystemFieldKind; group: "employee" | "computed" | "contact" | "signer" | "certificate" };
@@ -49,9 +50,9 @@ export function ageOn(dob: string, date: string): number {
   return date.slice(5) < dob.slice(5) ? years - 1 : years;
 }
 
-/** Chứng chỉ được tính là "có" khi đang hiện hành và còn hạn tại ngày xuất. */
+/** Chứng chỉ được tính là "có" khi đang hiện hành và còn hạn tại ngày xuất (loại không có thời hạn luôn còn hạn). */
 export function hasValidCertificate(certificates: readonly Certificate[], type: string, exportDate: string): boolean {
-  return certificates.some((certificate) => certificate.type === type && certificate.state === "current" && certificate.expiryDate >= exportDate);
+  return certificates.some((certificate) => certificate.type === type && certificate.state === "current" && isValidOn(certificate.expiryDate, exportDate));
 }
 
 export type FieldValueSource = {

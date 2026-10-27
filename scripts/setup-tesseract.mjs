@@ -10,11 +10,16 @@ const coreSource = join(root, "node_modules", "tesseract.js-core");
 const workerTarget = join(root, "public", "tesseract", "worker.min.js");
 const coreTarget = join(root, "public", "tesseract", "core");
 const tessdataDir = join(root, "public", "tessdata");
+// Worker của PDF.js: đọc chữ trong chứng chỉ PDF scan (vẽ trang ra ảnh rồi OCR)
+const pdfWorkerSource = join(root, "node_modules", "pdfjs-dist", "build", "pdf.worker.min.mjs");
+const pdfWorkerTarget = join(root, "public", "pdfjs", "pdf.worker.min.mjs");
 
 await mkdir(dirname(workerTarget), { recursive: true });
 await mkdir(coreTarget, { recursive: true });
 await mkdir(tessdataDir, { recursive: true });
 await copyFile(workerSource, workerTarget);
+await mkdir(dirname(pdfWorkerTarget), { recursive: true });
+await copyFile(pdfWorkerSource, pdfWorkerTarget);
 for (const file of await readdir(coreSource)) {
   if (/^tesseract-core.*\.(?:js|wasm)$/.test(file)) await copyFile(join(coreSource, file), join(coreTarget, file));
 }

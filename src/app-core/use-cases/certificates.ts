@@ -50,7 +50,9 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       if (before.version !== input.expectedVersion) return err("CONFLICT");
       if (before.state !== "current") return err("CERT_NOT_CURRENT");
       if (!hasValidRenewalIdentity(before.type, before.title, input.type, certificateTitleFor(before.type, shape.data.title, shape.data.safetyGroup ?? before.safetyGroup))) return err("CERT_RENEW_TITLE_INVALID", "title");
-      if (input.expiryDate <= before.expiryDate || (input.issueDate && before.issueDate && input.issueDate < before.issueDate)) return err("CERT_RENEW_DATE_INVALID", "expiryDate");
+      // Chỉ so hạn khi cả bản cũ và bản mới đều có hạn (loại không có thời hạn thì không có "hạn mới sau hạn cũ")
+      const expiryNotLater = input.expiryDate !== null && before.expiryDate !== null && input.expiryDate <= before.expiryDate;
+      if (expiryNotLater || (input.issueDate && before.issueDate && input.issueDate < before.issueDate)) return err("CERT_RENEW_DATE_INVALID", "expiryDate");
       const employee = await getEmployee(before.employeeId);
       if (!employee) return err("EMP_NOT_FOUND");
       const all = await repositories.certificates.list();
@@ -148,7 +150,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const [types, certificates] = await Promise.all([repositories.certificateTypes.list(), repositories.certificates.list()]);
       return success(getCertificateChecklist(employee, types, certificates, today()));
     },
-    listExpiring: async (actor: Actor): Promise<Result<(Certificate & { daysLeft: number; group: "expired" | "d30" | "d60"; reminderSendDate: string; reminderSent: boolean; reminderSentDate: string | null; employeeName: string; employeeCode: string; displayName: string })[]>> => {
+    listExpiring: async (actor: Actor): Promise<Result<(Certificate & { expiryDate: string; daysLeft: number; group: "expired" | "d30" | "d60"; reminderSendDate: string; reminderSent: boolean; reminderSentDate: string | null; employeeName: string; employeeCode: string; displayName: string })[]>> => {
       if (!has(actor, "certificateRead")) return err("FORBIDDEN");
       // Gọi song song: bốn lượt đọc độc lập nhau
       const [employees, certificates, certificateTypes, { keys: sentReminderKeys, dates: sentReminderDates }] = await Promise.all([repositories.employees.list(), repositories.certificates.list(), repositories.certificateTypes.list(), sentReminders()]);
@@ -157,13 +159,16 @@ export function createCertificateUseCases(ctx: HrAppContext) {
         const employee = employees.find((item) => item.id === certificate.employeeId);
         // Người đã nghỉ việc hoặc đã lưu trữ không cần nhắc hạn (khớp với phần gửi email nhắc hạn)
         if (!employee || employee.archivedAt !== null || employee.status === "resigned") return [];
-        const daysLeft = diffDays(today(), certificate.expiryDate);
+        // Chứng chỉ không có thời hạn không bao giờ vào danh sách sắp hết hạn
+        const expiryDate = certificate.expiryDate;
+        if (expiryDate === null) return [];
+        const daysLeft = diffDays(today(), expiryDate);
         if (daysLeft > 60) return [];
         const group: "expired" | "d30" | "d60" = daysLeft < 0 ? "expired" : daysLeft <= 30 ? "d30" : "d60";
-        const reminderKey = sentReminderKeys.find((key) => key.startsWith(`${certificate.id}|`) && key.endsWith(`|${certificate.expiryDate}`));
+        const reminderKey = sentReminderKeys.find((key) => key.startsWith(`${certificate.id}|`) && key.endsWith(`|${expiryDate}`));
         const reminderSent = reminderKey !== undefined;
         const type = certificateTypes.find((item) => item.key === certificate.type);
-        return [{ ...certificate, daysLeft, group, reminderSendDate: addDays(certificate.expiryDate, -30), reminderSent, reminderSentDate: reminderKey ? sentReminderDates.get(reminderKey) ?? null : null, employeeName: employee.name, employeeCode: employee.code, displayName: type ? certificateDisplayName(type, certificate.title) : certificateDisplayName(certificate.type, certificate.title) }];
+        return [{ ...certificate, expiryDate, daysLeft, group, reminderSendDate: addDays(expiryDate, -30), reminderSent, reminderSentDate: reminderKey ? sentReminderDates.get(reminderKey) ?? null : null, employeeName: employee.name, employeeCode: employee.code, displayName: type ? certificateDisplayName(type, certificate.title) : certificateDisplayName(certificate.type, certificate.title) }];
       });
       result.sort((a, b) => a.daysLeft - b.daysLeft || compareNormalizedText(a.employeeName, b.employeeName));
       return success(result);

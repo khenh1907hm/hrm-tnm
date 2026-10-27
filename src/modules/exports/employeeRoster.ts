@@ -26,6 +26,7 @@ const toDate = (iso: string | null | undefined): Date | null => {
 const vnDate = (iso: string) => iso.split("-").reverse().join("/");
 
 function certificateTone(certificate: Certificate, today: string): Tone {
+  if (certificate.expiryDate === null) return "ok";
   const daysLeft = diffDays(today, certificate.expiryDate);
   return daysLeft < 0 ? "bad" : daysLeft <= 30 ? "warn" : "ok";
 }
@@ -107,7 +108,7 @@ export async function buildEmployeeRosterWorkbook(data: RosterData): Promise<Uin
         if (type.requiredForPositions.includes(employee.position)) { cell.value = "Thiếu (bắt buộc)"; paint(cell, "bad"); }
         continue;
       }
-      cell.value = own.map((certificate) => `${certificate.title ? `${certificate.title} · ` : ""}Số ${certificate.number} · HH ${vnDate(certificate.expiryDate)}`).join("\n");
+      cell.value = own.map((certificate) => `${certificate.title ? `${certificate.title} · ` : ""}${certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · ${certificate.expiryDate ? `HH ${vnDate(certificate.expiryDate)}` : "Không thời hạn"}`).join("\n");
       const worst = own.map((certificate) => certificateTone(certificate, data.today));
       paint(cell, worst.includes("bad") ? "bad" : worst.includes("warn") ? "warn" : "ok");
     }
@@ -129,7 +130,7 @@ export async function buildEmployeeRosterWorkbook(data: RosterData): Promise<Uin
       const tone = certificateTone(certificate, data.today);
       const row = detail.addRow({
         code: employee.code, name: employee.name, type: typeName(certificate.type), title: certificate.title, number: certificate.number,
-        issueDate: toDate(certificate.issueDate), expiryDate: toDate(certificate.expiryDate), daysLeft: diffDays(data.today, certificate.expiryDate),
+        issueDate: toDate(certificate.issueDate), expiryDate: certificate.expiryDate ? toDate(certificate.expiryDate) : "Không thời hạn", daysLeft: certificate.expiryDate ? diffDays(data.today, certificate.expiryDate) : "",
         state: toneLabel[tone], files: 1 + certificate.supplementaryFiles.length,
       });
       paint(row.getCell("state"), tone);

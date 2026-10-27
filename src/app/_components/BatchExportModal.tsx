@@ -11,6 +11,7 @@ import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFileName, zipFiles, type ProfileBundleFile } from "./profileExport";
 import type { App, SetNotice } from "./shared";
+import { isValidOn } from "../../modules/certificates/status";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
 type PersonResult = { employee: Employee; warnings: string[]; error?: string };
@@ -68,7 +69,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
             const revealed = await app.employees.revealCccd(actor, employee.id);
             if (revealed.ok) full = { ...employee, cccd: revealed.value };
           }
-          const selected = includeAttachments ? list.filter((item) => item.state === "current" && item.expiryDate >= exportDate && template.profile.attachments.includes(item.type)).map((item) => item.id) : [];
+          const selected = includeAttachments ? list.filter((item) => item.state === "current" && isValidOn(item.expiryDate, exportDate) && template.profile.attachments.includes(item.type)).map((item) => item.id) : [];
           const overrides = { ...shared, ...Object.fromEntries(Object.entries(perPerson[employee.id] ?? {}).filter(([, value]) => value !== "")) };
           const input = { template, employee: full, commander: contact, signer: usesSigner(template.profile) ? signer : null, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, selectedCertificateIds: selected, overrides, exportDate };
           if (format === "pdf" && converterReady) {

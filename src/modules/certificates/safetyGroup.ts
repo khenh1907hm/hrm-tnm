@@ -1,4 +1,5 @@
 import type { Employee } from "../employees/types";
+import { expirySortKey, isValidOn } from "./status";
 import type { Certificate } from "./types";
 
 export const SAFETY_CERTIFICATE_TYPE = "atld";
@@ -28,7 +29,7 @@ export function normalizeSafetyGroup(type: string, value: number | null | undefi
 export function currentSafetyGroup(employee: Pick<Employee, "id" | "group">, certificates: readonly Certificate[]): number | null {
   const fromCertificate = certificates
     .filter((item) => item.employeeId === employee.id && item.state === "current" && isSafetyCertificateType(item.type) && isValidSafetyGroup(item.safetyGroup))
-    .sort((a, b) => b.expiryDate.localeCompare(a.expiryDate))[0]?.safetyGroup;
+    .sort((a, b) => expirySortKey(b.expiryDate).localeCompare(expirySortKey(a.expiryDate)))[0]?.safetyGroup;
   return fromCertificate ?? employee.group;
 }
 
@@ -46,7 +47,7 @@ export function certificateTitleFor(type: string, title: string | undefined, gro
 /** Các nhóm ATLĐ còn hiệu lực tại một ngày (mặc định: mọi chứng chỉ hiện hành), tăng dần; không có thì dùng nhóm trên hồ sơ. */
 export function currentSafetyGroups(employee: Pick<Employee, "id" | "group">, certificates: readonly Certificate[], onDate?: string): number[] {
   const groups = certificates
-    .filter((item) => item.employeeId === employee.id && item.state === "current" && isSafetyCertificateType(item.type) && isValidSafetyGroup(item.safetyGroup) && (!onDate || item.expiryDate >= onDate))
+    .filter((item) => item.employeeId === employee.id && item.state === "current" && isSafetyCertificateType(item.type) && isValidSafetyGroup(item.safetyGroup) && (!onDate || isValidOn(item.expiryDate, onDate)))
     .map((item) => item.safetyGroup as number);
   const unique = [...new Set(groups)].sort((a, b) => a - b);
   return unique.length ? unique : employee.group === null ? [] : [employee.group];

@@ -15,7 +15,7 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
       const all = await repositories.certificateTypes.list();
       return success(includeArchived && actor.role === "admin" ? all.sort((a, b) => a.sortOrder - b.sortOrder || compareNormalizedText(a.name, b.name) || compareNormalizedText(a.id, b.id)) : sortCertificateTypes(all));
     },
-    create: async (actor: Actor, input: { name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"] }): Promise<Result<CertificateTypeRecord>> => {
+    create: async (actor: Actor, input: { name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; noExpiry?: boolean | undefined }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
       const shape = certificateTypeInputSchema.safeParse(input);
       if (!shape.success) return failure(shape.error.issues.map((item) => issue("CTYPE_INPUT_INVALID", String(item.path[0] ?? "form"))));
@@ -26,7 +26,7 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
       await writeAudit(actor, "certificateType.create", "certificateType", result.value.id, null, result.value);
       return result;
     },
-    update: async (actor: Actor, input: { id: string; expectedVersion: number; name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; sortOrder: number }): Promise<Result<CertificateTypeRecord>> => {
+    update: async (actor: Actor, input: { id: string; expectedVersion: number; name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; sortOrder: number; noExpiry?: boolean | undefined }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
       const shape = certificateTypeInputSchema.safeParse(input);
       if (!shape.success) return failure(shape.error.issues.map((item) => issue("CTYPE_INPUT_INVALID", String(item.path[0] ?? "form"))));
@@ -38,6 +38,22 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
       if (!await repositories.certificateTypes.replace(result.value, input.expectedVersion)) return err("CONFLICT");
       await writeAudit(actor, "certificateType.update", "certificateType", result.value.id, before, result.value);
       return result;
+    },
+    /** Đặt lại thứ tự các loại đang dùng theo danh sách id (kéo thả): thứ tự = vị trí 1, 2, 3…, chỉ ghi loại đổi chỗ. */
+    reorder: async (actor: Actor, orderedIds: readonly string[]): Promise<Result<CertificateTypeRecord[]>> => {
+      if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
+      const active = sortCertificateTypes(await repositories.certificateTypes.list());
+      const sameSet = orderedIds.length === active.length && new Set(orderedIds).size === active.length && active.every((type) => orderedIds.includes(type.id));
+      if (!sameSet) return err("CONFLICT");
+      const byId = new Map(active.map((type) => [type.id, type]));
+      for (const [index, id] of orderedIds.entries()) {
+        const before = byId.get(id)!;
+        if (before.sortOrder === index + 1) continue;
+        const after = { ...before, sortOrder: index + 1, version: before.version + 1 };
+        if (!await repositories.certificateTypes.replace(after, before.version)) return err("CONFLICT");
+        await writeAudit(actor, "certificateType.update", "certificateType", id, before, after);
+      }
+      return success(sortCertificateTypes(await repositories.certificateTypes.list()));
     },
     archive: async (actor: Actor, input: { id: string; expectedVersion: number; reason: string }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");

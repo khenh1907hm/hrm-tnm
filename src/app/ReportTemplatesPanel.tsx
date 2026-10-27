@@ -1,5 +1,5 @@
 "use client";
-import { Download, FileText, Lightbulb, Pencil, Play, Plus, Settings, X } from "lucide-react";
+import { Copy, Download, FileText, Lightbulb, Pencil, Play, Plus, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { Actor } from "../modules/auth/permissions";
 import { profileConfigFromScan } from "../modules/excel-template/engine/profileConfig";
@@ -24,6 +24,7 @@ import {
 } from "../modules/excel-template/types";
 import {
   base64ToUint8Array,
+  duplicateTemplate,
   saveTemplates,
   uint8ArrayToBase64,
 } from "../modules/excel-template/templateStorage";
@@ -130,7 +131,8 @@ export function ReportTemplatesPanel({
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const scan = await scanTemplate(bytes);
-      const profile = scan.placeholders.length ? profileConfigFromScan(scan, formProfile ?? undefined) : null;
+      // File chưa có mã {{…}} cũng là mẫu hồ sơ: chọn ô cần điền ngay trên ảnh phiếu trong app
+      const profile = profileConfigFromScan(scan, formProfile ?? undefined);
       setFormFileName(file.name);
       setFormFileBase64(uint8ArrayToBase64(bytes));
       setFormProfile(profile);
@@ -248,6 +250,16 @@ export function ReportTemplatesPanel({
     saveTemplates(updatedList);
     setIsCreating(false);
     setEditingTemplate(null);
+  };
+
+  /** Nhân bản mẫu (file Excel + cấu hình) thành mẫu mới đứng ngay sau mẫu gốc, để sửa tiếp cho dự án khác. */
+  const copyTemplate = (tpl: ExcelReportTemplate) => {
+    const copy = duplicateTemplate(tpl, templates, `tpl-${Date.now()}`, new Date().toISOString());
+    const index = templates.findIndex((item) => item.id === tpl.id);
+    const next = [...templates.slice(0, index + 1), copy, ...templates.slice(index + 1)];
+    onTemplatesChange(next);
+    saveTemplates(next);
+    setNotice(`Đã nhân bản thành mẫu "${copy.name}".`);
   };
 
   const deleteTemplate = (id: string, name: string) => {
@@ -386,6 +398,9 @@ export function ReportTemplatesPanel({
               </button>}
               <button className="button" style={{ fontSize: "12px", padding: "6px 10px" }} onClick={() => openEdit(tpl)}>
                 {tpl.profile ? <><Settings className="ico" size={16} aria-hidden="true" /> Cài đặt mẫu</> : <><Pencil className="ico" size={16} aria-hidden="true" /> Sửa ô</>}
+              </button>
+              <button className="button" style={{ fontSize: "12px", padding: "6px 10px" }} title="Tạo bản sao gồm file Excel và toàn bộ cấu hình" onClick={() => copyTemplate(tpl)}>
+                <Copy className="ico" size={16} aria-hidden="true" /> Nhân bản
               </button>
               <button className="button danger" style={{ fontSize: "12px", padding: "6px 10px" }} onClick={() => deleteTemplate(tpl.id, tpl.name)}>
                 Xóa
@@ -526,7 +541,7 @@ export function ReportTemplatesPanel({
                 </div>
               </div>
 
-              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
+              {formProfile && <ProfileTemplateEditor value={formProfile} onChange={setFormProfile} fileBase64={formFileBase64} onFileChange={setFormFileBase64} certificateTypes={certificateTypes} partners={partners.partners} signatures={signatures} loadSignatureFile={loadSignatureFile} />}
 
               {/* Bảng định nghĩa ô nào thêm trường nào */}
               {!formProfile && <><div style={{ marginBottom: "20px" }}>

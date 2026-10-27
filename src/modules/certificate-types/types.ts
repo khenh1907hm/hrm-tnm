@@ -11,12 +11,15 @@ export type CertificateTypeRecord = {
   archived: boolean;
   archiveReason: string | null;
   version: number;
+  /** Loại không có thời hạn (bằng cấp…): chứng chỉ không cần ngày hết hạn, luôn còn hiệu lực. Bản ghi cũ không có trường này = có hạn. */
+  noExpiry?: boolean;
 };
 
 export type CertificateTypeInput = {
   name: string;
   englishName?: string | null;
   requiredForPositions: Position[];
+  noExpiry?: boolean | undefined;
 };
 
 export const SYSTEM_CERTIFICATE_TYPES: readonly CertificateTypeRecord[] = [

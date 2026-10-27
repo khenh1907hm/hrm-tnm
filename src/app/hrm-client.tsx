@@ -316,7 +316,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     if (!result.ok) return issueText(result.errors[0]?.code ?? "EMP_ARCHIVE_REASON");
     setReasonDialog(null);
     setSelectedIds((current) => current.filter((id) => id !== selected.id));
-    setSelected(null); navigate("employees"); await refresh(app, actor); setNotice("Đã lưu trữ hồ sơ. Admin có thể khôi phục bằng bộ lọc “Hiện hồ sơ đã lưu trữ”.");
+    setSelected(null); navigate("employees"); await refresh(app, actor); setNotice("Đã lưu trữ hồ sơ. Admin có thể khôi phục bằng cách tích ô “Đã lưu trữ” ở danh sách nhân sự.");
     return null;
   };
 

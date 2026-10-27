@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   base64ToUint8Array,
   createDefaultDemoTemplate,
+  duplicateTemplate,
   uint8ArrayToBase64,
 } from "./templateStorage";
 
@@ -28,5 +29,18 @@ describe("templateStorage utilities", () => {
 
     const nameMapping = template.mappings.find((m) => m.field === "name");
     expect(nameMapping?.cell).toBe("C6");
+  });
+});
+
+describe("duplicateTemplate", () => {
+  it("giữ nguyên file và cấu hình, đổi id, đặt tên bản sao không trùng", async () => {
+    const original = { ...await createDefaultDemoTemplate(), id: "tpl-a", name: "Hồ sơ Vinci" };
+    const copy = duplicateTemplate(original, [original], "tpl-b", "2026-10-27T10:00:00.000Z");
+    expect(copy).toMatchObject({ id: "tpl-b", name: "Hồ sơ Vinci (bản sao)", fileBase64: original.fileBase64, mappings: original.mappings, createdAt: "2026-10-27T10:00:00.000Z" });
+    // Sửa bản sao không ảnh hưởng bản gốc
+    copy.mappings.push({ cell: "Z9", field: "name" } as (typeof copy.mappings)[number]);
+    expect(original.mappings).not.toContain(copy.mappings.at(-1));
+    const third = duplicateTemplate(original, [original, copy], "tpl-c", "2026-10-27T10:01:00.000Z");
+    expect(third.name).toBe("Hồ sơ Vinci (bản sao 2)");
   });
 });

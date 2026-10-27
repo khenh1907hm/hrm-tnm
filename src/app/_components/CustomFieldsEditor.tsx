@@ -7,9 +7,9 @@ import type { Partner } from "../../modules/partners/types";
 
 const KIND_LABELS: Record<ProfileCustomFieldKind, string> = { text: "Chữ", date: "Ngày (dd/mm/yyyy)", checkbox: "Ô đánh dấu ☑/☐", image: "Ảnh" };
 const SCOPE_LABELS: Record<ProfileFieldScope, string> = { employee: "Lưu theo từng nhân sự", template: "Cố định theo mẫu", export: "Nhập khi xuất" };
-const MAX_FIXED_IMAGE = 2 * 1024 * 1024;
+export const MAX_FIXED_IMAGE = 2 * 1024 * 1024;
 
-const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
+export const readAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(reader.error); reader.readAsDataURL(file); });
 
 /** Kiểm tra ô đích: trường ảnh cần vùng ô, trường khác cần đúng một ô. */
 function targetError(kind: ProfileCustomFieldKind, target: string): string | null {
@@ -73,7 +73,7 @@ export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChan
 
   return (
     <section>
-      <h3>4. Ô nhập thêm <small>(ngày bắt đầu dự án, logo/ảnh dự án…)</small></h3>
+      <h3>3. Ô nhập thêm <small>(ngày bắt đầu dự án, logo/ảnh dự án…)</small></h3>
       <p className="muted">Thông tin không có sẵn trong hồ sơ. Gõ <code>{"{{mã}}"}</code> vào ô trong Excel, hoặc bấm <b>Thêm trường</b> bên dưới rồi chọn ô cần điền, không cần sửa file Excel.</p>
       {value.customFields.length > 0 && (
         <div className="table-scroll">
@@ -81,7 +81,7 @@ export function CustomFieldsEditor(props: { value: ProfileTemplateConfig; onChan
             <thead><tr><th>Tên hiển thị</th><th>Kiểu</th><th>Gắn vào</th><th>Giá trị lấy từ</th><th>Giá trị / ảnh mặc định</th><th><span className="sr-only">Xóa</span></th></tr></thead>
             <tbody>
               {value.customFields.map((field) => (
-                <tr key={field.key}>
+                <tr key={field.key} data-preview={field.target ? `custom:${field.key}` : `key:${field.key}`}>
                   <td><input aria-label={`Tên hiển thị ${field.key}`} value={field.label} onChange={(event) => update(field.key, { label: event.target.value })} /></td>
                   <td>
                     <select aria-label={`Kiểu ${field.label}`} value={field.kind} onChange={(event) => update(field.key, { kind: event.target.value as ProfileCustomFieldKind, defaultValue: "" })}>

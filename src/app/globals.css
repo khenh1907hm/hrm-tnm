@@ -221,6 +221,10 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .photo-skeleton-hint{font-weight:400;font-size:10px;color:var(--muted)}
 .photo-preview-3x4-large{width:150px;height:200px;flex-shrink:0;border-radius:10px;overflow:hidden;border:2px solid #3b82f6;box-shadow:0 4px 16px rgba(0,0,0,.1);position:relative}
 .photo-preview-3x4-large img{width:100%;height:100%;object-fit:cover;display:block}
+/* Ảnh 3×4 ở trang chi tiết: khung cố định, ảnh mọi kích thước đều cắt vừa khung (ưu tiên giữ phần đầu) */
+.photo-preview-3x4{position:relative;width:120px;aspect-ratio:3/4;flex-shrink:0;border-radius:8px;overflow:hidden;border:1px solid var(--line);background:var(--soft);display:grid;place-items:center}
+.photo-preview-3x4 img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center top;display:block}
+.photo-preview-3x4 .muted{font-size:12px;text-align:center;padding:6px}
 .photo-change-btn{width:100%;height:34px;font-size:12px;padding:6px 10px;display:flex;align-items:center;justify-content:center}
 
 /* OCR Header Button */
@@ -454,3 +458,102 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 @media (max-width:640px){.hoso-card{grid-template-columns:1fr}.hoso-facts{grid-template-columns:1fr}}
 /* Người ký trong form xuất: xem trước ảnh chữ ký, nút Xóa nền */
 .signer-picker{display:grid;gap:6px;margin-bottom:12px}.signer-picker>.field{margin:0}.signer-image{display:flex;flex-wrap:wrap;align-items:center;gap:10px}.signer-image-stage{width:220px;height:90px;border:1px solid var(--line);border-radius:6px;display:grid;place-items:center;padding:6px}.signer-image-stage img{max-width:100%;max-height:100%;object-fit:contain}.signer-image-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.signer-image-actions .button{display:inline-flex;align-items:center;gap:6px}
+/* Tự đọc thông tin chứng chỉ từ tệp (OCR) */
+.ocr-result{grid-column:1/-1;display:flex;align-items:flex-start;gap:8px;padding:10px 12px;border:1px solid var(--info-bg);background:var(--info-bg);color:var(--info);border-radius:8px;font-size:13px}.ocr-result>div{flex:1}.ocr-result.is-warning{border-color:var(--warn-bg);background:var(--warn-bg);color:var(--warn)}.ocr-result .button{flex-shrink:0;padding:4px 10px;font-size:13px}.ocr-result .ico{flex-shrink:0;margin-top:2px}
+.field input.ocr-filled{border-color:var(--brand);background:var(--brand-soft)}
+
+/* Xem trước phiếu mẫu: mục cấu hình đang chọn → vùng tương ứng trên ảnh phiếu sáng lên. */
+.profile-editor-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,46%);gap:20px;align-items:start}
+.profile-editor-preview{position:sticky;top:12px;max-height:calc(100vh - 24px);display:flex;flex-direction:column;gap:6px;min-width:0}
+.profile-editor-preview h3{font-size:14px;margin:0}
+.profile-editor-preview>p{margin:0;font-size:12px}
+@media (max-width:1100px){.profile-editor-layout{grid-template-columns:1fr}.profile-editor-preview{position:static;max-height:none;order:-1}}
+.template-preview{display:flex;flex-direction:column;gap:6px;min-height:0;flex:1}
+.template-preview-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12px;color:var(--muted)}
+.template-preview-legend span{display:inline-flex;align-items:center;gap:5px}
+.template-preview-legend i{width:12px;height:12px;border-radius:3px;border:2px solid var(--tone);background:var(--tone-bg)}
+.template-preview-note{margin:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--warn);background:var(--warn-bg);padding:4px 8px;border-radius:6px}
+.template-preview-frame{overflow:auto;flex:1;min-height:120px;overscroll-behavior:contain;border:1px solid var(--line);border-radius:8px;background:#e9edf2;padding:8px}
+.template-preview-scaler{position:relative;overflow:hidden}
+.template-preview-sheet{position:relative;transform-origin:0 0;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.2);font-family:Tahoma,Arial,sans-serif;color:#000}
+.preview-cell{position:absolute;display:flex;box-sizing:border-box;overflow:hidden;border:0 solid #555;padding:0 2px;line-height:1.15;pointer-events:none}
+.preview-image{position:absolute;object-fit:fill;pointer-events:none}
+.tone-field{--tone:#d99a00;--tone-bg:rgba(255,196,0,.22)}
+.tone-image{--tone:#1f6fd1;--tone-bg:rgba(31,111,209,.18)}
+.tone-signer{--tone:#8a3ffc;--tone-bg:rgba(138,63,252,.18)}
+.tone-custom{--tone:#18a058;--tone-bg:rgba(24,160,88,.18)}
+.tone-print{--tone:#d63b3b;--tone-bg:transparent}
+.preview-region{position:absolute;box-sizing:border-box;margin:0;padding:0;border:2px solid var(--tone);background:var(--tone-bg);border-radius:2px;pointer-events:none}
+.preview-region.tone-print{border-style:dashed;pointer-events:none}
+.preview-region:hover{box-shadow:0 0 0 2px var(--tone)}
+.preview-region.is-dim{opacity:.25}
+.preview-region.is-active{opacity:1;z-index:2;border-width:3px;background:color-mix(in srgb,var(--tone) 35%,transparent);box-shadow:0 0 0 4px color-mix(in srgb,var(--tone) 35%,transparent)}
+.preview-region.tone-print.is-active{background:transparent}
+.preview-region-label{position:absolute;left:0;bottom:100%;transform-origin:0 100%;white-space:nowrap;background:var(--tone);color:#fff;font:600 12px/1.4 system-ui,sans-serif;padding:1px 6px;border-radius:4px 4px 4px 0;pointer-events:none}
+.profile-editor .preview-flash{background:rgba(255,196,0,.3);box-shadow:0 0 0 3px rgba(255,196,0,.6);border-radius:6px}
+
+/* Sửa mẫu ngay trên ảnh phiếu: chọn ô → gán dữ liệu (bảng gán nổi trên ảnh) */
+.template-preview-sheet.is-selectable{cursor:cell;touch-action:none;user-select:none}
+.preview-selection{position:absolute;box-sizing:border-box;border:2px solid #0b57d0;background:rgba(11,87,208,.14);pointer-events:none;z-index:3}
+.template-preview-body{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.template-preview-overlay{position:absolute;left:10px;right:22px;z-index:5}
+.template-preview-overlay.at-top{top:10px}.template-preview-overlay.at-bottom{bottom:10px}
+.cell-panel{border:1px solid #0b57d0;border-radius:8px;background:var(--surface);padding:10px 12px;display:grid;gap:8px;box-shadow:0 4px 14px rgba(11,87,208,.15)}
+.cell-panel .field{margin:0}
+.cell-panel-head{display:flex;align-items:center;gap:8px;min-width:0}
+.cell-panel-head .icon-button{margin-left:auto;padding:4px 6px}
+.cell-panel-text{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-size:12px}
+.cell-panel-current{list-style:none;margin:0;padding:0;display:grid;gap:4px}
+.cell-panel-current li{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--soft);border-radius:6px;padding:4px 4px 4px 8px;font-size:13px}
+.cell-panel-current .button{padding:3px 10px}
+.cell-panel-mode{display:grid;gap:4px;font-size:13px}
+.cell-panel-mode label{display:flex;align-items:center;gap:6px}
+.cell-panel-note{margin:0;font-size:12px}
+.cell-panel-custom{display:grid;grid-template-columns:1fr 150px;gap:8px}
+.cell-panel-actions{display:flex;justify-content:flex-end}
+.ai-setup{display:grid;gap:8px}
+.ai-setup ol{margin:0;padding-left:20px;font-size:13px}
+.ai-setup>.button{justify-self:start}
+.ai-setup .field{margin:0}
+.ai-setup textarea{width:100%;font:12px/1.4 ui-monospace,Consolas,monospace;border:1px solid var(--line);border-radius:6px;padding:8px}
+.ai-setup-actions{display:flex;gap:8px}
+.ai-setup-problems{margin:0;padding-left:0;list-style:none;display:grid;gap:3px;font-size:13px}
+.warn-text{color:var(--warn)}
+.ok-text{color:var(--ok);margin:0}
+
+/* Mở rộng ảnh phiếu */
+.profile-editor-preview-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.profile-editor-preview-head .preview-expand{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;white-space:nowrap;flex-shrink:0}
+.profile-editor-preview.is-expanded{position:fixed;inset:24px;margin:0 auto;width:min(1240px,calc(100vw - 48px));z-index:60;max-height:none;background:var(--surface);border-radius:12px;padding:18px 24px;box-shadow:0 24px 70px rgba(10,18,26,.35);will-change:transform}
+/* Phiếu nằm giữa nền xám, chừa lề hai bên như tờ giấy */
+.profile-editor-preview.is-expanded .template-preview-frame{background:#dde3ea;padding:24px clamp(16px,6vw,88px)}
+@media (max-width:640px){.profile-editor-preview.is-expanded{inset:12px;width:calc(100vw - 24px);padding:14px}}
+.preview-backdrop{position:fixed;inset:0;z-index:59;background:rgba(10,18,26,.45);animation:preview-fade .3s ease-out}
+@keyframes preview-fade{from{opacity:0}}
+@media (prefers-reduced-motion:reduce){.preview-backdrop{animation:none}}
+
+/* Cài nhanh bằng AI: thẻ đóng sẵn, bấm mới mở. */
+details.ai-setup{border:1px solid var(--line);border-radius:8px;padding:0;margin-top:12px;background:var(--surface)}
+details.ai-setup>summary{cursor:pointer;padding:10px 14px;font-weight:600;display:flex;align-items:center;gap:6px;list-style:none}
+details.ai-setup>summary::-webkit-details-marker{display:none}
+details.ai-setup>summary::after{content:"▸";margin-left:auto;color:var(--muted);transition:transform .2s}
+details.ai-setup[open]>summary::after{transform:rotate(90deg)}
+details.ai-setup>summary small{font-weight:400;color:var(--muted)}
+details.ai-setup[open]{padding-bottom:12px}
+.ai-tabs{display:flex;flex-wrap:wrap;gap:4px;padding:0 14px;border-bottom:1px solid var(--line)}
+.ai-tabs button{border:0;background:none;padding:8px 12px;border-bottom:2px solid transparent;color:var(--muted);font-weight:600}
+.ai-tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:var(--accent)}
+.ai-tab-panel{padding:12px 14px 0;display:grid;gap:10px}
+.ai-tab-panel>p,.ai-tab-panel ol{margin:0;font-size:13px}
+.ai-rules{max-height:420px}
+.ai-rules td,.ai-rules th{padding:6px 10px;font-size:13px}
+.ai-rules-group th{background:var(--soft);color:var(--ink);font-weight:600}
+.ai-prompt{max-height:320px;overflow:auto;margin:0;padding:10px 12px;background:#f6f8fa;border:1px solid var(--line);border-radius:6px;font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap}
+.ai-file{justify-self:start;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.ai-merge{display:grid;gap:8px;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.ai-merge>p{margin:0;font-size:13px}
+details.ai-setup>[role=status]{padding:8px 14px 0}
+/* Xuất hồ sơ: kéo / chọn số để đổi thứ tự chứng chỉ ghép sau phiếu */
+.profile-export-cert-row{display:flex;align-items:center;gap:6px;border-radius:8px;border-left:4px solid transparent;padding:2px 8px 2px 4px;margin-bottom:6px}.profile-export-cert-row .profile-export-cert{flex:1;min-width:0}.profile-export-cert-row.dragging{opacity:.7;box-shadow:0 4px 14px rgba(0,0,0,.12)}.cert-position{width:52px;padding:4px 6px;border:1px solid var(--line);border-radius:6px;background:#fff;flex-shrink:0}
+/* Bảng loại chứng chỉ: kéo tay nắm ⋮⋮ để đổi thứ tự */
+.ctype-hint{margin:0 0 8px;font-size:13px}.ctype-table td{vertical-align:middle}.ctype-table .pill{margin-left:6px}.ctype-english{display:block;margin-top:2px}.ctype-handle-cell{width:36px;padding-right:0}.ctype-actions{white-space:nowrap;text-align:right}.ctype-actions .button+.button{margin-left:6px}.drag-handle{border:0;background:none;color:var(--muted);padding:4px;border-radius:4px;cursor:grab;touch-action:none;display:inline-flex}.drag-handle:hover,.drag-handle:focus-visible{background:var(--soft);color:var(--ink)}.ctype-row.dragging{background:var(--soft);opacity:.75}.ctype-row.dragging .drag-handle{cursor:grabbing}

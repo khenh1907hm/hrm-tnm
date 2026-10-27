@@ -6,6 +6,7 @@ import { currentSafetyGroups } from "../certificates/safetyGroup";
 import { SYSTEM_CERTIFICATE_TYPES, type CertificateTypeRecord } from "../certificate-types/types";
 import type { Employee } from "../employees/types";
 import type { Signature } from "../signatures/types";
+import { expirySortKey, isValidOn } from "../certificates/status";
 
 export type WorkerProfileOptions = {
   selectedCertificateIds?: string[];
@@ -16,19 +17,19 @@ export type WorkerProfileOptions = {
 
 export function getSelectableProfileCertificates(employeeId: string, signDate: string, certificates: readonly Certificate[], certificateTypes: readonly CertificateTypeRecord[]) {
   const systemTypes = certificateTypes.filter((type) => type.system && !type.archived).sort((a, b) => a.sortOrder - b.sortOrder || compareNormalizedText(a.name, b.name) || compareCodePoint(a.id, b.id));
-  const employeeCertificates = certificates.filter((item) => item.employeeId === employeeId && item.state === "current" && item.expiryDate >= signDate);
+  const employeeCertificates = certificates.filter((item) => item.employeeId === employeeId && item.state === "current" && isValidOn(item.expiryDate, signDate));
   const systemKeys = new Set(systemTypes.map((type) => type.key));
   return {
-    system: systemTypes.map((type) => ({ type: type.key, displayName: type.name, certificates: employeeCertificates.filter((item) => item.type === type.key).sort((a, b) => b.expiryDate.localeCompare(a.expiryDate) || compareNormalizedText(a.title, b.title) || compareCodePoint(a.id, b.id)) })),
+    system: systemTypes.map((type) => ({ type: type.key, displayName: type.name, certificates: employeeCertificates.filter((item) => item.type === type.key).sort((a, b) => expirySortKey(b.expiryDate).localeCompare(expirySortKey(a.expiryDate)) || compareNormalizedText(a.title, b.title) || compareCodePoint(a.id, b.id)) })),
     extra: employeeCertificates.filter((item) => !systemKeys.has(item.type)).sort((a, b) => compareNormalizedText(a.type, b.type) || compareNormalizedText(a.title, b.title) || compareCodePoint(a.id, b.id)),
   };
 }
 
 function selectedForType(certificates: readonly Certificate[], typeKey: string, signDate: string, selectedIds: readonly string[], selectionIsExplicit: boolean): Certificate[] {
-  const eligible = certificates.filter((item) => item.type === typeKey && item.state === "current" && item.expiryDate >= signDate);
+  const eligible = certificates.filter((item) => item.type === typeKey && item.state === "current" && isValidOn(item.expiryDate, signDate));
   const selected = eligible.filter((item) => selectedIds.includes(item.id));
   const candidates = selectionIsExplicit ? selected : eligible;
-  return [...candidates].sort((a, b) => b.expiryDate.localeCompare(a.expiryDate) || compareNormalizedText(a.title, b.title) || compareCodePoint(a.id, b.id)).slice(0, 1);
+  return [...candidates].sort((a, b) => expirySortKey(b.expiryDate).localeCompare(expirySortKey(a.expiryDate)) || compareNormalizedText(a.title, b.title) || compareCodePoint(a.id, b.id)).slice(0, 1);
 }
 
 export function buildCertificateScanSelection(
@@ -41,7 +42,7 @@ export function buildCertificateScanSelection(
   for (const typeKey of systemTypeKeys) selected.push(...selectedForType(certificates, typeKey, signDate, options.selectedCertificateIds ?? [], options.selectedCertificateIds !== undefined));
   const systemTypeSet = new Set(systemTypeKeys);
   const extraIds = new Set(options.extraCertificateIds ?? []);
-  const extras = certificates.filter((item) => !systemTypeSet.has(item.type) && extraIds.has(item.id) && item.state === "current" && item.expiryDate >= signDate);
+  const extras = certificates.filter((item) => !systemTypeSet.has(item.type) && extraIds.has(item.id) && item.state === "current" && isValidOn(item.expiryDate, signDate));
   selected.push(...extras);
   const allScans = selected.flatMap((certificate) => [certificate.document, ...(options.includeSupplementary ? certificate.supplementaryFiles.map((item) => item.file) : [])]);
   if (options.selectedFileIds !== undefined) {

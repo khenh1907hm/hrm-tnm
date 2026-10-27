@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, Camera, Check, Copy, ExternalLink, IdCard, Image as ImageIcon, Lightbulb, Sparkles, UserRound } from "lucide-react";
+import { BriefcaseBusiness, Camera, Check, Copy, ExternalLink, IdCard, Image as ImageIcon, Lightbulb, Sparkles, Undo2, UserRound, WandSparkles } from "lucide-react";
 import { useRef, useState, type FormEvent } from "react";
 import type { Actor } from "../../modules/auth/permissions";
 import type { FileRef } from "../../modules/certificates/types";
@@ -10,7 +10,7 @@ import { checkIdImages } from "../../modules/ocr/imageFiles";
 import { mergeParsed, parseIdText } from "../../modules/ocr/parseIdText";
 import { readIdImages, type OcrProgress } from "../../modules/ocr/readIdImages";
 import { BackgroundRemover } from "./BackgroundRemover";
-import { dataUrlToFile, newPhotoRef, preparePhoto, usePhotoUrl } from "./employeePhoto";
+import { dataUrlToFile, newPhotoRef, photoTo3x4WithAi, preparePhoto, usePhotoUrl } from "./employeePhoto";
 import { Field } from "./Field";
 import { issueText, ocrFieldLabel, type App, type SetNotice } from "./shared";
 
@@ -29,7 +29,9 @@ Strict requirements:
 
 Output only the final cropped portrait.`;
 const CHATGPT_PHOTO_URL = `https://chatgpt.com/?q=${encodeURIComponent(CHATGPT_PHOTO_PROMPT)}`;
-const EDIT_TOUCHED_FIELDS: OcrFormField[] = ["name", "dob", "cccd", "phone", "home", "address", "currentAddress"];
+/** Lỗi CCCD không khớp năm sinh / giới tính: chỉ khi đó mới cần ô nhập lý do xác nhận. */
+const CCCD_MISMATCH_TEXTS = [issueText("CCCD_DOB_MISMATCH"), issueText("CCCD_GENDER_MISMATCH")];
+const EDIT_TOUCHED_FIELDS: OcrFormField[] =["name", "dob", "cccd", "phone", "home", "address", "currentAddress"];
 
 /** Giá trị ban đầu của form: ảnh có thể còn là data URL kiểu cũ. */
 export type EmployeeFormInitial = Omit<EmployeeInput, "photo"> & Pick<Employee, "photo">;
@@ -49,7 +51,11 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
   const storedPhotoUrl = usePhotoUrl(pendingPhoto ? null : form.photo, props.loadPhoto);
   const photoUrl = pendingPhoto ? pendingPhotoUrl : storedPhotoUrl;
   const [saving, setSaving] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  /** Lỗi lần lưu gần nhất kèm dữ liệu form lúc đó: trường nào đã sửa khác đi thì ẩn lỗi của trường đó. */
+  const [errorState, setErrorState] = useState<{ errors: Record<string, string>; form: EmployeeInput }>(() => ({ errors: {}, form }));
+  const showErrors = (next: Record<string, string>) => setErrorState({ errors: next, form });
+  const errors = Object.fromEntries(Object.entries(errorState.errors).filter(([field]) => form[field as keyof EmployeeInput] === errorState.form[field as keyof EmployeeInput]));
+  const cccdMismatch = errors.cccd !== undefined && CCCD_MISMATCH_TEXTS.includes(errors.cccd);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrProgress, setOcrProgress] = useState<OcrProgress | null>(null);
   const [ocrFilledFields, setOcrFilledFields] = useState<Set<OcrFormField>>(new Set());
@@ -58,11 +64,22 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
   const [ocrMissing, setOcrMissing] = useState<OcrFormField[]>([]);
   const ocrAbort = useRef<AbortController | null>(null);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [photoAiBusy, setPhotoAiBusy] = useState(false);
+  /** Ảnh trước khi AI chỉnh, để hoàn tác nếu kết quả không giống người thật. */
+  const [photoBeforeAi, setPhotoBeforeAi] = useState<{ photo: FileRef | null; pending: File | null; pendingUrl: string | null } | null>(null);
   const photoInputRef = useRef<HTMLInputElement | null>(null);
+  /** Dữ liệu lúc mở form, để hỏi lại trước khi đóng mà bỏ mất phần đã nhập. */
+  const [openedForm] = useState(() => JSON.stringify(form));
+  const closeForm = () => {
+    if (JSON.stringify(form) !== openedForm && !window.confirm("Bỏ các thông tin vừa nhập mà chưa lưu?")) return;
+    ocrAbort.current?.abort();
+    props.onClose();
+  };
   const idImageInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handlePhotoSelect = (file: File | undefined) => {
+  const handlePhotoSelect = (file: File | undefined, keepUndo = false) => {
     if (!file) return;
+    if (!keepUndo) setPhotoBeforeAi(null);
     if (!(PHOTO_MIMES as readonly string[]).includes(file.type)) {
       setNotice("Chỉ nhận ảnh chân dung JPG, PNG hoặc WebP.");
       return;
@@ -76,7 +93,28 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
       setForm((cur) => ({ ...cur, photo: newPhotoRef(prepared) }));
     });
   };
-  const removePhoto = () => { setPendingPhoto(null); setPendingPhotoUrl(null); setForm((cur) => ({ ...cur, photo: null })); };
+  const removePhoto = () => { setPhotoBeforeAi(null); setPendingPhoto(null); setPendingPhotoUrl(null); setForm((cur) => ({ ...cur, photo: null })); };
+
+  const photoTo3x4 = async () => {
+    const source = pendingPhoto ?? (form.photo ? await props.loadPhoto(form.photo) : null);
+    if (!source) { setNotice("Chưa tải được ảnh hiện tại, hãy thử lại."); return; }
+    setPhotoAiBusy(true);
+    try {
+      const edited = await photoTo3x4WithAi(source);
+      setPhotoBeforeAi({ photo: form.photo ?? null, pending: pendingPhoto, pendingUrl: pendingPhotoUrl });
+      handlePhotoSelect(edited, true);
+      setNotice("AI đã chỉnh xong ảnh 3×4. Hãy kiểm tra khuôn mặt còn giống người thật trước khi lưu.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "AI chỉnh ảnh đang gặp lỗi, hãy thử lại sau.");
+    } finally { setPhotoAiBusy(false); }
+  };
+  const undoPhotoAi = () => {
+    if (!photoBeforeAi) return;
+    setPendingPhoto(photoBeforeAi.pending);
+    setPendingPhotoUrl(photoBeforeAi.pendingUrl);
+    setForm((cur) => ({ ...cur, photo: photoBeforeAi.photo }));
+    setPhotoBeforeAi(null);
+  };
 
   // Ảnh chữ ký đã tách nền (thu nhỏ còn 800px cho nhẹ vì lưu ngay trong hồ sơ) → data URL
   const handleSignatureChange = (png: File) => {
@@ -102,12 +140,12 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
     event.preventDefault();
     const parsed = employeeInputSchema.safeParse(form);
     if (!parsed.success) {
-      setErrors(Object.fromEntries(parsed.error.issues.map((item) => [String(item.path[0] ?? "form"), "Vui lòng kiểm tra thông tin trường này."])));
+      showErrors(Object.fromEntries(parsed.error.issues.map((item) => [String(item.path[0] ?? "form"), "Vui lòng kiểm tra thông tin trường này."])));
       return;
     }
     const preview = await app.employees.validate(actor, { ...form, ...(editing ? { excludeId: editing.id } : {}) });
     if (!preview.ok) {
-      setErrors(Object.fromEntries(preview.errors.map((item) => [item.field ?? "form", issueText(item.code)])));
+      showErrors(Object.fromEntries(preview.errors.map((item) => [item.field ?? "form", issueText(item.code)])));
       return;
     }
     if (preview.warnings.length && !window.confirm(preview.warnings.map((item) => issueText(item.code)).join("\n"))) return;
@@ -123,7 +161,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
       ? await app.employees.update(actor, { ...form, id: editing.id, expectedVersion: editing.version })
       : await app.employees.create(actor, form);
     if (!result.ok) {
-      setErrors(Object.fromEntries(result.errors.map((item) => [item.field ?? "form", issueText(item.code)])));
+      showErrors(Object.fromEntries(result.errors.map((item) => [item.field ?? "form", issueText(item.code)])));
       return;
     }
     props.onSaved(result.value);
@@ -181,7 +219,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
       <form className="modal-card" onSubmit={(event) => void saveEmployee(event)}>
         <header>
           <h2>{editing ? "Sửa hồ sơ nhân sự" : "Thêm nhân sự"}</h2>
-          <button type="button" className="close" onClick={props.onClose}>×</button>
+          <button type="button" className="close" onClick={closeForm}>×</button>
         </header>
 
         {/* 1. Thông tin trên CCCD */}
@@ -247,13 +285,13 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
             </label>
 
             {/* Chỉ hiện trường lý do khi thực sự có cảnh báo không khớp hoặc đã có lý do */}
-            {Boolean(form.mismatchOverrideReason || errors.cccd) && (
+            {Boolean(form.mismatchOverrideReason || cccdMismatch) && (
               <div style={{ gridColumn: "1 / -1", background: "#fffbeb", padding: "10px 14px", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "12px" }}>
                 <Field
                   label="Lý do xác nhận CCCD không khớp (do công an cấp nhầm / khác giấy tờ)"
                   name="mismatchOverrideReason"
                   value={form.mismatchOverrideReason ?? ""}
-                  error={errors.cccd}
+                  error={undefined}
                   onChange={(value) => setForm({ ...form, mismatchOverrideReason: value })}
                 />
                 <small style={{ color: "#92400e" }}>Chỉ điền khi số CCCD thực sự không khớp với năm sinh hoặc giới tính do lỗi cấp phát.</small>
@@ -302,10 +340,19 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
                 </div>
               )}
               {form.photo ? (
-                <div style={{ display: "flex", gap: "6px", width: "100%" }}>
-                  <button type="button" className="button photo-change-btn" onClick={() => photoInputRef.current?.click()}>Đổi ảnh</button>
-                  <button type="button" className="button danger photo-change-btn" onClick={removePhoto}>Xóa</button>
-                </div>
+                <>
+                  <div style={{ display: "flex", gap: "6px", width: "100%" }}>
+                    <button type="button" className="button photo-change-btn" disabled={photoAiBusy} onClick={() => photoInputRef.current?.click()}>Đổi ảnh</button>
+                    <button type="button" className="button danger photo-change-btn" disabled={photoAiBusy} onClick={removePhoto}>Xóa</button>
+                  </div>
+                  {photoBeforeAi ? (
+                    <button type="button" className="button photo-change-btn" onClick={undoPhotoAi}><Undo2 className="ico" size={14} aria-hidden="true" /> Hoàn tác ảnh AI</button>
+                  ) : (
+                    <button type="button" className="button primary photo-change-btn" disabled={photoAiBusy} title="AI chỉnh ảnh hiện tại thành ảnh thẻ 3×4 nền trắng" onClick={() => void photoTo3x4()}>
+                      {photoAiBusy ? "AI đang chỉnh ảnh…" : <><WandSparkles className="ico" size={14} aria-hidden="true" /> Chỉnh 3×4 bằng AI</>}
+                    </button>
+                  )}
+                </>
               ) : (
                 <button type="button" className="button photo-change-btn" onClick={() => photoInputRef.current?.click()}>Tải ảnh lên</button>
               )}
@@ -326,7 +373,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
                   </button>
                   <pre className="prompt-text-box">{CHATGPT_PHOTO_PROMPT}</pre>
                 </div>
-                <p className="prompt-hint"><Lightbulb className="ico" size={12} aria-hidden="true" /> Bấm “Đi đến AI chỉnh ảnh”, đính kèm ảnh chụp nhân viên rồi gửi; tải ảnh kết quả về và bấm “Tải ảnh lên”.</p>
+                <p className="prompt-hint"><Lightbulb className="ico" size={12} aria-hidden="true" /> Cách nhanh: tải ảnh lên rồi bấm “Chỉnh 3×4 bằng AI”. Hoặc bấm “Đi đến AI chỉnh ảnh”, đính kèm ảnh chụp nhân viên rồi gửi; tải ảnh kết quả về và bấm “Tải ảnh lên”.</p>
               </div>
             </div>
           </div>
@@ -367,7 +414,7 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
         </section>
 
         <footer>
-          <button className="button" type="button" onClick={() => { ocrAbort.current?.abort(); props.onClose(); }}>Hủy</button>
+          <button className="button" type="button" onClick={closeForm}>Hủy</button>
           <button className="button primary" type="submit" disabled={saving}>{saving ? "Đang lưu…" : "Lưu hồ sơ"}</button>
         </footer>
       </form>

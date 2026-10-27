@@ -1,4 +1,4 @@
-import { Download, FileText } from "lucide-react";
+import { Download, FileText, GripVertical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { systemClock, todayVN } from "../../lib/clock";
 import type { Actor } from "../../modules/auth/permissions";
@@ -11,8 +11,17 @@ import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
+import { moveId, useDragReorder } from "./useDragReorder";
+import { expirySortKey, formatExpiry, isValidOn } from "../../modules/certificates/status";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
+
+/** Màu nhạt cho từng chứng chỉ ở danh sách đính kèm (nền + viền trái đậm hơn một chút). */
+const CERT_TONES = [
+  { background: "#eff6ff", border: "#93c5fd" }, { background: "#f0fdf4", border: "#86efac" }, { background: "#fff7ed", border: "#fdba74" },
+  { background: "#f5f3ff", border: "#c4b5fd" }, { background: "#fdf2f8", border: "#f9a8d4" }, { background: "#ecfeff", border: "#67e8f9" },
+  { background: "#fefce8", border: "#fde047" }, { background: "#f1f5f9", border: "#cbd5e1" },
+] as const;
 
 /** Xuất "Mẫu hồ sơ" cho một nhân sự: nhập trường tùy chỉnh, chọn chứng chỉ, xem cảnh báo. */
 export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean }) {
@@ -28,7 +37,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   const [contactChoice, setContactChoice] = useState<ContactChoice>(EMPTY_CONTACT);
   const selfIds = useMemo(() => [employee.id], [employee.id]);
   const current = useMemo(() => certificates.filter((certificate) => certificate.state === "current"), [certificates]);
-  const [selected, setSelected] = useState<string[]>(() => current.filter((certificate) => certificate.expiryDate >= exportDate && profile.attachments.includes(certificate.type)).map((certificate) => certificate.id));
+  const [selected, setSelected] = useState<string[]>(() => current.filter((certificate) => isValidOn(certificate.expiryDate, exportDate) && profile.attachments.includes(certificate.type)).map((certificate) => certificate.id));
   const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
   const [warnings, setWarnings] = useState<string[] | null>(null);
 
@@ -41,10 +50,16 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
     return () => { active = false; };
   }, [app, actor]);
 
-  const ordered = [...current].sort((a, b) => {
+  const defaultOrder = useMemo(() => [...current].sort((a, b) => {
     const rank = (type: string) => { const index = profile.attachments.indexOf(type); return index < 0 ? 99 : index; };
-    return rank(a.type) - rank(b.type) || a.expiryDate.localeCompare(b.expiryDate);
-  });
+    return rank(a.type) - rank(b.type) || expirySortKey(a.expiryDate).localeCompare(expirySortKey(b.expiryDate));
+  }).map((certificate) => certificate.id), [current, profile.attachments]);
+  /** Thứ tự ghép sau phiếu: mặc định theo loại trong mẫu, người xuất kéo thả hoặc chọn số để đổi. */
+  const [chosenOrder, setChosenOrder] = useState<string[] | null>(null);
+  const certificateOrder = chosenOrder ? [...chosenOrder.filter((id) => defaultOrder.includes(id)), ...defaultOrder.filter((id) => !chosenOrder.includes(id))] : defaultOrder;
+  const { order, draggingId, handleProps } = useDragReorder(certificateOrder, setChosenOrder);
+  const byId = new Map(current.map((certificate) => [certificate.id, certificate]));
+  const ordered = order.flatMap((id) => byId.get(id) ?? []);
 
   const run = async (format: "xlsx" | "pdf") => {
     setBusy(format);
@@ -55,7 +70,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         const revealed = await app.employees.revealCccd(actor, employee.id);
         if (revealed.ok) fullEmployee = { ...employee, cccd: revealed.value };
       }
-      const input = { template, employee: fullEmployee, commander, signer: needsSigner ? signer : null, certificates, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, selectedCertificateIds: selected, overrides, exportDate };
+      const input = { template, employee: fullEmployee, commander, signer: needsSigner ? signer : null, certificates, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, selectedCertificateIds: selected, certificateOrder, overrides, exportDate };
       let label = format === "pdf" ? "PDF" : "Excel";
       let warningList: string[];
       if (format === "pdf") {
@@ -101,17 +116,33 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
       <section>
         <h3>Chứng chỉ đính kèm (ghép lần lượt sau phiếu)</h3>
         <p className="muted">Hồ sơ PDF (.zip): phiếu Excel đã điền + một tệp PDF gộp các chứng chỉ (PDF giữ nguyên trang, ảnh scan mỗi ảnh một trang A4). Excel: chỉ chèn được chứng chỉ dạng ảnh.</p>
-        {ordered.length ? ordered.map((certificate) => {
+        {ordered.length > 1 && <p className="muted">Kéo biểu tượng ⋮⋮ hoặc chọn số thứ tự để đổi thứ tự ghép sau phiếu.</p>}
+        {ordered.length ? ordered.map((certificate, index) => {
           const hasBinary = Boolean(props.sessionFiles[certificate.document.id]);
-          const expired = certificate.expiryDate < exportDate;
+          const expired = !isValidOn(certificate.expiryDate, exportDate);
+          const name = `${typeNames[certificate.type] ?? certificate.type}${certificate.title ? ` (${certificate.title})` : ""}`;
+          // Màu đi theo chứng chỉ (không theo vị trí) để khi kéo dễ nhìn ra dòng nào đang di chuyển
+          const tone = CERT_TONES[Math.max(0, defaultOrder.indexOf(certificate.id)) % CERT_TONES.length]!;
           return (
-            <label className="check-field profile-export-cert" key={certificate.id}>
-              <input type="checkbox" checked={selected.includes(certificate.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, certificate.id] : selected.filter((id) => id !== certificate.id))} />
-              <span><b>{typeNames[certificate.type] ?? certificate.type}{certificate.title ? ` (${certificate.title})` : ""}</b> · Số {certificate.number} · Hết hạn {certificate.expiryDate.split("-").reverse().join("/")}</span>
-              {expired && <span className="pill bad">Đã hết hạn</span>}
-              {!profile.attachments.includes(certificate.type) && <span className="pill">Ngoài danh sách của mẫu</span>}
-              {!hasBinary && <span className="pill warn">Chưa có tệp trong phiên</span>}
-            </label>
+            <div className={certificate.id === draggingId ? "profile-export-cert-row dragging" : "profile-export-cert-row"} key={certificate.id} data-reorder-id={certificate.id} style={{ background: tone.background, borderLeftColor: tone.border }}>
+              {ordered.length > 1 && (
+                <button type="button" className="drag-handle" aria-label={`Kéo để đổi thứ tự ${name} (hoặc bấm ↑/↓)`} title="Kéo để đổi thứ tự" {...handleProps(certificate.id)}>
+                  <GripVertical className="ico" size={16} aria-hidden="true" />
+                </button>
+              )}
+              <label className="check-field profile-export-cert">
+                <input type="checkbox" checked={selected.includes(certificate.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, certificate.id] : selected.filter((id) => id !== certificate.id))} />
+                <span><b>{name}</b> · {certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · {certificate.expiryDate ? `Hết hạn ${formatExpiry(certificate.expiryDate)}` : "Không thời hạn"}</span>
+                {expired && <span className="pill bad">Đã hết hạn</span>}
+                {!profile.attachments.includes(certificate.type) && <span className="pill">Ngoài danh sách của mẫu</span>}
+                {!hasBinary && <span className="pill warn">Chưa có tệp trong phiên</span>}
+              </label>
+              {ordered.length > 1 && (
+                <select className="cert-position" aria-label={`Thứ tự của ${name}`} title="Thứ tự ghép sau phiếu" value={index + 1} onChange={(event) => setChosenOrder(moveId(order, certificate.id, Number(event.target.value) - 1))}>
+                  {ordered.map((_, position) => <option key={position} value={position + 1}>{position + 1}</option>)}
+                </select>
+              )}
+            </div>
           );
         }) : <p className="muted">Nhân sự chưa có chứng chỉ hiện hành.</p>}
       </section>

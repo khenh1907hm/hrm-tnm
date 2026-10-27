@@ -80,3 +80,15 @@ export function saveTemplates(templates: ExcelReportTemplate[]): void {
     // ignore quota errors
   }
 }
+
+/**
+ * Nhân bản một mẫu báo cáo: giữ nguyên file Excel và toàn bộ cấu hình (ô, vùng ảnh, chứng chỉ đính kèm…),
+ * đổi id, đặt tên "… (bản sao)" không trùng mẫu khác và mốc thời gian mới.
+ */
+export function duplicateTemplate(template: ExcelReportTemplate, existing: readonly ExcelReportTemplate[], id: string, now: string): ExcelReportTemplate {
+  const names = new Set(existing.map((item) => item.name.trim().toLowerCase()));
+  const base = `${template.name.trim()} (bản sao)`;
+  let name = base;
+  for (let index = 2; names.has(name.toLowerCase()); index++) name = `${template.name.trim()} (bản sao ${index})`;
+  return { ...structuredClone(template), id, name, createdAt: now, updatedAt: now };
+}

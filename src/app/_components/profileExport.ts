@@ -12,6 +12,7 @@ import type { Employee } from "../../modules/employees/types";
 import { mergeProfilePdf, type MergePart } from "../../modules/exports/pdf/mergeProfilePdf";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import { photoFile } from "./employeePhoto";
+import { formatExpiry } from "../../modules/certificates/status";
 
 /** Cạnh dài tối đa của ảnh scan khi chèn vào Excel (~150 dpi trên A4), để file không quá nặng. */
 const MAX_SCAN_SIDE = 1800;
@@ -105,6 +106,8 @@ export type ProfileExportInput = {
   sessionFiles: Readonly<Record<string, File>>;
   /** Id chứng chỉ người dùng chọn đính kèm. */
   selectedCertificateIds: readonly string[];
+  /** Thứ tự ghép chứng chỉ sau phiếu do người xuất chọn (id); bỏ trống = theo thứ tự loại trong mẫu. */
+  certificateOrder?: readonly string[];
   /** Giá trị trường tùy chỉnh người xuất sửa (thô). */
   overrides: Readonly<Record<string, string>>;
   exportDate: string;
@@ -130,25 +133,15 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
   // Ảnh: 3×4 từ hồ sơ; ảnh theo nhân sự (kể cả vùng IMG_ như ảnh CCCD) từ extraFiles; ảnh cố định từ mẫu
   const imageSlots = withoutDuplicatePortraits([...profile.imageSlots, ...customImageSlots(profile)], profile);
   const images: Record<string, TemplateImage | null> = {};
-  // Vùng ảnh được phủ kín đúng 4 góc ô khi điền (fillWorkbook "stretch")
-  const filledSlots = new Set<string>();
   for (const slot of imageSlots) {
-    const slotAspect = profile.slotAspect[slot.field];
+    // Mọi ảnh đều lấp đầy đúng vùng ô đã chọn (phủ kín 4 góc ô), không cắt, không chừa trống
     const idCard = isIdCardImage(slot.field, fieldLabel(slot.field, profile));
     const portrait = isPortraitImage(slot.field, fieldLabel(slot.field, profile));
-    const fit = profile.imageSlots.find((item) => item.field === slot.field)?.fit;
-    // "Vừa khung": thêm viền trong suốt theo tỉ lệ vùng rồi phủ kín vùng như "Kéo giãn", để hai bên trống đều nhau
-    // (căn giữa bằng pixel ước lượng bị lệch khi Excel/LibreOffice tính độ rộng cột khác).
-    // Ảnh CCCD và ảnh 3×4 luôn kéo giãn vừa khít ô: không cắt theo tỉ lệ ước lượng, không chừa trống hai bên.
-    const fitted = idCard || portrait;
-    const pad = !fitted && slot.field !== "signature" && fit !== "cover" && fit !== "stretch" && slotAspect !== undefined;
-    if (fitted || pad || fit === "cover" || fit === "stretch") filledSlots.add(slot.field);
-    const aspect = !fitted && (fit === "cover" || pad) ? slotAspect : undefined;
     const fixed = profile.customFields.find((field) => field.key === slot.field && field.kind === "image" && field.scope === "template")?.defaultValue;
     const stored = input.employee.extraFiles?.[slot.field];
     // Ảnh chụp của nhân sự (3×4, CCCD, ảnh scan riêng) không cần trong suốt → JPEG; chữ ký, ảnh cố định của mẫu giữ PNG
     const opaque = idCard || portrait || (Boolean(stored) && !fixed && slot.field !== "employeeSignature");
-    const options = { maxSide: SLOT_MAX_SIDE, ...(aspect ? { aspect } : {}), ...(pad ? { pad: true } : {}), ...(idCard ? { landscape: true } : {}), ...(opaque ? { opaque: true } : {}) };
+    const options = { maxSide: SLOT_MAX_SIDE, ...(idCard ? { landscape: true } : {}), ...(opaque ? { opaque: true } : {}) };
     if (slot.field === "signature") {
       // Thiếu ảnh thì fillWorkbook tự báo "vùng ảnh chưa có ảnh" như các vùng khác
       if (input.signer?.image) images[slot.field] = await toTemplateImage(input.signer.image, { maxSide: SLOT_MAX_SIDE });
@@ -167,18 +160,21 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
 
   const attachments: AttachmentPage[] = [];
   const chosen = input.certificates.filter((certificate) => input.selectedCertificateIds.includes(certificate.id));
-  const ordered = [...chosen].sort((a, b) => {
-    const rank = (type: string) => { const index = profile.attachments.indexOf(type); return index < 0 ? profile.attachments.length : index; };
-    return rank(a.type) - rank(b.type);
-  });
+  // Người xuất đã sắp thứ tự (kéo thả / đánh số) thì theo đúng thứ tự đó; không thì theo thứ tự loại trong mẫu
+  const order = input.certificateOrder;
+  const ordered = [...chosen].sort(order
+    ? (a, b) => order.indexOf(a.id) - order.indexOf(b.id)
+    : (a, b) => {
+      const rank = (type: string) => { const index = profile.attachments.indexOf(type); return index < 0 ? profile.attachments.length : index; };
+      return rank(a.type) - rank(b.type);
+    });
   for (const certificate of ordered) {
     const typeName = input.certificateTypeNames[certificate.type] ?? certificate.type;
     const files = [{ file: certificate.document, label: "Tệp chính" }, ...certificate.supplementaryFiles.map((item) => ({ file: item.file, label: `Tệp bổ sung: ${item.label ?? item.file.name}` }))];
     for (const { file, label } of files) {
       const binary = input.sessionFiles[file.id];
       if (!binary) { warnings.push(`${typeName}: chưa có dữ liệu tệp "${file.name}" trong phiên này`); continue; }
-      const [y, m, d] = certificate.expiryDate.split("-");
-      const title = `${typeName}${certificate.title ? ` (${certificate.title})` : ""} · Số ${certificate.number} · Hết hạn ${d}/${m}/${y} · ${label}`;
+      const title = `${typeName}${certificate.title ? ` (${certificate.title})` : ""} · ${certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · ${certificate.expiryDate ? `Hết hạn ${formatExpiry(certificate.expiryDate)}` : "Không thời hạn"} · ${label}`;
       if (forPdf && binary.type === "application/pdf") { mergeParts.push({ title, kind: "pdf", bytes: new Uint8Array(await binary.arrayBuffer()) }); continue; }
       if (binary.type === "application/pdf") { warnings.push(`${typeName}: tệp PDF "${file.name}" chưa hỗ trợ chèn vào Excel, hãy tải ảnh JPG/PNG`); continue; }
       const image = await toTemplateImage(binary, { opaque: true });
@@ -193,7 +189,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     sheetName: profile.sheetName,
     printArea: profile.printArea,
     values,
-    imageSlots: imageSlots.map((slot) => (filledSlots.has(slot.field) ? { ...slot, fit: "stretch" as const } : slot)),
+    imageSlots: imageSlots.map((slot) => ({ ...slot, fit: "stretch" as const })),
     images,
     attachments,
     cellValues,
