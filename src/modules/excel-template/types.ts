@@ -78,6 +78,8 @@ export interface ProfileTemplateConfig {
   attachments: string[];
   /** Chữ ký mặc định (id trong Thư viện chữ ký) cho ô người ký / vùng IMG_signature; đổi được khi xuất. */
   signatureId?: string;
+  /** Quy tắc đặt tên tệp xuất, vd "Vinci - {mã nhân viên} - {tên nhân viên}"; trống = HoSo_<mã>_<tên>_<ngày>. */
+  fileNamePattern?: string;
 }
 
 export interface ExcelReportTemplate {

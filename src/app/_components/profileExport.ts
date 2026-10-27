@@ -4,6 +4,7 @@ import { fillWorkbook, type AttachmentPage, type TemplateImage } from "../../mod
 import { readImageInfo } from "../../modules/excel-template/engine/imageSize";
 import { customImageSlots, customValues, fieldLabel, isIdCardImage, isPortraitImage, withoutDuplicatePortraits } from "../../modules/excel-template/engine/profileConfig";
 import { normalizeText } from "../../lib/text";
+import { applyFileNamePattern } from "../../modules/excel-template/fileNamePattern";
 import { base64ToUint8Array } from "../../modules/excel-template/templateStorage";
 import type { ExcelReportTemplate } from "../../modules/excel-template/types";
 import type { Certificate } from "../../modules/certificates/types";
@@ -254,8 +255,10 @@ export async function zipFiles(files: readonly (ProfileBundleFile & { folder?: s
 const safeName = (value: string) => normalizeText(value).replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_|_$/g, "");
 
 /** Tên tệp hồ sơ: HoSo_<mã>_<tên không dấu>_<yyyymmdd>.xlsx */
-export function profileFileName(employee: Pick<Employee, "code" | "name">, exportDate: string, extension: "xlsx" | "pdf" | "zip" = "xlsx"): string {
-  return `HoSo_${employee.code}_${safeName(employee.name)}_${exportDate.replaceAll("-", "")}.${extension}`;
+export function profileFileName(employee: Pick<Employee, "code" | "name"> & { position?: string }, exportDate: string, extension: "xlsx" | "pdf" | "zip" = "xlsx", pattern?: string): string {
+  // Mẫu có quy tắc đặt tên (vd "Vinci - {mã nhân viên} - {tên nhân viên}") thì theo quy tắc đó
+  const named = pattern?.trim() ? applyFileNamePattern(pattern, employee, exportDate).name : "";
+  return named ? `${named}.${extension}` : `HoSo_${employee.code}_${safeName(employee.name)}_${exportDate.replaceAll("-", "")}.${extension}`;
 }
 
 /** Tên tệp PDF gộp chứng chỉ: ChungChi_<mã>_<tên không dấu>_<yyyymmdd>.pdf */

@@ -12,6 +12,7 @@ import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/e
 import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 import { moveId, useDragReorder } from "./useDragReorder";
+import { applyFileNamePattern, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
 import { expirySortKey, formatExpiry, isValidOn } from "../../modules/certificates/status";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
@@ -24,7 +25,7 @@ const CERT_TONES = [
 ] as const;
 
 /** Xuất "Mẫu hồ sơ" cho một nhân sự: nhập trường tùy chỉnh, chọn chứng chỉ, xem cảnh báo. */
-export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean }) {
+export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean; onSaveFileNamePattern?: ((pattern: string) => void) | undefined }) {
   const { app, actor, template, employee, certificates } = props;
   const { profile } = template;
   const exportDate = todayVN(systemClock);
@@ -40,6 +41,11 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   const [selected, setSelected] = useState<string[]>(() => current.filter((certificate) => isValidOn(certificate.expiryDate, exportDate) && profile.attachments.includes(certificate.type)).map((certificate) => certificate.id));
   const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
   const [warnings, setWarnings] = useState<string[] | null>(null);
+  /** Quy tắc đặt tên tệp, nhớ theo mẫu (lưu vào mẫu khi xuất). */
+  const [namePattern, setNamePattern] = useState(profile.fileNamePattern ?? "");
+  const namePreview = namePattern.trim() ? applyFileNamePattern(namePattern, employee, exportDate) : null;
+  const fileName = (extension: "xlsx" | "pdf" | "zip") => profileFileName(employee, exportDate, extension, namePattern);
+  const insertToken = (token: string) => setNamePattern((current) => current.trim() ? `${current.trimEnd()} - ${token}` : token);
 
   useEffect(() => {
     let active = true;
@@ -63,6 +69,8 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
 
   const run = async (format: "xlsx" | "pdf") => {
     setBusy(format);
+    // Admin đổi quy tắc đặt tên thì lưu vào mẫu, lần xuất sau (cả xuất hàng loạt) dùng lại; HR chỉ áp dụng cho lần xuất này
+    if (actor.role === "admin" && namePattern.trim() !== (profile.fileNamePattern ?? "").trim()) props.onSaveFileNamePattern?.(namePattern.trim());
     try {
       // CCCD trong hồ sơ đang bị che; chỉ mở khi mẫu thật sự cần (có ghi nhật ký)
       let fullEmployee = employee;
@@ -77,19 +85,19 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         // Một file PDF: phiếu (Excel → PDF trên máy chủ) rồi các chứng chỉ đã chọn ở dưới
         try {
           const result = await exportProfilePdf(input);
-          downloadBlob(new Blob([result.bytes.slice().buffer], { type: "application/pdf" }), profileFileName(employee, exportDate, "pdf"));
+          downloadBlob(new Blob([result.bytes.slice().buffer], { type: "application/pdf" }), fileName("pdf"));
           warningList = result.warnings;
         } catch (error) {
           if (!isConverterMissing(error)) throw error;
           // Máy chủ chưa cài ComPDF / Gotenberg: vẫn tải được phiếu Excel + PDF gộp chứng chỉ
           const result = await exportProfileBundle(input);
-          downloadBlob(await zipFiles(result.files), profileFileName(employee, exportDate, "zip"));
+          downloadBlob(await zipFiles(result.files), fileName("zip"));
           warningList = ["Máy chủ chưa cài máy chuyển PDF nên phiếu vẫn là file Excel (đã nén ZIP kèm PDF chứng chỉ)", ...result.warnings];
           label = "ZIP (Excel + PDF chứng chỉ)";
         }
       } else {
         const result = await exportProfileWorkbook(input);
-        downloadXlsx(result.bytes, profileFileName(employee, exportDate));
+        downloadXlsx(result.bytes, fileName("xlsx"));
         warningList = result.warnings;
       }
       setWarnings(warningList);
@@ -152,6 +160,16 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
           <ul>{warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
         </div>
       )}
+      <section className="file-name-rule">
+        <h3>Quy tắc đặt tên tệp</h3>
+        <input type="text" value={namePattern} maxLength={150} placeholder="Vd: Vinci - {mã nhân viên} - {tên nhân viên}" aria-label="Quy tắc đặt tên tệp" onChange={(event) => setNamePattern(event.target.value)} />
+        <div className="file-name-tokens">
+          <span className="muted">Chèn:</span>
+          {FILE_NAME_TOKENS.map((item) => <button type="button" className="pill" key={item.token} onClick={() => insertToken(item.token)}>{item.token}</button>)}
+        </div>
+        <p className="muted file-name-example">Ví dụ: <b>{fileName(props.pdfOnly ? "pdf" : "xlsx")}</b>{namePattern.trim() ? "" : " (để trống là tên mặc định)"}</p>
+        {namePreview && namePreview.unknownTokens.length > 0 && <p className="form-error">Không nhận ra: {namePreview.unknownTokens.join(", ")}. Dùng các biến ở trên.</p>}
+      </section>
       <div className="button-row" style={{ justifyContent: "flex-end" }}>
         {!props.pdfOnly && <button type="button" className="button" disabled={busy !== null} onClick={() => void run("xlsx")}>
           {busy === "xlsx" ? "Đang tạo Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải Excel (.xlsx)</>}

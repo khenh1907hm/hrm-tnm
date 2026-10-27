@@ -493,6 +493,9 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
             setShowExcelModal(false);
             navigate("reports");
           }}
+          onSaveFileNamePattern={(templateId, pattern) => setTemplates(templates.map((template) => template.id === templateId && template.profile
+            ? { ...template, profile: { ...template.profile, fileNamePattern: pattern }, updatedAt: new Date().toISOString() }
+            : template))}
         />
       )}
     </div>
