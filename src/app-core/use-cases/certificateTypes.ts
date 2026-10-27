@@ -39,6 +39,22 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
       await writeAudit(actor, "certificateType.update", "certificateType", result.value.id, before, result.value);
       return result;
     },
+    /** Đặt lại thứ tự các loại đang dùng theo danh sách id (kéo thả): thứ tự = vị trí 1, 2, 3…, chỉ ghi loại đổi chỗ. */
+    reorder: async (actor: Actor, orderedIds: readonly string[]): Promise<Result<CertificateTypeRecord[]>> => {
+      if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
+      const active = sortCertificateTypes(await repositories.certificateTypes.list());
+      const sameSet = orderedIds.length === active.length && new Set(orderedIds).size === active.length && active.every((type) => orderedIds.includes(type.id));
+      if (!sameSet) return err("CONFLICT");
+      const byId = new Map(active.map((type) => [type.id, type]));
+      for (const [index, id] of orderedIds.entries()) {
+        const before = byId.get(id)!;
+        if (before.sortOrder === index + 1) continue;
+        const after = { ...before, sortOrder: index + 1, version: before.version + 1 };
+        if (!await repositories.certificateTypes.replace(after, before.version)) return err("CONFLICT");
+        await writeAudit(actor, "certificateType.update", "certificateType", id, before, after);
+      }
+      return success(sortCertificateTypes(await repositories.certificateTypes.list()));
+    },
     archive: async (actor: Actor, input: { id: string; expectedVersion: number; reason: string }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");
       const before = await repositories.certificateTypes.get(input.id);

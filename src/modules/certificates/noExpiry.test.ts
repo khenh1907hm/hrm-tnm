@@ -45,6 +45,8 @@ describe("loại chứng chỉ không có thời hạn", () => {
     expect(required.errors.map((item) => item.code)).toEqual(["CERT_EXPIRY_REQUIRED"]);
     // Loại không hạn vẫn được nhập hạn nếu giấy có ghi; khi đó kiểm tra hạn như thường
     expect(validateCertificate({ ...input, expiryDate: "2000-01-01" }, "2026-10-23", employee.dob, types).errors.map((item) => item.code)).toContain("CERT_EXPIRY_BEFORE_ISSUE");
+    // Loại có hạn nhưng tích "không có thời hạn" cho riêng chứng chỉ này (vd HĐLĐ không xác định thời hạn) thì được để trống
+    expect(validateCertificate({ ...input, type: "health", noExpiry: true }, "2026-10-23", employee.dob, types).errors).toEqual([]);
   });
 
   it("CERT_03 cho để trống số khi giấy không ghi số; có nhập thì phải đúng dạng, và số trống không bị coi là trùng", () => {

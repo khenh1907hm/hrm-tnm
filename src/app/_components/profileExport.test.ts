@@ -48,6 +48,13 @@ describe("exportProfileBundle", () => {
     expect(Object.keys(zip.files).filter((name) => !name.endsWith("/")).sort()).toEqual(["HoSo_TNM001/ChungChi_TNM001_nguyen_van_an_20261022.pdf", "HoSo_TNM001/HoSo_TNM001_nguyen_van_an_20261022.xlsx"]);
   });
 
+  it("merges certificates in the order the exporter chose (drag / number), not the template order", async () => {
+    const { files } = await exportProfileBundle({ ...await input(["c-atld", "c-health"]), certificateOrder: ["c-atld", "c-health"] });
+    // An toàn lao động (2 trang rộng 300) lên trước Khám sức khỏe (1 trang rộng 200)
+    const merged = await PDFDocument.load(files[1]!.bytes);
+    expect(merged.getPages().map((page) => page.getSize().width)).toEqual([300, 300, 200]);
+  });
+
   it("gives only the Excel file and says so when no certificate is chosen", async () => {
     const { files, warnings } = await exportProfileBundle(await input([]));
     expect(files.map((file) => file.name)).toEqual(["HoSo_TNM001_nguyen_van_an_20261022.xlsx"]);

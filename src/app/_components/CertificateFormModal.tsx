@@ -27,8 +27,10 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
   const type = renewingCertificate?.type ?? editingCertificate?.type ?? selectedCertificateType;
   const typeRecord = certificateTypes.find((item) => item.key === type);
   const typeName = typeRecord?.name ?? "Chứng chỉ";
-  // Loại không có thời hạn (bằng cấp…): ngày hết hạn được để trống
-  const noExpiry = typeRecord?.noExpiry === true;
+  // Loại không có thời hạn (bằng cấp…), hoặc tích "không có thời hạn" cho riêng chứng chỉ này: ngày hết hạn để trống
+  const typeNoExpiry = typeRecord?.noExpiry === true;
+  const [ownNoExpiry, setOwnNoExpiry] = useState(() => !typeNoExpiry && editingCertificate?.expiryDate === null);
+  const noExpiry = typeNoExpiry || ownNoExpiry;
   const isSafety = isSafetyCertificateType(type);
   // Nhóm đang có ở chứng chỉ ATLĐ hiện hành khác → không cho chọn trùng
   const takenGroups = new Set(props.existingCertificates.filter((item) => item.state === "current" && isSafetyCertificateType(item.type) && item.id !== base?.id && item.safetyGroup).map((item) => item.safetyGroup as number));
@@ -106,7 +108,8 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
       type: knownType,
       number: String(formData.get("number") ?? "").trim(),
       issueDate: String(formData.get("issueDate") ?? "") || null,
-      expiryDate: String(formData.get("expiryDate") ?? "") || (noExpiry ? null : ""),
+      expiryDate: ownNoExpiry ? null : String(formData.get("expiryDate") ?? "") || (noExpiry ? null : ""),
+      noExpiry: ownNoExpiry,
       document,
       title: renewingCertificate ? renewingCertificate.title : title,
       supplementaryFiles,
@@ -164,7 +167,10 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
           )}
           <label className="field"><span>Số chứng chỉ</span><input name="number" maxLength={50} placeholder="Để trống nếu giấy không ghi số" defaultValue={editingCertificate?.number ?? ""} />{errors.number && <small>{errors.number}</small>}</label>
           <label className="field"><span>Ngày cấp</span><input name="issueDate" type="date" defaultValue={editingCertificate?.issueDate ?? ""} />{errors.issueDate && <small>{errors.issueDate}</small>}</label>
-          <label className="field"><span>Ngày hết hạn{noExpiry ? "" : <> <abbr title="Bắt buộc">*</abbr></>}</span><input name="expiryDate" type="date" required={!noExpiry} defaultValue={editingCertificate?.expiryDate ?? ""} />{noExpiry && !errors.expiryDate && <small className="field-help">{typeName} không có thời hạn, để trống là luôn còn hiệu lực.</small>}{errors.expiryDate && <small>{errors.expiryDate}</small>}</label>
+          <div className="cert-expiry">
+            <label className="field"><span>Ngày hết hạn{noExpiry ? "" : <> <abbr title="Bắt buộc">*</abbr></>}</span><input name="expiryDate" type="date" required={!noExpiry} disabled={ownNoExpiry} defaultValue={editingCertificate?.expiryDate ?? ""} />{typeNoExpiry && !errors.expiryDate && <small className="field-help">{typeName} không có thời hạn, để trống là luôn còn hiệu lực.</small>}{errors.expiryDate && <small>{errors.expiryDate}</small>}</label>
+            {!typeNoExpiry && <label className="check-field"><input type="checkbox" checked={ownNoExpiry} onChange={(event) => setOwnNoExpiry(event.target.checked)} /> Không có thời hạn (luôn còn hiệu lực)</label>}
+          </div>
           <CertificateFilesField items={files} onChange={setFiles} error={errors.document ?? errors.supplementaryFiles} />
           {(ocr.status !== "idle" || primaryFile) && (
             <div className={`ocr-result${ocr.status === "done" && (ocr.otherType || ocr.missing.length) ? " is-warning" : ""}`} role="status">

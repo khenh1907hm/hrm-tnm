@@ -106,6 +106,8 @@ export type ProfileExportInput = {
   sessionFiles: Readonly<Record<string, File>>;
   /** Id chứng chỉ người dùng chọn đính kèm. */
   selectedCertificateIds: readonly string[];
+  /** Thứ tự ghép chứng chỉ sau phiếu do người xuất chọn (id); bỏ trống = theo thứ tự loại trong mẫu. */
+  certificateOrder?: readonly string[];
   /** Giá trị trường tùy chỉnh người xuất sửa (thô). */
   overrides: Readonly<Record<string, string>>;
   exportDate: string;
@@ -158,10 +160,14 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
 
   const attachments: AttachmentPage[] = [];
   const chosen = input.certificates.filter((certificate) => input.selectedCertificateIds.includes(certificate.id));
-  const ordered = [...chosen].sort((a, b) => {
-    const rank = (type: string) => { const index = profile.attachments.indexOf(type); return index < 0 ? profile.attachments.length : index; };
-    return rank(a.type) - rank(b.type);
-  });
+  // Người xuất đã sắp thứ tự (kéo thả / đánh số) thì theo đúng thứ tự đó; không thì theo thứ tự loại trong mẫu
+  const order = input.certificateOrder;
+  const ordered = [...chosen].sort(order
+    ? (a, b) => order.indexOf(a.id) - order.indexOf(b.id)
+    : (a, b) => {
+      const rank = (type: string) => { const index = profile.attachments.indexOf(type); return index < 0 ? profile.attachments.length : index; };
+      return rank(a.type) - rank(b.type);
+    });
   for (const certificate of ordered) {
     const typeName = input.certificateTypeNames[certificate.type] ?? certificate.type;
     const files = [{ file: certificate.document, label: "Tệp chính" }, ...certificate.supplementaryFiles.map((item) => ({ file: item.file, label: `Tệp bổ sung: ${item.label ?? item.file.name}` }))];

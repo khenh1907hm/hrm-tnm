@@ -9,6 +9,8 @@ export type CertificateInput = {
   type: string; number: string; issueDate: string | null; expiryDate: string | null; document: FileRef | null;
   title?: string; supplementaryFiles?: SupplementaryFile[];
   safetyGroup?: number | null | undefined;
+  /** Riêng chứng chỉ này không có thời hạn (vd HĐLĐ không xác định thời hạn) dù loại của nó có hạn. */
+  noExpiry?: boolean | undefined;
 };
 const allowedMime = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -56,8 +58,8 @@ export function validateCertificate(
   if (input.issueDate && (!isValidISODate(input.issueDate) || input.issueDate > today || input.issueDate < dob)) errors.push(issue("CERT_ISSUE_DATE_INVALID", "issueDate"));
   const expiry = input.expiryDate;
   if (expiry === null) {
-    // Chỉ loại "không có thời hạn" mới được bỏ trống ngày hết hạn
-    if (type && !type.noExpiry) errors.push(issue("CERT_EXPIRY_REQUIRED", "expiryDate"));
+    // Bỏ trống ngày hết hạn khi loại "không có thời hạn" hoặc người nhập tích "không có thời hạn" cho riêng chứng chỉ này
+    if (type && !type.noExpiry && !input.noExpiry) errors.push(issue("CERT_EXPIRY_REQUIRED", "expiryDate"));
   } else {
     if (!isValidISODate(expiry)) errors.push(issue("DATE_INVALID", "expiryDate"));
     if (input.issueDate && expiry < input.issueDate) errors.push(issue("CERT_EXPIRY_BEFORE_ISSUE", "expiryDate"));
