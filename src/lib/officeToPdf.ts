@@ -17,7 +17,7 @@ type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
 const fail = (status: number, code: string, message: string) => Response.json({ code, message }, { status });
 
 /** Có cấu hình Supabase → bắt buộc phiên đăng nhập hợp lệ (tránh người lạ dùng hết lượt / máy chủ chuyển đổi). */
-async function authorized(request: Request, env: ConvertEnv, fetcher: Fetch): Promise<boolean> {
+export async function authorized(request: Request, env: Pick<ConvertEnv, "supabaseUrl" | "supabaseKey">, fetcher: Fetch): Promise<boolean> {
   if (!env.supabaseUrl || !env.supabaseKey) return true;
   const header = request.headers.get("authorization") ?? "";
   if (!header.startsWith("Bearer ")) return false;

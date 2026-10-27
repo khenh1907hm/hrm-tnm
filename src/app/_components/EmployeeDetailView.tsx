@@ -3,10 +3,12 @@ import { Paperclip, Plus, Star } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../../modules/certificates/types";
+import { formatDate } from "../../lib/dates";
 import { formatExpiry } from "../../modules/certificates/status";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
 import type { Employee } from "../../modules/employees/types";
 import { usePhotoUrl } from "./employeePhoto";
+import { STATUS_LABELS } from "./EmployeeListView";
 import type { App, SetNotice } from "./shared";
 
 export function EmployeeDetailView(props: {
@@ -36,7 +38,7 @@ export function EmployeeDetailView(props: {
   const photoUrl = usePhotoUrl(selected.photo, props.loadPhoto);
   return <>
     <button className="back-button" onClick={props.onBack}>← Quay lại danh sách</button>
-    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : selected.status}</p></div><div className="button-row">{actor.role === "admin" && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
+    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{actor.role === "admin" && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
     <section className="panel detail-panel">
       <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {selected.photo && (
@@ -46,7 +48,7 @@ export function EmployeeDetailView(props: {
         )}
         <div style={{ flex: 1, minWidth: "260px" }}>
           <h2>Thông tin cá nhân</h2>
-          <dl>{[["Ngày sinh", selected.dob], ["Giới tính", selected.gender], ["CCCD", selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày làm nghề", selected.startDate], ["Ngày vào TNM", selected.companyStartDate || "Chưa có"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+          <dl>{[["Ngày sinh", formatDate(selected.dob)], ["Giới tính", selected.gender], ["CCCD", selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày làm nghề", formatDate(selected.startDate)], ["Ngày vào TNM", (selected.companyStartDate ? formatDate(selected.companyStartDate) : "") || "Chưa có"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
           <div className="employee-signature-detail"><span className="muted">Chữ ký</span>{selected.signatureImage ? <div className="employee-signature-preview"><img src={selected.signatureImage} alt={`Chữ ký ${selected.name}`} /></div> : "Chưa có"}</div>
           <button className="button" onClick={async () => { const result = await app.employees.revealCccd(actor, selected.id); if (result.ok) props.setNotice(`CCCD đầy đủ: ${result.value}`); }}>Hiện CCCD đầy đủ</button>
         </div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { randomIds } from "../../lib/ids";
+import { getSupabaseClient } from "../../lib/supabase/client";
 import type { FileRef } from "../../modules/certificates/types";
 import { isLegacyPhoto, photoRef } from "../../modules/employees/photo";
 import type { Employee } from "../../modules/employees/types";
@@ -33,6 +34,20 @@ export async function preparePhoto(file: File): Promise<File> {
   bitmap.close();
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
   return blob ? new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" }) : file;
+}
+
+/** Gửi ảnh lên /api/photo-3x4 (Cloudflare Workers AI) để chỉnh thành ảnh thẻ 3×4 nền trắng. */
+export async function photoTo3x4WithAi(file: File): Promise<File> {
+  const session = await getSupabaseClient()?.auth.getSession();
+  const token = session?.data.session?.access_token;
+  const body = new FormData();
+  body.set("image", file);
+  const response = await fetch("/api/photo-3x4", { method: "POST", body, headers: token ? { authorization: `Bearer ${token}` } : {} });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null) as { message?: string } | null;
+    throw new Error(problem?.message ?? `AI chỉnh ảnh báo lỗi (${response.status}).`);
+  }
+  return new File([await response.blob()], "anh-3x4-ai.jpg", { type: "image/jpeg" });
 }
 
 export function newPhotoRef(file: File): FileRef {
