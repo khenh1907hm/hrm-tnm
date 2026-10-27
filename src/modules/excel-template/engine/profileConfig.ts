@@ -40,7 +40,8 @@ export function profileConfigFromScan(scan: TemplateScan, previous?: ProfileTemp
   const certificateKeys = scan.placeholders.filter(isCertificateKey).map(certificateTypeOf);
   return {
     sheetName: scan.sheetName,
-    printArea: previous?.printArea ?? scan.printArea ?? "A1:Z60",
+    // Thay file mới có đặt vùng in thì theo file mới (người dùng vừa sửa trong Excel); file không đặt thì giữ vùng đã chỉnh trong app
+    printArea: scan.printArea ?? previous?.printArea ?? "A1:Z60",
     placeholders: scan.placeholders,
     customFields,
     imageSlots,
