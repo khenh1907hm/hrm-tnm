@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type MouseEvent } from "react";
-import { ArrowDown, ArrowUp, Maximize2, Minimize2, Plus } from "lucide-react";
+import { GripVertical, Maximize2, Minimize2, Plus } from "lucide-react";
 import { SYSTEM_FIELDS } from "../../modules/excel-template/engine/fieldValues";
 import type { AiTemplateMerge } from "../../modules/excel-template/engine/mappingPlan";
 import { fieldKeyFromLabel, IMAGE_FIELDS, isCertificateKey, isCustomKey, profileConfigFromScan } from "../../modules/excel-template/engine/profileConfig";
@@ -9,12 +9,14 @@ import { base64ToUint8Array, uint8ArrayToBase64 } from "../../modules/excel-temp
 import type { ProfileCustomField, ProfileImageSlot, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import type { Partner } from "../../modules/partners/types";
 import type { Signature } from "../../modules/signatures/types";
+import { certTone } from "./certTones";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { SignatureFileLoader } from "./SignerPicker";
 import { TemplateAiSetup } from "./TemplateAiSetup";
 import { TemplateCellPanel, type CellAssignment } from "./TemplateCellPanel";
 import { TemplatePreview, type PreviewRegion, type PreviewSelection } from "./TemplatePreview";
 import { TemplateSignerSection } from "./TemplateSignerSection";
+import { moveId, useDragReorder } from "./useDragReorder";
 
 type CertificateTypeOption = { key: string; name: string };
 
@@ -131,13 +133,10 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
 
   // Sửa trong app → đánh dấu để lần tải lại file Excel sau không ghi đè
   const updateSlot = (index: number, patch: Partial<ProfileImageSlot>) => onChange({ ...value, imageSlots: value.imageSlots.map((slot, i) => i === index ? { ...slot, ...patch, custom: true } : slot) });
-  const moveAttachment = (index: number, direction: -1 | 1) => {
-    const next = [...value.attachments];
-    const target = index + direction;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target]!, next[index]!];
-    onChange({ ...value, attachments: next });
-  };
+  // Thứ tự in chứng chỉ sau phiếu: kéo tay nắm ⋮⋮ (hoặc ↑/↓) hoặc chọn số thứ tự, giống màn xuất hồ sơ
+  const setAttachments = (attachments: string[]) => onChange({ ...value, attachments });
+  const { order: attachmentOrder, draggingId, handleProps } = useDragReorder(value.attachments, setAttachments);
+  const toneOf = (key: string) => certTone(certificateTypes.findIndex((type) => type.key === key));
 
   return (
     <div className={props.fileBase64 ? "profile-editor-layout" : undefined}>
@@ -179,15 +178,27 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
 
       <section>
         <h3>4. Chứng chỉ đính kèm <small>(in sau phiếu, theo thứ tự này)</small></h3>
-        <div className="profile-attachments">
-          {value.attachments.map((key, index) => (
-            <div className="profile-attachment" key={key}>
-              <span>{index + 1}. {typeName(key)}</span>
-              <button type="button" className="button" aria-label={`Chuyển ${typeName(key)} lên`} onClick={() => moveAttachment(index, -1)}><ArrowUp size={14} aria-hidden="true" /></button>
-              <button type="button" className="button" aria-label={`Chuyển ${typeName(key)} xuống`} onClick={() => moveAttachment(index, 1)}><ArrowDown size={14} aria-hidden="true" /></button>
-              <button type="button" className="button danger" onClick={() => onChange({ ...value, attachments: value.attachments.filter((item) => item !== key) })}>Bỏ</button>
+        {attachmentOrder.length > 1 && <p className="muted">Kéo biểu tượng ⋮⋮ hoặc chọn số thứ tự để đổi thứ tự in sau phiếu.</p>}
+        {attachmentOrder.map((key, index) => {
+          const tone = toneOf(key);
+          return (
+            <div className={key === draggingId ? "profile-export-cert-row profile-attachment-row dragging" : "profile-export-cert-row profile-attachment-row"} key={key} data-reorder-id={key} style={{ background: tone.background, borderLeftColor: tone.border }}>
+              {attachmentOrder.length > 1 && (
+                <button type="button" className="drag-handle" aria-label={`Kéo để đổi thứ tự ${typeName(key)} (hoặc bấm ↑/↓)`} title="Kéo để đổi thứ tự" {...handleProps(key)}>
+                  <GripVertical className="ico" size={16} aria-hidden="true" />
+                </button>
+              )}
+              <span className="profile-attachment-name">{typeName(key)}</span>
+              {attachmentOrder.length > 1 && (
+                <select className="cert-position" aria-label={`Thứ tự của ${typeName(key)}`} title="Thứ tự in sau phiếu" value={index + 1} onChange={(event) => setAttachments(moveId(value.attachments, key, Number(event.target.value) - 1))}>
+                  {attachmentOrder.map((_, position) => <option key={position} value={position + 1}>{position + 1}</option>)}
+                </select>
+              )}
+              <button type="button" className="button danger" onClick={() => setAttachments(value.attachments.filter((item) => item !== key))}>Bỏ</button>
             </div>
-          ))}
+          );
+        })}
+        <div className="profile-attachments">
           {certificateTypes.filter((type) => !value.attachments.includes(type.key)).map((type) => (
             <button type="button" className="button" key={type.key} onClick={() => onChange({ ...value, attachments: [...value.attachments, type.key] })}><Plus className="ico" size={14} aria-hidden="true" /> {type.name}</button>
           ))}

@@ -11,18 +11,12 @@ import type { Employee } from "../../modules/employees/types";
 import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
+import { certTone } from "./certTones";
 import { moveId, useDragReorder } from "./useDragReorder";
 import { applyFileNamePattern, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
 import { expirySortKey, formatExpiry, isValidOn } from "../../modules/certificates/status";
 
 type ProfileTemplate = ExcelReportTemplate & { profile: ProfileTemplateConfig };
-
-/** Màu nhạt cho từng chứng chỉ ở danh sách đính kèm (nền + viền trái đậm hơn một chút). */
-const CERT_TONES = [
-  { background: "#eff6ff", border: "#93c5fd" }, { background: "#f0fdf4", border: "#86efac" }, { background: "#fff7ed", border: "#fdba74" },
-  { background: "#f5f3ff", border: "#c4b5fd" }, { background: "#fdf2f8", border: "#f9a8d4" }, { background: "#ecfeff", border: "#67e8f9" },
-  { background: "#fefce8", border: "#fde047" }, { background: "#f1f5f9", border: "#cbd5e1" },
-] as const;
 
 /** Xuất "Mẫu hồ sơ" cho một nhân sự: nhập trường tùy chỉnh, chọn chứng chỉ, xem cảnh báo. */
 export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean; onSaveFileNamePattern?: ((pattern: string) => void) | undefined }) {
@@ -130,7 +124,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
           const expired = !isValidOn(certificate.expiryDate, exportDate);
           const name = `${typeNames[certificate.type] ?? certificate.type}${certificate.title ? ` (${certificate.title})` : ""}`;
           // Màu đi theo chứng chỉ (không theo vị trí) để khi kéo dễ nhìn ra dòng nào đang di chuyển
-          const tone = CERT_TONES[Math.max(0, defaultOrder.indexOf(certificate.id)) % CERT_TONES.length]!;
+          const tone = certTone(defaultOrder.indexOf(certificate.id));
           return (
             <div className={certificate.id === draggingId ? "profile-export-cert-row dragging" : "profile-export-cert-row"} key={certificate.id} data-reorder-id={certificate.id} style={{ background: tone.background, borderLeftColor: tone.border }}>
               {ordered.length > 1 && (
