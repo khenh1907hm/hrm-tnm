@@ -526,7 +526,11 @@ export function ReportTemplatesPanel({
                         type="file"
                         accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         style={{ display: "none" }}
-                        onChange={(e) => void handleFileUpload(e.target.files)}
+                        onChange={(e) => {
+                          void handleFileUpload(e.target.files);
+                          // Chọn lại đúng file cùng tên (đã sửa ngoài Excel) vẫn phải nạp lại
+                          e.target.value = "";
+                        }}
                       />
                     </label>
                     <button

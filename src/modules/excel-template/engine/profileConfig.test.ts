@@ -33,6 +33,8 @@ describe("profileConfigFromScan", () => {
     expect(next.customFields[0]).toEqual(previous.customFields[0]);
     expect(next.imageSlots[0]!.fit).toBe("contain");
     expect(profileConfigFromScan({ ...scan, printArea: null }).printArea).toBe("A1:Z60");
+    // File mới tự đặt vùng in (đã sửa trong Excel) thì dùng vùng in của file mới
+    expect(profileConfigFromScan({ ...scan, printArea: "A1:AB90" }, previous).printArea).toBe("A1:AB90");
   });
 
   it("re-uploading the file keeps image areas edited in the app (and the chosen signer) instead of the IMG_ names in Excel", () => {
