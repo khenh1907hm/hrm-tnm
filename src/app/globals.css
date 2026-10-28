@@ -62,6 +62,7 @@ h1,h2,h3{font-weight:600;letter-spacing:-.01em}button,a,summary,label[for],selec
 .profile-attachments{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .profile-attachment{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;padding:3px 3px 3px 10px;background:var(--soft)}
 .profile-attachment .button{padding:2px 8px;font-size:12px}
+.profile-attachment-row{padding:4px 6px 4px 4px}.profile-attachment-row .profile-attachment-name{flex:1;min-width:0;font-weight:600}.profile-attachment-row .button{padding:2px 8px;font-size:12px}
 .profile-export-fields{padding:0}
 .profile-export-cert{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:5px 0}
 .profile-export .readiness-warnings ul{margin:6px 0 0;padding-left:18px}
