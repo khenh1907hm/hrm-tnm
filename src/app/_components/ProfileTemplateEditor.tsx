@@ -4,11 +4,13 @@ import { SYSTEM_FIELDS } from "../../modules/excel-template/engine/fieldValues";
 import type { AiTemplateMerge } from "../../modules/excel-template/engine/mappingPlan";
 import { fieldKeyFromLabel, IMAGE_FIELDS, isCertificateKey, isCustomKey, profileConfigFromScan } from "../../modules/excel-template/engine/profileConfig";
 import { scanTemplate } from "../../modules/excel-template/engine/scanTemplate";
+import { systemClock, todayVN } from "../../lib/clock";
 import { placeFieldCodes, removeFieldCode, templateFieldCatalog } from "../../modules/excel-template/engine/templateEdits";
 import { base64ToUint8Array, uint8ArrayToBase64 } from "../../modules/excel-template/templateStorage";
 import type { ProfileCustomField, ProfileImageSlot, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import type { Partner } from "../../modules/partners/types";
 import type { Signature } from "../../modules/signatures/types";
+import { CertificateExportNaming } from "./CertificateExportNaming";
 import { CustomFieldsEditor } from "./CustomFieldsEditor";
 import type { SignatureFileLoader } from "./SignerPicker";
 import { TemplateAiSetup } from "./TemplateAiSetup";
@@ -19,7 +21,7 @@ import { TemplateSignerSection } from "./TemplateSignerSection";
 type CertificateTypeOption = { key: string; name: string };
 
 /** Cài đặt "Mẫu hồ sơ": trường tùy chỉnh, vùng ảnh, chứng chỉ đính kèm và vùng in. */
-export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void; certificateTypes: readonly CertificateTypeOption[]; partners?: readonly Partner[]; signatures?: readonly Signature[] | null; loadSignatureFile?: SignatureFileLoader | undefined; fileBase64?: string | undefined; onFileChange?: ((fileBase64: string) => void) | undefined }) {
+export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onChange: (value: ProfileTemplateConfig) => void; certificateTypes: readonly CertificateTypeOption[]; partners?: readonly Partner[]; signatures?: readonly Signature[] | null; loadSignatureFile?: SignatureFileLoader | undefined; fileBase64?: string | undefined; onFileChange?: ((fileBase64: string) => void) | undefined; templateName?: string }) {
   const { value, onChange, certificateTypes } = props;
   const typeName = (key: string) => certificateTypes.find((type) => type.key === key)?.name ?? key;
 
@@ -199,6 +201,12 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
           <span>5. Vùng in của phiếu (1 trang)</span>
           <input value={value.printArea} onChange={(event) => onChange({ ...value, printArea: event.target.value.toUpperCase() })} />
         </label>
+      </section>
+
+      <section>
+        <h3>6. Xuất riêng chứng chỉ <small>(nút “Tải chứng chỉ (.zip)” khi xuất: không kèm phiếu, mỗi chứng chỉ một tệp)</small></h3>
+        <p className="muted">Chứng chỉ đánh số 1, 2, 3… theo thứ tự ở mục 4.</p>
+        <CertificateExportNaming value={value.certificateExport} onChange={(certificateExport) => onChange({ ...value, certificateExport })} typeKeys={value.attachments} typeNames={Object.fromEntries(certificateTypes.map((type) => [type.key, type.name]))} fileNamePattern={value.fileNamePattern} onFileNamePatternChange={(fileNamePattern) => onChange({ ...value, fileNamePattern })} templateName={props.templateName ?? ""} exportDate={todayVN(systemClock)} />
       </section>
 
       {editable && <TemplateAiSetup catalog={catalog} fileBase64={props.fileBase64!} sheetName={value.sheetName} busy={busy} onApply={applyAi} />}

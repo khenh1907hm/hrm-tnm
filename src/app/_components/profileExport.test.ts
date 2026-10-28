@@ -4,7 +4,7 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Employee } from "../../modules/employees/types";
-import { exportProfileBundle, zipFiles, type ProfileExportInput } from "./profileExport";
+import { exportCertificateFiles, exportProfileBundle, zipFiles, type ProfileExportInput } from "./profileExport";
 
 async function templateBase64(): Promise<string> {
   const workbook = new ExcelJS.Workbook();
@@ -59,5 +59,44 @@ describe("exportProfileBundle", () => {
     const { files, warnings } = await exportProfileBundle(await input([]));
     expect(files.map((file) => file.name)).toEqual(["HoSo_TNM001_nguyen_van_an_20261022.xlsx"]);
     expect(warnings).toEqual(["Không có chứng chỉ nào để gộp PDF, chỉ có tệp Excel"]);
+  });
+});
+
+describe("exportCertificateFiles (xuất riêng chứng chỉ)", () => {
+  const cert = (id: string, type: string, number: string, document: { id: string; name: string; mime: string }, supplementary: { id: string; name: string; mime: string }[] = []): Certificate => ({
+    id, employeeId: "e1", type: type as Certificate["type"], title: "", number, issueDate: null, expiryDate: null, state: "current",
+    document: { ...document, size: 10 }, supplementaryFiles: supplementary.map((file) => ({ file: { ...file, size: 10 } })),
+  } as unknown as Certificate);
+
+  it("mỗi chứng chỉ một tệp đánh số, không kèm số chứng chỉ, tên gọi riêng theo loại; tệp bổ sung gộp thành một PDF", async () => {
+    const id = new File([new Uint8Array([0xff, 0xd8, 0xff])], "TNM0018CM.jpg", { type: "image/jpeg" });
+    const labor = await pdfFile(2, "HD.pdf");
+    const atld = await pdfFile(1, "ATD.pdf");
+    const atldBack = await pdfFile(1, "ATD-sau.pdf");
+    const result = await exportCertificateFiles({
+      employee: { code: "TNM0018", name: "Trần Ngọc Đức", position: "Nhân viên hiện trường" },
+      certificates: [
+        cert("c1", "custom-ctype-cccd", "272765636", { id: "f1", name: "TNM0018CM.jpg", mime: "image/jpeg" }),
+        cert("c2", "labor", "009/TNM-2023", { id: "f2", name: "HD.pdf", mime: "application/pdf" }),
+        cert("c3", "atld", "25C2665", { id: "f3", name: "ATD.pdf", mime: "application/pdf" }, [{ id: "f4", name: "ATD-sau.pdf", mime: "application/pdf" }]),
+        cert("c4", "atld", "26E11924", { id: "f5", name: "missing.pdf", mime: "application/pdf" }),
+      ],
+      certificateTypeNames: { "custom-ctype-cccd": "Căn cước công dân", labor: "HĐLĐ", atld: "An toàn lao động" },
+      sessionFiles: { f1: id, f2: labor, f3: atld, f4: atldBack },
+      config: { typeLabels: { "custom-ctype-cccd": "ID" } },
+      fileNamePattern: "Vinci - {mã nhân viên} - {tên nhân viên}",
+      exportDate: "2026-10-28",
+    });
+    expect(result.folder).toBe("Vinci - TNM0018 - Trần Ngọc Đức");
+    expect(result.files.map((file) => file.name)).toEqual(["1. ID.jpg", "2. HĐLĐ.pdf", "3. An toàn lao động.pdf"]);
+    expect((await PDFDocument.load(result.files[2]!.bytes)).getPageCount()).toBe(2);
+    expect(result.warnings).toEqual(['An toàn lao động: chưa có dữ liệu tệp "missing.pdf" trong phiên này']);
+
+    const zip = await JSZip.loadAsync(await (await zipFiles(result.files.map((file) => ({ ...file, folder: `Chứng chỉ - 28-10-2026/${result.folder}` })))).arrayBuffer());
+    expect(Object.keys(zip.files).filter((name) => !zip.files[name]!.dir)).toEqual([
+      "Chứng chỉ - 28-10-2026/Vinci - TNM0018 - Trần Ngọc Đức/1. ID.jpg",
+      "Chứng chỉ - 28-10-2026/Vinci - TNM0018 - Trần Ngọc Đức/2. HĐLĐ.pdf",
+      "Chứng chỉ - 28-10-2026/Vinci - TNM0018 - Trần Ngọc Đức/3. An toàn lao động.pdf",
+    ]);
   });
 });

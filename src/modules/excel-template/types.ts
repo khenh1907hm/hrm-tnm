@@ -80,6 +80,19 @@ export interface ProfileTemplateConfig {
   signatureId?: string;
   /** Quy tắc đặt tên tệp xuất, vd "Vinci - {mã nhân viên} - {tên nhân viên}"; trống = HoSo_<mã>_<tên>_<ngày>. */
   fileNamePattern?: string;
+  /** Xuất riêng chứng chỉ (không kèm phiếu): tên thư mục tổng, tên tệp từng chứng chỉ và tên gọi từng loại. */
+  certificateExport?: CertificateExportConfig;
+}
+
+/**
+ * Cấu trúc ZIP khi xuất riêng chứng chỉ: <thư mục tổng>/<thư mục nhân sự theo fileNamePattern>/<tệp chứng chỉ>.
+ * Trống = mặc định ("Chứng chỉ - {ngày xuất}" và "{stt}. {loại chứng chỉ}").
+ */
+export interface CertificateExportConfig {
+  folderPattern?: string;
+  filePattern?: string;
+  /** Tên gọi khi xuất theo khóa loại chứng chỉ, vd { "custom-ctype-cccd": "ID" }; trống = tên loại. */
+  typeLabels?: Record<string, string>;
 }
 
 export interface ExcelReportTemplate {

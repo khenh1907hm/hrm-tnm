@@ -7,6 +7,7 @@ import type { CertificateChecklistRow, CertificateChecklistSummary } from "../mo
 import type { Certificate, FileRef } from "../modules/certificates/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
 import type { Employee } from "../modules/employees/types";
+import type { ProfileTemplateConfig } from "../modules/excel-template/types";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
@@ -99,6 +100,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [showClaudeImport, setShowClaudeImport] = useState(false);
   const templateError = useCallback((message: string) => setNotice(message, "error"), [setNotice]);
   const [templates, setTemplates] = useReportTemplates(backend.mode === "live" ? getSupabaseClient() : null, templateError);
+  /** Quy tắc đặt tên đổi ở hộp thoại xuất (Admin) → lưu vào mẫu cho lần xuất sau. */
+  const saveProfileNaming = (templateId: string, patch: Pick<ProfileTemplateConfig, "fileNamePattern" | "certificateExport">) => setTemplates(templates.map((template) => template.id === templateId && template.profile
+    ? { ...template, profile: { ...template.profile, ...patch }, updatedAt: new Date().toISOString() }
+    : template));
   const partnerStore = usePartners(backend.mode === "live" ? getSupabaseClient() : null, templateError);
   const listInput = useMemo(() => toListInput(filters), [filters]);
 
@@ -476,7 +481,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       {showClaudeImport && <ClaudeHoSoImportModal setNotice={setNotice} onClose={() => setShowClaudeImport(false)} onSaved={() => void refresh(app, actor)} />}
       {showImport && <ImportEmployeesModal app={app} actor={actor} setNotice={setNotice} onClose={() => setShowImport(false)} onImported={() => void refresh(app, actor)} />}
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
-      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} loadSignatureFile={loadSignatureFile} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
+      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} loadSignatureFile={loadSignatureFile} setNotice={setNotice} onSaveNaming={saveProfileNaming} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}
@@ -493,9 +498,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
             setShowExcelModal(false);
             navigate("reports");
           }}
-          onSaveFileNamePattern={(templateId, pattern) => setTemplates(templates.map((template) => template.id === templateId && template.profile
-            ? { ...template, profile: { ...template.profile, fileNamePattern: pattern }, updatedAt: new Date().toISOString() }
-            : template))}
+          onSaveNaming={saveProfileNaming}
         />
       )}
     </div>

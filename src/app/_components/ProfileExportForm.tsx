@@ -1,4 +1,4 @@
-import { Download, FileText, GripVertical } from "lucide-react";
+import { Download, FileArchive, FileText, GripVertical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { systemClock, todayVN } from "../../lib/clock";
 import type { Actor } from "../../modules/auth/permissions";
@@ -8,8 +8,10 @@ import { ContactPicker, EMPTY_CONTACT, type ContactChoice } from "./ContactPicke
 import { SignerPicker, type ChosenSigner, type SignatureFileLoader } from "./SignerPicker";
 import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
-import type { ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
-import { downloadBlob, downloadXlsx, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
+import type { CertificateExportConfig, ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
+import { certificateRootFolderName } from "../../modules/excel-template/certificateExportNames";
+import { CertificateExportNaming } from "./CertificateExportNaming";
+import { downloadBlob, downloadXlsx, exportCertificateFiles, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 import { moveId, useDragReorder } from "./useDragReorder";
 import { applyFileNamePattern, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
@@ -25,7 +27,7 @@ const CERT_TONES = [
 ] as const;
 
 /** Xuất "Mẫu hồ sơ" cho một nhân sự: nhập trường tùy chỉnh, chọn chứng chỉ, xem cảnh báo. */
-export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean; onSaveFileNamePattern?: ((pattern: string) => void) | undefined }) {
+export function ProfileExportForm(props: { app: App; actor: Actor; template: ProfileTemplate; employee: Employee; certificates: readonly Certificate[]; sessionFiles: Readonly<Record<string, File>>; setNotice: SetNotice; loadSignatureFile?: SignatureFileLoader | undefined; pdfOnly?: boolean; onSaveNaming?: ((patch: Pick<ProfileTemplateConfig, "fileNamePattern" | "certificateExport">) => void) | undefined }) {
   const { app, actor, template, employee, certificates } = props;
   const { profile } = template;
   const exportDate = todayVN(systemClock);
@@ -39,10 +41,12 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   const selfIds = useMemo(() => [employee.id], [employee.id]);
   const current = useMemo(() => certificates.filter((certificate) => certificate.state === "current"), [certificates]);
   const [selected, setSelected] = useState<string[]>(() => current.filter((certificate) => isValidOn(certificate.expiryDate, exportDate) && profile.attachments.includes(certificate.type)).map((certificate) => certificate.id));
-  const [busy, setBusy] = useState<"xlsx" | "pdf" | null>(null);
+  const [busy, setBusy] = useState<"xlsx" | "pdf" | "certs" | null>(null);
   const [warnings, setWarnings] = useState<string[] | null>(null);
   /** Quy tắc đặt tên tệp, nhớ theo mẫu (lưu vào mẫu khi xuất). */
   const [namePattern, setNamePattern] = useState(profile.fileNamePattern ?? "");
+  /** Tên thư mục tổng, tên tệp chứng chỉ, tên gọi từng loại khi tải riêng chứng chỉ (lưu vào mẫu như quy tắc tên). */
+  const [certConfig, setCertConfig] = useState<CertificateExportConfig | undefined>(profile.certificateExport);
   const namePreview = namePattern.trim() ? applyFileNamePattern(namePattern, employee, exportDate) : null;
   const fileName = (extension: "xlsx" | "pdf" | "zip") => profileFileName(employee, exportDate, extension, namePattern);
   const insertToken = (token: string) => setNamePattern((current) => current.trim() ? `${current.trimEnd()} - ${token}` : token);
@@ -67,10 +71,34 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   const byId = new Map(current.map((certificate) => [certificate.id, certificate]));
   const ordered = order.flatMap((id) => byId.get(id) ?? []);
 
+  // Admin đổi quy tắc đặt tên thì lưu vào mẫu, lần xuất sau (cả xuất hàng loạt) dùng lại; HR chỉ áp dụng cho lần xuất này
+  const saveNaming = () => {
+    if (actor.role !== "admin") return;
+    const patternChanged = namePattern.trim() !== (profile.fileNamePattern ?? "").trim();
+    const certChanged = JSON.stringify(certConfig ?? {}) !== JSON.stringify(profile.certificateExport ?? {});
+    if (patternChanged || certChanged) props.onSaveNaming?.({ fileNamePattern: namePattern.trim(), ...(certConfig ? { certificateExport: certConfig } : {}) });
+  };
+
+  /** Chỉ chứng chỉ đã chọn, không kèm phiếu: <thư mục tổng>/<thư mục nhân sự>/1. …, 2. … theo thứ tự đang sắp. */
+  const runCertificates = async () => {
+    setBusy("certs");
+    saveNaming();
+    try {
+      const chosen = ordered.filter((certificate) => selected.includes(certificate.id));
+      const result = await exportCertificateFiles({ employee, certificates: chosen, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, config: certConfig, fileNamePattern: namePattern, exportDate });
+      if (!result.files.length) throw new Error(result.warnings[0] ?? "Không có tệp chứng chỉ nào để tải.");
+      const root = certificateRootFolderName(certConfig, { templateName: template.name, count: 1, exportDate });
+      downloadBlob(await zipFiles(result.files.map((file) => ({ ...file, folder: `${root}/${result.folder}` }))), `${root}.zip`);
+      setWarnings(result.warnings);
+      props.setNotice(result.warnings.length ? `Đã tải ${result.files.length} chứng chỉ, còn ${result.warnings.length} mục cần kiểm tra.` : `Đã tải ${result.files.length} chứng chỉ.`, result.warnings.length ? "warning" : "success");
+    } catch (error) {
+      props.setNotice(error instanceof Error ? error.message : "Không tạo được tệp chứng chỉ.", "error");
+    } finally { setBusy(null); }
+  };
+
   const run = async (format: "xlsx" | "pdf") => {
     setBusy(format);
-    // Admin đổi quy tắc đặt tên thì lưu vào mẫu, lần xuất sau (cả xuất hàng loạt) dùng lại; HR chỉ áp dụng cho lần xuất này
-    if (actor.role === "admin" && namePattern.trim() !== (profile.fileNamePattern ?? "").trim()) props.onSaveFileNamePattern?.(namePattern.trim());
+    saveNaming();
     try {
       // CCCD trong hồ sơ đang bị che; chỉ mở khi mẫu thật sự cần (có ghi nhật ký)
       let fullEmployee = employee;
@@ -170,7 +198,14 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         <p className="muted file-name-example">Ví dụ: <b>{fileName(props.pdfOnly ? "pdf" : "xlsx")}</b>{namePattern.trim() ? "" : " (để trống là tên mặc định)"}</p>
         {namePreview && namePreview.unknownTokens.length > 0 && <p className="form-error">Không nhận ra: {namePreview.unknownTokens.join(", ")}. Dùng các biến ở trên.</p>}
       </section>
+      <details className="file-name-rule certificate-naming-box">
+        <summary>Tên thư mục và tệp khi tải riêng chứng chỉ</summary>
+        <CertificateExportNaming value={certConfig} onChange={setCertConfig} typeKeys={[...new Set(ordered.filter((certificate) => selected.includes(certificate.id)).map((certificate) => certificate.type))]} typeNames={typeNames} fileNamePattern={namePattern} templateName={template.name} exportDate={exportDate} person={employee} />
+      </details>
       <div className="button-row" style={{ justifyContent: "flex-end" }}>
+        <button type="button" className="button" disabled={busy !== null || !selected.length} title="Chỉ các chứng chỉ đã chọn, mỗi chứng chỉ một tệp đánh số theo thứ tự, không kèm phiếu" onClick={() => void runCertificates()}>
+          {busy === "certs" ? "Đang tạo…" : <><FileArchive className="ico" size={16} aria-hidden="true" /> Tải chứng chỉ (.zip)</>}
+        </button>
         {!props.pdfOnly && <button type="button" className="button" disabled={busy !== null} onClick={() => void run("xlsx")}>
           {busy === "xlsx" ? "Đang tạo Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải Excel (.xlsx)</>}
         </button>}
