@@ -83,7 +83,7 @@ describe("exportCertificateFiles (xuất riêng chứng chỉ)", () => {
       ],
       certificateTypeNames: { "custom-ctype-cccd": "Căn cước công dân", labor: "HĐLĐ", atld: "An toàn lao động" },
       sessionFiles: { f1: id, f2: labor, f3: atld, f4: atldBack },
-      config: { typeLabels: { "custom-ctype-cccd": "ID" } },
+      config: { typeLabels: { "custom-ctype-cccd": "ID" }, groups: [] },
       fileNamePattern: "Vinci - {mã nhân viên} - {tên nhân viên}",
       exportDate: "2026-10-28",
     });
@@ -127,9 +127,39 @@ describe("exportCertificatesPdf (gộp chứng chỉ thành 1 PDF)", () => {
     expect(result.warnings).toEqual(['An toàn lao động: chưa có dữ liệu tệp "missing.pdf" trong phiên này']);
   });
 
-  it("gộp là mặc định; chỉ layout \"separate\" mới tách từng tệp", () => {
-    expect(mergesCertificates(undefined)).toBe(true);
-    expect(mergesCertificates({ layout: "merged" })).toBe(true);
+  it("mặc định tải từng tệp; chỉ layout \"merged\" mới gộp tất cả", () => {
+    expect(mergesCertificates(undefined)).toBe(false);
     expect(mergesCertificates({ layout: "separate" })).toBe(false);
+    expect(mergesCertificates({ layout: "merged" })).toBe(true);
+  });
+});
+
+describe("exportCertificateFiles: nhóm gộp chung một tệp", () => {
+  const cert = (id: string, type: string, fileId: string): Certificate => ({
+    id, employeeId: "e1", type: type as Certificate["type"], title: "", number: id, issueDate: null, expiryDate: null, state: "current",
+    document: { id: fileId, name: `${fileId}.pdf`, mime: "application/pdf", size: 10 }, supplementaryFiles: [],
+  } as unknown as Certificate);
+
+  it("mặc định: làm việc trên cao, an toàn điện, an toàn lao động ra chung \"An toàn.pdf\" ở vị trí cái đầu tiên", async () => {
+    const result = await exportCertificateFiles({
+      employee: { code: "TNM0848", name: "Phan Đức Phi", position: "Nhân viên kỹ thuật" },
+      certificates: [cert("c1", "custom-ctype-cccd", "f1"), cert("c2", "elec", "f2"), cert("c3", "custom-ctype-labor-contract", "f3"), cert("c4", "custom-ctype-height-health", "f4"), cert("c5", "atld", "f5")],
+      certificateTypeNames: { "custom-ctype-cccd": "CCCD", elec: "An toàn điện", "custom-ctype-labor-contract": "HĐLĐ", "custom-ctype-height-health": "Làm việc trên cao", atld: "An toàn lao động" },
+      sessionFiles: { f1: await pdfFile(1, "f1.pdf", [10, 10]), f2: await pdfFile(1, "f2.pdf", [20, 20]), f3: await pdfFile(1, "f3.pdf", [30, 30]), f4: await pdfFile(2, "f4.pdf", [40, 40]), f5: await pdfFile(1, "f5.pdf", [50, 50]) },
+      config: undefined, fileNamePattern: undefined, exportDate: "2026-10-28",
+    });
+    expect(result.files.map((file) => file.name)).toEqual(["1. CCCD.pdf", "2. An toàn.pdf", "3. HĐLĐ.pdf"]);
+    // Trong nhóm giữ thứ tự đang sắp: điện → làm việc trên cao (2 trang) → lao động
+    expect((await PDFDocument.load(result.files[1]!.bytes)).getPages().map((page) => page.getSize().width)).toEqual([20, 40, 40, 50]);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("chỉ chọn một chứng chỉ của nhóm thì vẫn mang tên nhóm, giữ nguyên tệp gốc", async () => {
+    const result = await exportCertificateFiles({
+      employee: { code: "TNM0848", name: "Phan Đức Phi", position: "Nhân viên kỹ thuật" }, certificates: [cert("c2", "elec", "f2")],
+      certificateTypeNames: { elec: "An toàn điện" }, sessionFiles: { f2: await pdfFile(1, "f2.pdf") },
+      config: { groups: [{ id: "g", name: "Chứng chỉ an toàn", types: ["elec", "atld"] }] }, fileNamePattern: undefined, exportDate: "2026-10-28",
+    });
+    expect(result.files.map((file) => file.name)).toEqual(["1. Chứng chỉ an toàn.pdf"]);
   });
 });

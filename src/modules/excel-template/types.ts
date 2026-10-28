@@ -93,8 +93,18 @@ export interface CertificateExportConfig {
   filePattern?: string;
   /** Tên gọi khi xuất theo khóa loại chứng chỉ, vd { "custom-ctype-cccd": "ID" }; trống = tên loại. */
   typeLabels?: Record<string, string>;
-  /** Trống/"merged" = mỗi nhân sự MỘT tệp PDF gộp mọi chứng chỉ; "separate" = mỗi chứng chỉ một tệp đánh số. */
+  /** Trống/"separate" = mỗi chứng chỉ (hoặc mỗi nhóm) một tệp đánh số; "merged" = mỗi nhân sự MỘT tệp PDF gộp mọi chứng chỉ. */
   layout?: "merged" | "separate";
+  /** Nhóm loại chứng chỉ gộp chung một tệp PDF khi tải từng tệp; trống = nhóm mặc định "An toàn", [] = không gộp. */
+  groups?: CertificateExportGroup[];
+}
+
+/** Một nhóm khi xuất chứng chỉ: các loại trong nhóm ra chung một tệp PDF mang tên nhóm. */
+export interface CertificateExportGroup {
+  id: string;
+  name: string;
+  /** Khóa loại chứng chỉ, theo thứ tự cài (thứ tự ghép lấy theo danh sách đang sắp khi xuất). */
+  types: string[];
 }
 
 export interface ExcelReportTemplate {

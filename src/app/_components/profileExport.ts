@@ -8,6 +8,7 @@ import { applyFileNamePattern } from "../../modules/excel-template/fileNamePatte
 import { base64ToUint8Array } from "../../modules/excel-template/templateStorage";
 import type { CertificateExportConfig, ExcelReportTemplate } from "../../modules/excel-template/types";
 import { certificateFileBaseName, certificateTypeLabel, employeeFolderName, uniqueFileNames } from "../../modules/excel-template/certificateExportNames";
+import { certificateGroups, certificateUnits } from "../../modules/excel-template/certificateGroups";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Commander } from "../../modules/commanders/types";
 import type { Employee } from "../../modules/employees/types";
@@ -261,6 +262,9 @@ async function toMergeParts(binaries: readonly { file: { name: string }; binary:
   return parts;
 }
 
+/** Ngày hết hạn sớm nhất trong nhóm (cho biến {ngày hết hạn}); không cái nào có hạn → null. */
+const earliestExpiry = (items: readonly Certificate[]) => items.map((item) => item.expiryDate).filter((date): date is string => Boolean(date)).sort()[0] ?? null;
+
 /** Tệp chính rồi tệp bổ sung của một chứng chỉ có trong phiên; thiếu tệp nào thì ghi cảnh báo. */
 function certificateBinaries(certificate: Certificate, typeLabel: string, sessionFiles: Readonly<Record<string, File>>, warnings: string[]) {
   return [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)].flatMap((file) => {
@@ -281,8 +285,8 @@ export type CertificateExportInput = {
   exportDate: string;
 };
 
-/** Mặc định gộp mọi chứng chỉ của một người thành một PDF; "separate" = mỗi chứng chỉ một tệp như trước. */
-export const mergesCertificates = (config: CertificateExportConfig | undefined) => config?.layout !== "separate";
+/** "merged" = mọi chứng chỉ của một người thành một PDF; mặc định mỗi chứng chỉ (hoặc mỗi nhóm) một tệp. */
+export const mergesCertificates = (config: CertificateExportConfig | undefined) => config?.layout === "merged";
 
 /**
  * Xuất chứng chỉ của một nhân sự thành MỘT tệp PDF (không kèm phiếu), vd "Vinci - TNM0018 - Trần Ngọc Đức.pdf":
@@ -301,7 +305,8 @@ export async function exportCertificatesPdf(input: CertificateExportInput): Prom
 }
 
 /**
- * Xuất riêng chứng chỉ của một nhân sự (không kèm phiếu): mỗi chứng chỉ một tệp trong thư mục nhân sự,
+ * Xuất riêng chứng chỉ của một nhân sự (không kèm phiếu): mỗi chứng chỉ một tệp trong thư mục nhân sự (chứng chỉ cùng nhóm
+ * gộp chung một PDF mang tên nhóm, vd "3. An toàn.pdf"),
  * đánh số theo thứ tự truyền vào, vd "1. ID.jpg", "2. HĐLĐ.pdf". Tệp chính giữ nguyên byte gốc;
  * chứng chỉ có tệp bổ sung thì gộp thành một PDF để mỗi chứng chỉ vẫn đúng một số thứ tự.
  */
@@ -310,17 +315,22 @@ export async function exportCertificateFiles(input: CertificateExportInput): Pro
   const folder = employeeFolderName(input.fileNamePattern, employee, exportDate);
   const warnings: string[] = [];
   const files: ProfileBundleFile[] = [];
-  for (const certificate of input.certificates) {
-    const typeLabel = certificateTypeLabel(input.config, certificate.type, input.certificateTypeNames);
-    const binaries = certificateBinaries(certificate, typeLabel, input.sessionFiles, warnings);
+  // Chứng chỉ cùng nhóm (mặc định: làm việc trên cao, an toàn điện, an toàn lao động) ra chung một tệp mang tên nhóm
+  const units = certificateUnits(input.certificates, (item) => item.type, (item) => item.id, certificateGroups(input.config));
+  for (const unit of units) {
+    const labelOf = (certificate: Certificate) => certificateTypeLabel(input.config, certificate.type, input.certificateTypeNames);
+    const typeLabel = unit.group ? unit.group.name.trim() || labelOf(unit.items[0]!) : labelOf(unit.items[0]!);
+    const binaries = unit.items.flatMap((certificate) => certificateBinaries(certificate, labelOf(certificate), input.sessionFiles, warnings).map((entry) => ({ ...entry, label: labelOf(certificate) })));
     if (!binaries.length) continue;
-    const base = certificateFileBaseName(input.config, { index: files.length + 1, typeLabel, title: certificate.title, expiryDate: certificate.expiryDate }, employee, exportDate);
+    const first = unit.items[0]!;
+    const base = certificateFileBaseName(input.config, { index: files.length + 1, typeLabel, title: unit.group ? "" : first.title, expiryDate: unit.group ? earliestExpiry(unit.items) : first.expiryDate }, employee, exportDate);
     if (binaries.length === 1) {
       const { file, binary } = binaries[0]!;
       files.push({ name: `${base}.${extensionOf(file.name, binary.type || file.mime)}`, bytes: new Uint8Array(await binary.arrayBuffer()) });
       continue;
     }
-    const mergeParts = await toMergeParts(binaries, typeLabel, warnings);
+    const mergeParts: MergePart[] = [];
+    for (const entry of binaries) mergeParts.push(...await toMergeParts([entry], entry.label, warnings));
     const merged = await mergeProfilePdf(null, mergeParts);
     warnings.push(...merged.warnings);
     if (merged.pageCount) files.push({ name: `${base}.pdf`, bytes: merged.bytes });

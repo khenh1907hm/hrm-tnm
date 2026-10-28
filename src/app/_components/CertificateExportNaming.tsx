@@ -1,6 +1,7 @@
 import { certificateFileBaseName, certificateRootFolderName, certificateTypeLabel, DEFAULT_CERTIFICATE_FILE_PATTERN, DEFAULT_CERTIFICATE_FOLDER_PATTERN, DEFAULT_EMPLOYEE_FOLDER_PATTERN, employeeFolderName } from "../../modules/excel-template/certificateExportNames";
 import { applyFileNamePattern, CERTIFICATE_FILE_TOKENS, CERTIFICATE_FOLDER_TOKENS, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
-import type { CertificateExportConfig } from "../../modules/excel-template/types";
+import { certificateGroups, certificateUnits, DEFAULT_CERTIFICATE_GROUPS } from "../../modules/excel-template/certificateGroups";
+import type { CertificateExportConfig, CertificateExportGroup } from "../../modules/excel-template/types";
 
 type Person = { code: string; name: string; position?: string };
 
@@ -36,7 +37,8 @@ export function CertificateExportNaming(props: {
   };
   const root = certificateRootFolderName(value, { templateName: props.templateName, count: props.count ?? 1, exportDate: props.exportDate });
   const folder = employeeFolderName(props.fileNamePattern, person, props.exportDate);
-  const examples = props.typeKeys.slice(0, 4).map((key, index) => certificateFileBaseName(value, { index: index + 1, typeLabel: certificateTypeLabel(value, key, props.typeNames), title: "", expiryDate: null }, person, props.exportDate));
+  const exampleUnits = certificateUnits(props.typeKeys, (key) => key, (key) => key, certificateGroups(value)).slice(0, 5);
+  const examples = exampleUnits.map((unit, index) => certificateFileBaseName(value, { index: index + 1, typeLabel: unit.group?.name.trim() || certificateTypeLabel(value, unit.items[0]!, props.typeNames), title: "", expiryDate: null }, person, props.exportDate));
   const fileExtra = { stt: "", "loai chung chi": "", "ten chung chi": "", "ngay het han": "" };
   const unknown = [
     ...applyFileNamePattern(value.folderPattern ?? "", null, props.exportDate, { "ten mau": "", "so nguoi": "" }).unknownTokens,
@@ -44,14 +46,21 @@ export function CertificateExportNaming(props: {
     ...applyFileNamePattern(value.filePattern ?? "", person, props.exportDate, fileExtra).unknownTokens,
   ];
 
-  const merged = value.layout !== "separate";
+  const merged = value.layout === "merged";
+  const groups = value.groups ?? [...DEFAULT_CERTIFICATE_GROUPS];
+  const setGroups = (next: CertificateExportGroup[]) => set({ groups: next });
+  const groupTypeKeys = Object.keys(props.typeNames).length ? Object.keys(props.typeNames) : [...props.typeKeys];
+  const toggleGroupType = (groupIndex: number, key: string, checked: boolean) => setGroups(groups.map((group, index) => index === groupIndex
+    ? { ...group, types: checked ? [...group.types.filter((type) => type !== key), key] : group.types.filter((type) => type !== key) }
+    // Một loại chỉ ở một nhóm: thêm vào nhóm này thì bỏ khỏi nhóm khác
+    : checked ? { ...group, types: group.types.filter((type) => type !== key) } : group));
 
   return (
     <div className="certificate-naming">
       <fieldset className="certificate-layout">
         <legend>Cách tải</legend>
-        <label className="check-field"><input type="radio" name="certificate-layout" checked={merged} onChange={() => set({ layout: "merged" })} /> <span><b>Gộp thành 1 tệp PDF</b> cho mỗi nhân sự (điện, làm việc trên cao, HĐLĐ… nối tiếp nhau theo thứ tự)</span></label>
-        <label className="check-field"><input type="radio" name="certificate-layout" checked={!merged} onChange={() => set({ layout: "separate" })} /> <span>Mỗi chứng chỉ một tệp riêng, đánh số 1, 2, 3… (nén .zip)</span></label>
+        <label className="check-field"><input type="radio" name="certificate-layout" checked={!merged} onChange={() => set({ layout: "separate" })} /> <span><b>Từng tệp</b>, đánh số 1, 2, 3… (nén .zip); các loại cùng nhóm bên dưới gộp chung 1 tệp PDF</span></label>
+        <label className="check-field"><input type="radio" name="certificate-layout" checked={merged} onChange={() => set({ layout: "merged" })} /> <span>Gộp <b>tất cả</b> thành 1 tệp PDF cho mỗi nhân sự</span></label>
       </fieldset>
 
       <label className="field">
@@ -73,6 +82,26 @@ export function CertificateExportNaming(props: {
           {FILE_NAME_TOKENS.map((item) => <button type="button" className="pill" key={item.token} title={item.label} onClick={() => props.onFileNamePatternChange!(append(props.fileNamePattern, item.token))}>{item.token}</button>)}
         </div>
       </>}
+
+      {!merged && (
+        <div className="certificate-groups">
+          <b>Nhóm gộp chung 1 tệp</b> <small className="muted">(vd An toàn = làm việc trên cao + an toàn điện + an toàn lao động; khi xuất hiện thành một dòng, mở ra chọn từng cái)</small>
+          {groups.map((group, groupIndex) => (
+            <div className="certificate-group" key={group.id}>
+              <div className="certificate-group-head">
+                <input type="text" maxLength={60} aria-label="Tên nhóm (tên tệp)" value={group.name} placeholder="Tên nhóm, vd An toàn" onChange={(event) => setGroups(groups.map((item, index) => index === groupIndex ? { ...item, name: event.target.value } : item))} />
+                <button type="button" className="button danger" onClick={() => setGroups(groups.filter((_, index) => index !== groupIndex))}>Bỏ nhóm</button>
+              </div>
+              <div className="certificate-group-types">
+                {groupTypeKeys.map((key) => (
+                  <label className="check-field" key={key}><input type="checkbox" checked={group.types.includes(key)} onChange={(event) => toggleGroupType(groupIndex, key, event.target.checked)} /> {props.typeNames[key] ?? key}</label>
+                ))}
+              </div>
+            </div>
+          ))}
+          <button type="button" className="button" onClick={() => setGroups([...groups, { id: `g-${Date.now().toString(36)}`, name: "", types: [] }])}>+ Thêm nhóm</button>
+        </div>
+      )}
 
       {!merged && <>
       <label className="field">
