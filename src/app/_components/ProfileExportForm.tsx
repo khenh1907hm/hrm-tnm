@@ -11,7 +11,7 @@ import type { Employee } from "../../modules/employees/types";
 import type { CertificateExportConfig, ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { certificateRootFolderName } from "../../modules/excel-template/certificateExportNames";
 import { CertificateExportNaming } from "./CertificateExportNaming";
-import { downloadBlob, downloadXlsx, exportCertificateFiles, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportCertificateFiles, exportCertificatesPdf, mergesCertificates, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 import { moveId, useDragReorder } from "./useDragReorder";
 import { applyFileNamePattern, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
@@ -85,6 +85,15 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
     saveNaming();
     try {
       const chosen = ordered.filter((certificate) => selected.includes(certificate.id));
+      if (mergesCertificates(certConfig)) {
+        // Mặc định: mọi chứng chỉ đã chọn gộp thành MỘT tệp PDF theo thứ tự đang sắp
+        const pdf = await exportCertificatesPdf({ employee, certificates: chosen, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, config: certConfig, fileNamePattern: namePattern, exportDate });
+        if (!pdf.pageCount) throw new Error(pdf.warnings[0] ?? "Không có tệp chứng chỉ nào để tải.");
+        downloadBlob(new Blob([pdf.bytes.slice().buffer], { type: "application/pdf" }), pdf.name);
+        setWarnings(pdf.warnings);
+        props.setNotice(pdf.warnings.length ? `Đã gộp ${chosen.length} chứng chỉ thành 1 PDF (${pdf.pageCount} trang), còn ${pdf.warnings.length} mục cần kiểm tra.` : `Đã gộp ${chosen.length} chứng chỉ thành 1 PDF (${pdf.pageCount} trang).`, pdf.warnings.length ? "warning" : "success");
+        return;
+      }
       const result = await exportCertificateFiles({ employee, certificates: chosen, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, config: certConfig, fileNamePattern: namePattern, exportDate });
       if (!result.files.length) throw new Error(result.warnings[0] ?? "Không có tệp chứng chỉ nào để tải.");
       const root = certificateRootFolderName(certConfig, { templateName: template.name, count: 1, exportDate });
@@ -199,12 +208,12 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         {namePreview && namePreview.unknownTokens.length > 0 && <p className="form-error">Không nhận ra: {namePreview.unknownTokens.join(", ")}. Dùng các biến ở trên.</p>}
       </section>
       <details className="file-name-rule certificate-naming-box">
-        <summary>Tên thư mục và tệp khi tải riêng chứng chỉ</summary>
+        <summary>Cách tải riêng chứng chỉ (1 PDF hoặc từng tệp) và đặt tên</summary>
         <CertificateExportNaming value={certConfig} onChange={setCertConfig} typeKeys={[...new Set(ordered.filter((certificate) => selected.includes(certificate.id)).map((certificate) => certificate.type))]} typeNames={typeNames} fileNamePattern={namePattern} templateName={template.name} exportDate={exportDate} person={employee} />
       </details>
       <div className="button-row" style={{ justifyContent: "flex-end" }}>
-        <button type="button" className="button" disabled={busy !== null || !selected.length} title="Chỉ các chứng chỉ đã chọn, mỗi chứng chỉ một tệp đánh số theo thứ tự, không kèm phiếu" onClick={() => void runCertificates()}>
-          {busy === "certs" ? "Đang tạo…" : <><FileArchive className="ico" size={16} aria-hidden="true" /> Tải chứng chỉ (.zip)</>}
+        <button type="button" className="button" disabled={busy !== null || !selected.length} title={mergesCertificates(certConfig) ? "Các chứng chỉ đã chọn gộp thành một tệp PDF theo thứ tự đang sắp, không kèm phiếu" : "Chỉ các chứng chỉ đã chọn, mỗi chứng chỉ một tệp đánh số theo thứ tự, không kèm phiếu"} onClick={() => void runCertificates()}>
+          {busy === "certs" ? "Đang tạo…" : <><FileArchive className="ico" size={16} aria-hidden="true" /> {mergesCertificates(certConfig) ? "Tải chứng chỉ (1 PDF)" : "Tải chứng chỉ (.zip)"}</>}
         </button>
         {!props.pdfOnly && <button type="button" className="button" disabled={busy !== null} onClick={() => void run("xlsx")}>
           {busy === "xlsx" ? "Đang tạo Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải Excel (.xlsx)</>}

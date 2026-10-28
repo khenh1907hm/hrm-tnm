@@ -93,6 +93,8 @@ export interface CertificateExportConfig {
   filePattern?: string;
   /** Tên gọi khi xuất theo khóa loại chứng chỉ, vd { "custom-ctype-cccd": "ID" }; trống = tên loại. */
   typeLabels?: Record<string, string>;
+  /** Trống/"merged" = mỗi nhân sự MỘT tệp PDF gộp mọi chứng chỉ; "separate" = mỗi chứng chỉ một tệp đánh số. */
+  layout?: "merged" | "separate";
 }
 
 export interface ExcelReportTemplate {

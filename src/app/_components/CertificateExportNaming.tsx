@@ -8,7 +8,8 @@ const SAMPLE: Person = { code: "TNM0001", name: "Nguyễn Văn A", position: "Nh
 const append = (current: string | undefined, token: string) => current?.trim() ? `${current.trimEnd()} ${token}` : token;
 
 /**
- * Quy tắc tên khi xuất riêng chứng chỉ: thư mục tổng, tên tệp từng chứng chỉ và tên gọi từng loại (vd CCCD → ID).
+ * Xuất riêng chứng chỉ: gộp 1 PDF mỗi nhân sự (mặc định) hoặc từng tệp; quy tắc tên thư mục tổng, tên tệp từng chứng chỉ
+ * và tên gọi từng loại (vd CCCD → ID).
  * Dùng ở FORM Báo cáo (lưu vào mẫu) và ở hộp thoại xuất (sửa cho lần xuất đó).
  */
 export function CertificateExportNaming(props: {
@@ -43,10 +44,18 @@ export function CertificateExportNaming(props: {
     ...applyFileNamePattern(value.filePattern ?? "", person, props.exportDate, fileExtra).unknownTokens,
   ];
 
+  const merged = value.layout !== "separate";
+
   return (
     <div className="certificate-naming">
+      <fieldset className="certificate-layout">
+        <legend>Cách tải</legend>
+        <label className="check-field"><input type="radio" name="certificate-layout" checked={merged} onChange={() => set({ layout: "merged" })} /> <span><b>Gộp thành 1 tệp PDF</b> cho mỗi nhân sự (điện, làm việc trên cao, HĐLĐ… nối tiếp nhau theo thứ tự)</span></label>
+        <label className="check-field"><input type="radio" name="certificate-layout" checked={!merged} onChange={() => set({ layout: "separate" })} /> <span>Mỗi chứng chỉ một tệp riêng, đánh số 1, 2, 3… (nén .zip)</span></label>
+      </fieldset>
+
       <label className="field">
-        <span>Tên thư mục tổng (tên tệp .zip)</span>
+        <span>Tên thư mục tổng (tên tệp .zip{merged ? " khi xuất nhiều người" : ""})</span>
         <input type="text" maxLength={150} value={value.folderPattern ?? ""} placeholder={DEFAULT_CERTIFICATE_FOLDER_PATTERN} onChange={(event) => set({ folderPattern: event.target.value })} />
       </label>
       <div className="file-name-tokens">
@@ -56,7 +65,7 @@ export function CertificateExportNaming(props: {
 
       {props.onFileNamePatternChange && <>
         <label className="field">
-          <span>Tên thư mục từng nhân sự <small>(cũng là quy tắc đặt tên tệp hồ sơ)</small></span>
+          <span>{merged ? "Tên tệp PDF của từng nhân sự" : "Tên thư mục từng nhân sự"} <small>(cũng là quy tắc đặt tên tệp hồ sơ)</small></span>
           <input type="text" maxLength={150} value={props.fileNamePattern ?? ""} placeholder={DEFAULT_EMPLOYEE_FOLDER_PATTERN} onChange={(event) => props.onFileNamePatternChange!(event.target.value)} />
         </label>
         <div className="file-name-tokens">
@@ -65,6 +74,7 @@ export function CertificateExportNaming(props: {
         </div>
       </>}
 
+      {!merged && <>
       <label className="field">
         <span>Tên tệp từng chứng chỉ</span>
         <input type="text" maxLength={150} value={value.filePattern ?? ""} placeholder={DEFAULT_CERTIFICATE_FILE_PATTERN} onChange={(event) => set({ filePattern: event.target.value })} />
@@ -73,9 +83,10 @@ export function CertificateExportNaming(props: {
         <span className="muted">Chèn:</span>
         {[...CERTIFICATE_FILE_TOKENS, ...FILE_NAME_TOKENS].map((item) => <button type="button" className="pill" key={item.token} title={item.label} onClick={() => set({ filePattern: append(value.filePattern, item.token) })}>{item.token}</button>)}
       </div>
+      </>}
       {unknown.length > 0 && <p className="form-error">Không nhận ra: {unknown.join(", ")}. Dùng các biến ở trên.</p>}
 
-      {props.typeKeys.length > 0 && (
+      {!merged && props.typeKeys.length > 0 && (
         <table className="profile-table certificate-labels">
           <thead><tr><th>Loại chứng chỉ</th><th>Tên gọi khi xuất <small>(trống = giữ tên loại)</small></th></tr></thead>
           <tbody>
@@ -91,10 +102,15 @@ export function CertificateExportNaming(props: {
 
       <div className="certificate-naming-example muted">
         <span>Ví dụ:</span>
-        <code>{root}.zip</code>
-        <code className="indent-1">{root}/</code>
-        <code className="indent-2">{folder}/</code>
-        {examples.map((name) => <code className="indent-3" key={name}>{name}.pdf</code>)}
+        {merged ? <>
+          <code>{folder}.pdf</code>
+          <span className="muted">Xuất nhiều người: {root}.zip → mỗi người một tệp PDF như trên.</span>
+        </> : <>
+          <code>{root}.zip</code>
+          <code className="indent-1">{root}/</code>
+          <code className="indent-2">{folder}/</code>
+          {examples.map((name) => <code className="indent-3" key={name}>{name}.pdf</code>)}
+        </>}
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ import type { Employee } from "../../modules/employees/types";
 import type { CertificateExportConfig, ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { certificateRootFolderName } from "../../modules/excel-template/certificateExportNames";
 import { CertificateExportNaming } from "./CertificateExportNaming";
-import { downloadBlob, downloadXlsx, exportCertificateFiles, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFileName, zipFiles, type ProfileBundleFile } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportCertificateFiles, exportCertificatesPdf, mergesCertificates, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFileName, zipFiles, type ProfileBundleFile } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 import { expirySortKey, isValidOn } from "../../modules/certificates/status";
 
@@ -73,6 +73,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
       const rank = (type: string) => attachments.indexOf(type);
       const outcomes: PersonResult[] = [];
       const output: (ProfileBundleFile & { folder: string })[] = [];
+      const merged = mergesCertificates(certConfig);
       for (const [index, employee] of employees.entries()) {
         try {
           const certificates = await app.certificates.listByEmployee(actor, employee.id);
@@ -80,11 +81,20 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
             .filter((item) => item.state === "current" && isValidOn(item.expiryDate, exportDate) && attachments.includes(item.type))
             .sort((a, b) => rank(a.type) - rank(b.type) || expirySortKey(a.expiryDate).localeCompare(expirySortKey(b.expiryDate)));
           const files = props.ensureFiles ? await props.ensureFiles(list, employee) : sessionFiles;
-          const result = await exportCertificateFiles({ employee, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, config: certConfig, fileNamePattern: namePattern, exportDate });
-          // Hai nhân sự trùng tên thư mục (vd quy tắc chỉ có tên) → thêm mã để không ghi đè lên nhau
-          const folder = output.some((file) => file.folder === result.folder) ? `${result.folder} (${employee.code})` : result.folder;
-          output.push(...result.files.map((file) => ({ ...file, folder })));
-          outcomes.push(result.files.length ? { employee, warnings: result.warnings } : { employee, warnings: [], error: result.warnings[0] ?? "Không có tệp chứng chỉ nào." });
+          const exportInput = { employee, certificates: list, certificateTypeNames: typeNames, sessionFiles: files, config: certConfig, fileNamePattern: namePattern, exportDate };
+          if (merged) {
+            // Mỗi nhân sự MỘT tệp PDF gộp mọi chứng chỉ; trùng tên tệp (vd quy tắc chỉ có tên) → thêm mã
+            const pdf = await exportCertificatesPdf(exportInput);
+            const name = output.some((file) => file.name.toLowerCase() === pdf.name.toLowerCase()) ? pdf.name.replace(/\.pdf$/, ` (${employee.code}).pdf`) : pdf.name;
+            if (pdf.pageCount) output.push({ name, bytes: pdf.bytes, folder: "" });
+            outcomes.push(pdf.pageCount ? { employee, warnings: pdf.warnings } : { employee, warnings: [], error: pdf.warnings[0] ?? "Không có tệp chứng chỉ nào." });
+          } else {
+            const result = await exportCertificateFiles(exportInput);
+            // Hai nhân sự trùng tên thư mục (vd quy tắc chỉ có tên) → thêm mã để không ghi đè lên nhau
+            const folder = output.some((file) => file.folder === result.folder) ? `${result.folder} (${employee.code})` : result.folder;
+            output.push(...result.files.map((file) => ({ ...file, folder })));
+            outcomes.push(result.files.length ? { employee, warnings: result.warnings } : { employee, warnings: [], error: result.warnings[0] ?? "Không có tệp chứng chỉ nào." });
+          }
         } catch (error) {
           outcomes.push({ employee, warnings: [], error: error instanceof Error ? error.message : "Không tạo được tệp chứng chỉ." });
         }
@@ -92,7 +102,9 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
       }
       const done = outcomes.filter((item) => !item.error).length;
       const root = certificateRootFolderName(certConfig, { templateName: template.name, count: done, exportDate });
-      if (output.length) downloadBlob(await zipFiles(output.map((file) => ({ ...file, folder: `${root}/${file.folder}` }))), `${root}.zip`);
+      // Gộp PDF mà chỉ một người → tải thẳng tệp PDF; còn lại nén ZIP <thư mục tổng>/…
+      if (merged && output.length === 1) downloadBlob(new Blob([output[0]!.bytes.slice().buffer], { type: "application/pdf" }), output[0]!.name);
+      else if (output.length) downloadBlob(await zipFiles(output.map((file) => ({ ...file, folder: file.folder ? `${root}/${file.folder}` : root }))), `${root}.zip`);
       setResults(outcomes);
       const failed = outcomes.length - done;
       setNotice(failed ? `Đã tải chứng chỉ của ${done}/${employees.length} nhân sự, ${failed} người không có tệp.` : `Đã tải chứng chỉ của ${done} nhân sự.`);
@@ -227,7 +239,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
 
             {template && (
               <details className="file-name-rule certificate-naming-box">
-                <summary>Tên thư mục và tệp khi tải riêng chứng chỉ</summary>
+                <summary>Cách tải riêng chứng chỉ (1 PDF mỗi người hoặc từng tệp) và đặt tên</summary>
                 <CertificateExportNaming value={certConfig} onChange={setCertConfig} typeKeys={template.profile.attachments} typeNames={typeNames} fileNamePattern={namePattern} onFileNamePatternChange={setNamePattern} templateName={template.name} exportDate={exportDate} person={employees[0]} count={employees.length} />
               </details>
             )}
@@ -248,9 +260,9 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
         <footer>
           {busy && <span className="batch-progress" role="status">Đang tạo {progress}/{employees.length}…<progress max={employees.length} value={progress} /></span>}
           <button type="button" className="button" onClick={props.onClose}>Đóng</button>
-          <button type="button" className="button" disabled={busy !== null || !template || !employees.length} title="Chỉ chứng chỉ còn hạn theo danh sách của mẫu, mỗi chứng chỉ một tệp đánh số, không kèm phiếu" onClick={() => void runCertificates()}>
+          <button type="button" className="button" disabled={busy !== null || !template || !employees.length} title={mergesCertificates(certConfig) ? "Chứng chỉ còn hạn theo danh sách của mẫu, mỗi nhân sự gộp thành một tệp PDF, không kèm phiếu" : "Chỉ chứng chỉ còn hạn theo danh sách của mẫu, mỗi chứng chỉ một tệp đánh số, không kèm phiếu"} onClick={() => void runCertificates()}>
             <FileArchive className="ico" size={16} aria-hidden="true" />
-            Tải chứng chỉ (.zip)
+            {mergesCertificates(certConfig) ? (employees.length > 1 ? `Tải chứng chỉ · ${employees.length} PDF (.zip)` : "Tải chứng chỉ (1 PDF)") : "Tải chứng chỉ (.zip)"}
           </button>
           <button type="button" className="button" disabled={busy !== null || !template || !employees.length} onClick={() => void run("xlsx")}>
             <FileDown className="ico" size={16} aria-hidden="true" />

@@ -249,12 +249,28 @@ export async function exportProfileBundle(input: ProfileExportInput): Promise<{ 
 const EXTENSIONS: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/heic": "heic" };
 const extensionOf = (name: string, mime: string) => /\.([a-z0-9]{2,5})$/i.exec(name)?.[1]?.toLowerCase() ?? EXTENSIONS[mime] ?? "bin";
 
-/**
- * Xuất riêng chứng chỉ của một nhân sự (không kèm phiếu): mỗi chứng chỉ một tệp trong thư mục nhân sự,
- * đánh số theo thứ tự truyền vào, vd "1. ID.jpg", "2. HĐLĐ.pdf". Tệp chính giữ nguyên byte gốc;
- * chứng chỉ có tệp bổ sung thì gộp thành một PDF để mỗi chứng chỉ vẫn đúng một số thứ tự.
- */
-export async function exportCertificateFiles(input: {
+/** Tệp của một chứng chỉ → các phần ghép PDF (PDF giữ nguyên trang, ảnh mỗi ảnh một trang). */
+async function toMergeParts(binaries: readonly { file: { name: string }; binary: File }[], typeLabel: string, warnings: string[]): Promise<MergePart[]> {
+  const parts: MergePart[] = [];
+  for (const { file, binary } of binaries) {
+    if (binary.type === "application/pdf") { parts.push({ title: `${typeLabel} · ${file.name}`, kind: "pdf", bytes: new Uint8Array(await binary.arrayBuffer()) }); continue; }
+    const image = await toTemplateImage(binary, { opaque: true });
+    if (image) parts.push({ title: `${typeLabel} · ${file.name}`, kind: "image", bytes: image.bytes, extension: image.extension });
+    else warnings.push(`${typeLabel}: không đọc được ảnh "${file.name}"`);
+  }
+  return parts;
+}
+
+/** Tệp chính rồi tệp bổ sung của một chứng chỉ có trong phiên; thiếu tệp nào thì ghi cảnh báo. */
+function certificateBinaries(certificate: Certificate, typeLabel: string, sessionFiles: Readonly<Record<string, File>>, warnings: string[]) {
+  return [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)].flatMap((file) => {
+    const binary = sessionFiles[file.id];
+    if (!binary) warnings.push(`${typeLabel}: chưa có dữ liệu tệp "${file.name}" trong phiên này`);
+    return binary ? [{ file, binary }] : [];
+  });
+}
+
+export type CertificateExportInput = {
   employee: Pick<Employee, "code" | "name" | "position">;
   /** Chứng chỉ đã chọn, đúng thứ tự đánh số. */
   certificates: readonly Certificate[];
@@ -263,19 +279,40 @@ export async function exportCertificateFiles(input: {
   config: CertificateExportConfig | undefined;
   fileNamePattern: string | undefined;
   exportDate: string;
-}): Promise<{ folder: string; files: ProfileBundleFile[]; warnings: string[] }> {
+};
+
+/** Mặc định gộp mọi chứng chỉ của một người thành một PDF; "separate" = mỗi chứng chỉ một tệp như trước. */
+export const mergesCertificates = (config: CertificateExportConfig | undefined) => config?.layout !== "separate";
+
+/**
+ * Xuất chứng chỉ của một nhân sự thành MỘT tệp PDF (không kèm phiếu), vd "Vinci - TNM0018 - Trần Ngọc Đức.pdf":
+ * lần lượt từng chứng chỉ theo thứ tự truyền vào, mỗi chứng chỉ tệp chính rồi tệp bổ sung.
+ */
+export async function exportCertificatesPdf(input: CertificateExportInput): Promise<{ name: string; bytes: Uint8Array; pageCount: number; warnings: string[] }> {
+  const warnings: string[] = [];
+  const parts: MergePart[] = [];
+  for (const certificate of input.certificates) {
+    const typeLabel = certificateTypeLabel(input.config, certificate.type, input.certificateTypeNames);
+    parts.push(...await toMergeParts(certificateBinaries(certificate, typeLabel, input.sessionFiles, warnings), typeLabel, warnings));
+  }
+  if (!input.certificates.length) warnings.push("Không có chứng chỉ nào được chọn để xuất");
+  const merged = parts.length ? await mergeProfilePdf(null, parts) : { bytes: new Uint8Array(), pageCount: 0, warnings: [] };
+  return { name: `${employeeFolderName(input.fileNamePattern, input.employee, input.exportDate)}.pdf`, bytes: merged.bytes, pageCount: merged.pageCount, warnings: [...warnings, ...merged.warnings] };
+}
+
+/**
+ * Xuất riêng chứng chỉ của một nhân sự (không kèm phiếu): mỗi chứng chỉ một tệp trong thư mục nhân sự,
+ * đánh số theo thứ tự truyền vào, vd "1. ID.jpg", "2. HĐLĐ.pdf". Tệp chính giữ nguyên byte gốc;
+ * chứng chỉ có tệp bổ sung thì gộp thành một PDF để mỗi chứng chỉ vẫn đúng một số thứ tự.
+ */
+export async function exportCertificateFiles(input: CertificateExportInput): Promise<{ folder: string; files: ProfileBundleFile[]; warnings: string[] }> {
   const { employee, exportDate } = input;
   const folder = employeeFolderName(input.fileNamePattern, employee, exportDate);
   const warnings: string[] = [];
   const files: ProfileBundleFile[] = [];
   for (const certificate of input.certificates) {
     const typeLabel = certificateTypeLabel(input.config, certificate.type, input.certificateTypeNames);
-    const parts = [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)];
-    const binaries = parts.flatMap((file) => {
-      const binary = input.sessionFiles[file.id];
-      if (!binary) warnings.push(`${typeLabel}: chưa có dữ liệu tệp "${file.name}" trong phiên này`);
-      return binary ? [{ file, binary }] : [];
-    });
+    const binaries = certificateBinaries(certificate, typeLabel, input.sessionFiles, warnings);
     if (!binaries.length) continue;
     const base = certificateFileBaseName(input.config, { index: files.length + 1, typeLabel, title: certificate.title, expiryDate: certificate.expiryDate }, employee, exportDate);
     if (binaries.length === 1) {
@@ -283,13 +320,7 @@ export async function exportCertificateFiles(input: {
       files.push({ name: `${base}.${extensionOf(file.name, binary.type || file.mime)}`, bytes: new Uint8Array(await binary.arrayBuffer()) });
       continue;
     }
-    const mergeParts: MergePart[] = [];
-    for (const { file, binary } of binaries) {
-      if (binary.type === "application/pdf") { mergeParts.push({ title: `${typeLabel} · ${file.name}`, kind: "pdf", bytes: new Uint8Array(await binary.arrayBuffer()) }); continue; }
-      const image = await toTemplateImage(binary, { opaque: true });
-      if (image) mergeParts.push({ title: `${typeLabel} · ${file.name}`, kind: "image", bytes: image.bytes, extension: image.extension });
-      else warnings.push(`${typeLabel}: không đọc được ảnh "${file.name}"`);
-    }
+    const mergeParts = await toMergeParts(binaries, typeLabel, warnings);
     const merged = await mergeProfilePdf(null, mergeParts);
     warnings.push(...merged.warnings);
     if (merged.pageCount) files.push({ name: `${base}.pdf`, bytes: merged.bytes });

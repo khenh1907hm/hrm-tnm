@@ -4,7 +4,7 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Employee } from "../../modules/employees/types";
-import { exportCertificateFiles, exportProfileBundle, zipFiles, type ProfileExportInput } from "./profileExport";
+import { exportCertificateFiles, exportCertificatesPdf, exportProfileBundle, mergesCertificates, zipFiles, type ProfileExportInput } from "./profileExport";
 
 async function templateBase64(): Promise<string> {
   const workbook = new ExcelJS.Workbook();
@@ -98,5 +98,38 @@ describe("exportCertificateFiles (xuất riêng chứng chỉ)", () => {
       "Chứng chỉ - 28-10-2026/Vinci - TNM0018 - Trần Ngọc Đức/2. HĐLĐ.pdf",
       "Chứng chỉ - 28-10-2026/Vinci - TNM0018 - Trần Ngọc Đức/3. An toàn lao động.pdf",
     ]);
+  });
+});
+
+describe("exportCertificatesPdf (gộp chứng chỉ thành 1 PDF)", () => {
+  const cert = (id: string, type: string, document: { id: string; name: string; mime: string }, supplementary: { id: string; name: string; mime: string }[] = []): Certificate => ({
+    id, employeeId: "e1", type: type as Certificate["type"], title: "", number: id, issueDate: null, expiryDate: null, state: "current",
+    document: { ...document, size: 10 }, supplementaryFiles: supplementary.map((file) => ({ file: { ...file, size: 10 } })),
+  } as unknown as Certificate);
+
+  it("nối mọi chứng chỉ theo thứ tự truyền vào (tệp chính rồi tệp bổ sung) thành một PDF đặt tên theo quy tắc của mẫu", async () => {
+    const result = await exportCertificatesPdf({
+      employee: { code: "TNM0018", name: "Trần Ngọc Đức", position: "Nhân viên kỹ thuật" },
+      certificates: [
+        cert("c1", "elec", { id: "f1", name: "dien.pdf", mime: "application/pdf" }),
+        cert("c2", "custom-ctype-height-health", { id: "f2", name: "cao.pdf", mime: "application/pdf" }, [{ id: "f3", name: "cao-sau.pdf", mime: "application/pdf" }]),
+        cert("c3", "atld", { id: "f4", name: "missing.pdf", mime: "application/pdf" }),
+      ],
+      certificateTypeNames: { elec: "An toàn điện", "custom-ctype-height-health": "Làm việc trên cao", atld: "An toàn lao động" },
+      sessionFiles: { f1: await pdfFile(1, "dien.pdf", [100, 100]), f2: await pdfFile(2, "cao.pdf", [200, 200]), f3: await pdfFile(1, "cao-sau.pdf", [300, 300]) },
+      config: undefined,
+      fileNamePattern: "Vinci - {mã nhân viên} - {tên nhân viên}",
+      exportDate: "2026-10-28",
+    });
+    expect(result.name).toBe("Vinci - TNM0018 - Trần Ngọc Đức.pdf");
+    expect(result.pageCount).toBe(4);
+    expect((await PDFDocument.load(result.bytes)).getPages().map((page) => page.getSize().width)).toEqual([100, 200, 200, 300]);
+    expect(result.warnings).toEqual(['An toàn lao động: chưa có dữ liệu tệp "missing.pdf" trong phiên này']);
+  });
+
+  it("gộp là mặc định; chỉ layout \"separate\" mới tách từng tệp", () => {
+    expect(mergesCertificates(undefined)).toBe(true);
+    expect(mergesCertificates({ layout: "merged" })).toBe(true);
+    expect(mergesCertificates({ layout: "separate" })).toBe(false);
   });
 });
