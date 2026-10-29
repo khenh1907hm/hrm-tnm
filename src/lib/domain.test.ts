@@ -11,7 +11,7 @@ import { profileCertificateStatus } from "../modules/certificates/status";
 import { validateEmployee } from "../modules/employees/rules";
 import { validateCertificate } from "../modules/certificates/rules";
 import { computeDueReminders } from "../modules/reminders/due";
-import { reminderEmail } from "../modules/reminders/email";
+import { reminderDigestEmail } from "../modules/reminders/email";
 import { parseIdText, mergeParsed } from "../modules/ocr/parseIdText";
 import { messagesVi } from "../messages.vi";
 import { PERMISSIONS } from "../modules/auth/permissions";
@@ -319,7 +319,7 @@ describe("reminder, export, and OCR edge rules", () => {
     expect(computeDueReminders(certificates, [employee], "2026-10-12", false, ["cert-1|EXPIRING_30|2026-10-15"])).toEqual([]);
   });
   it("REM_06 formats Vietnamese email content", () => {
-    const mail = reminderEmail(sampleEmployee, sampleCertificate, 3, "/employees/employee-fixture");
+    const mail = reminderDigestEmail([{ employee: sampleEmployee, certificate: sampleCertificate, daysLeft: 3, profileUrl: "/employees/employee-fixture" }], { today: "2026-10-12" });
     expect(mail.text).toContain("15/10/2026");
     expect(mail.text).toContain("Nguyễn Minh An");
   });

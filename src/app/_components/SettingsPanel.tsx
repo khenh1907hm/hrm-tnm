@@ -4,7 +4,7 @@ import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
 import type { Commander } from "../../modules/commanders/types";
 import { POSITIONS, type Position } from "../../modules/employees/types";
-import { reminderEmail } from "../../modules/reminders/email";
+import { reminderDigestEmail } from "../../modules/reminders/email";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import { issueText, type App, type SetNotice } from "./shared";
 import { CertificateTypeTable } from "./CertificateTypeTable";
@@ -70,17 +70,18 @@ export function SettingsPanel(props: { app: App; actor: Actor; setNotice: SetNot
   }, [signatures, props.sessionFiles]);
   useEffect(() => {
     let active = true;
-    void Promise.all([props.app.settings.get(props.actor), props.app.employees.list(props.actor), props.app.certificates.listExpiring(props.actor)]).then(([current, workers, expiring]) => {
+    void Promise.all([props.app.settings.get(props.actor), props.app.certificates.listExpiring(props.actor)]).then(async ([current, expiring]) => {
       if (!active) return;
       if (current.ok) { setEmails(current.value.reminderEmails); setSavedEmails(current.value.reminderEmails); setSettingsVersion(current.value.version); setSendExpiredNotice(current.value.sendExpiredNotice); }
-      if (workers.ok && expiring.ok && expiring.value.length) {
-        const item = expiring.value[0];
-        if (item) {
-          const employee = workers.value.items.find((entry) => entry.id === item.employeeId);
-          const category = types.find((entry) => entry.key === item.type);
-          if (employee) setSample(reminderEmail(employee, item, item.daysLeft, `${window.location.origin}/nhan-su/${employee.id}`, category));
-        }
-      }
+      if (!expiring.ok || !expiring.value.length) return;
+      // Xem trước đúng email tổng hợp: mọi chứng chỉ đang hiện ở trang Cảnh báo
+      const people = new Map((await Promise.all([...new Set(expiring.value.map((item) => item.employeeId))].map((id) => props.app.employees.get(props.actor, id)))).flatMap((result) => result.ok ? [[result.value.id, result.value] as const] : []));
+      const items = expiring.value.flatMap((item) => {
+        const employee = people.get(item.employeeId);
+        return employee ? [{ employee, certificate: item, daysLeft: item.daysLeft, profileUrl: `${window.location.origin}/nhan-su/${employee.id}`, certificateType: types.find((entry) => entry.key === item.type) }] : [];
+      });
+      const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+      if (active && items.length) setSample(reminderDigestEmail(items, { today }));
     });
     return () => { active = false; };
   }, [props.app, props.actor, types]);
@@ -126,9 +127,9 @@ export function SettingsPanel(props: { app: App; actor: Actor; setNotice: SetNot
     try {
       const token = (await client.auth.getSession()).data.session?.access_token;
       const response = await fetch("/api/reminders/test", { method: "POST", headers: token ? { authorization: `Bearer ${token}` } : {} });
-      const body = await response.json().catch(() => null) as { ok?: boolean; message?: string; to?: string[] } | null;
+      const body = await response.json().catch(() => null) as { ok?: boolean; message?: string; to?: string[]; count?: number } | null;
       if (!response.ok || !body?.ok) { props.setNotice(body?.message ?? "Không gửi được email thử."); return; }
-      props.setNotice(`Đã gửi email thử tới ${body.to?.join(", ")}. Kiểm tra hộp thư (cả mục Spam).`, "success");
+      props.setNotice(`Đã gửi email thử (${body.count ?? 0} chứng chỉ) tới ${body.to?.join(", ")}. Kiểm tra hộp thư (cả mục Spam).`, "success");
     } catch { props.setNotice("Không kết nối được máy chủ để gửi email thử."); }
     finally { setTesting(false); }
   };
