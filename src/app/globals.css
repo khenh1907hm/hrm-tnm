@@ -259,17 +259,6 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 /* ===== Màu nhấn & tương phản (v3) ===== */
 :root{--violet:#6d28d9;--violet-bg:#ede9fe;--teal:#0f766e;--teal-bg:#ccfbf1;--success:#15803d;--success-hover:#166534;--nav-bg:#0f2350;--nav-bg-2:#16336f;--nav-ink:#c7d4f0;--nav-ink-strong:#fff;--table-head:#eef3fc}
 
-/* Thanh điều hướng tối */
-.side-nav{background:linear-gradient(180deg,var(--nav-bg) 0%,var(--nav-bg-2) 100%);border-right:0;color:var(--nav-ink)}
-.side-nav .brand b{color:var(--nav-ink-strong)}.side-nav .brand span{color:var(--nav-ink)}
-.side-nav .brand-mark{border-radius:10px;box-shadow:0 4px 12px rgba(234,88,12,.45)}
-.side-nav .nav-item{color:var(--nav-ink);border-left-color:transparent}
-.side-nav .nav-item:hover{background:rgba(255,255,255,.08);color:var(--nav-ink-strong)}
-.side-nav .nav-item.active{background:rgba(255,255,255,.14);color:var(--nav-ink-strong);border-left-color:var(--accent)}
-.side-nav .side-foot{color:var(--nav-ink)}.side-nav .side-user{color:var(--nav-ink-strong)}
-.side-nav .role-switch{border-color:rgba(255,255,255,.25)}.side-nav .role-switch button{background:transparent;color:var(--nav-ink)}.side-nav .role-switch button[aria-pressed=true]{background:var(--accent);color:#fff}
-.side-nav .button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.25);color:var(--nav-ink-strong)}.side-nav .button:hover{background:rgba(255,255,255,.16)}
-.side-nav .badge{background:var(--accent)}
 @media(max-width:860px){.app-shell{grid-template-columns:minmax(0,1fr)}.side-nav{min-width:0}.side-nav nav{flex:1 1 100%;min-width:0}.main-content{min-width:0}}
 
 /* Nút */
@@ -389,7 +378,6 @@ fieldset.field legend{font-weight:600;font-size:13px;margin-bottom:6px;color:var
 .signature-drop p{margin:0;font-size:13px}
 
 .pill.none{background:var(--soft);color:var(--muted)}
-.side-nav a.nav-item{color:var(--nav-ink)}.side-nav a.nav-item:hover{color:var(--nav-ink-strong)}
 
 /* Nhập nhân sự từ Excel */
 .import-dialog{max-width:960px}
@@ -570,3 +558,41 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .audit-table .nowrap{white-space:nowrap}.audit-entity{display:block;font-size:12px}.audit-table tr.is-open>td{background:var(--soft)}
 .audit-detail>td{background:var(--soft);padding:4px 14px 14px}.audit-detail table{background:var(--surface);border:1px solid var(--line);border-radius:6px}.audit-detail th,.audit-detail td{padding:7px 12px;cursor:default}.audit-detail tbody tr:hover{background:transparent}
 .audit-before{color:var(--muted);text-decoration:line-through}.audit-after{font-weight:600}
+/* Tài khoản & phân quyền */
+.accounts-table td{vertical-align:middle}.accounts-table .pill.info{margin-left:6px}.accounts-table select{min-height:32px;border:1px solid var(--line);border-radius:6px;padding:0 6px;background:var(--surface)}.accounts-table tr.is-locked td{color:var(--muted)}.accounts-table .nowrap{white-space:nowrap}
+.accounts-actions{white-space:nowrap;text-align:right}.accounts-actions .button{padding:5px 10px;font-size:13px}.accounts-actions .button+.button{margin-left:6px}
+.accounts-roles{margin-top:16px;padding:14px 18px}.accounts-roles h2{font-size:15px;margin:0 0 8px}.accounts-roles dl{display:grid;gap:4px;margin:0}.accounts-roles div{display:grid;grid-template-columns:120px 1fr;gap:8px;font-size:13px}.accounts-roles dt{font-weight:600}.accounts-roles dd{margin:0;color:var(--muted)}
+.accounts-modal{max-width:460px}.accounts-modal-body{display:grid;gap:12px;padding:16px 20px}.accounts-modal-body .field{margin:0}.accounts-modal-body .field input,.accounts-modal-body .field select{width:100%}.accounts-modal-body p{margin:0}
+/* Thanh bên kiểu tối gọn: nền phẳng, menu chia nhóm, thẻ người dùng ở đáy, thu gọn còn icon */
+.app-shell{transition:grid-template-columns .2s ease}.app-shell:has(.side-nav.is-collapsed){grid-template-columns:68px minmax(0,1fr)}
+.side-nav{background:var(--nav-bg);border-right:0;color:var(--nav-ink);padding:16px 10px;gap:8px;overflow-y:auto;overflow-x:hidden}
+.side-nav .brand{padding:0 4px 10px;gap:10px}.side-nav .brand-mark{width:34px;height:34px;border-radius:9px;font-size:12px;flex-shrink:0;box-shadow:none}
+.side-nav .brand-text{min-width:0;flex:1}.side-nav .brand b{color:var(--nav-ink-strong);font-size:14px;font-weight:600;white-space:nowrap}.side-nav .brand span{color:var(--nav-ink);font-size:12px;white-space:nowrap}
+.side-collapse{border:0;background:none;color:var(--nav-ink);padding:6px;border-radius:7px;display:grid;place-items:center;flex-shrink:0}.side-collapse:hover{background:rgba(255,255,255,.08);color:var(--nav-ink-strong)}
+.side-nav nav{gap:0}.nav-group{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}
+.nav-group-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#7186b3;padding:12px 10px 4px;white-space:nowrap}
+.side-nav .nav-item,.side-nav a.nav-item{color:var(--nav-ink);border-left:0;border-radius:8px;padding:8px 10px;gap:10px;font-weight:500;font-size:14px;white-space:nowrap}
+.side-nav .nav-item svg{flex-shrink:0;opacity:.85}
+.side-nav .nav-item:hover,.side-nav a.nav-item:hover{background:rgba(255,255,255,.07);color:var(--nav-ink-strong)}
+.side-nav .nav-item.active,.side-nav a.nav-item.active{background:rgba(255,255,255,.12);color:var(--nav-ink-strong);font-weight:600}.side-nav .nav-item.active svg{opacity:1;color:#fff}
+.side-nav .nav-label{overflow:hidden;text-overflow:ellipsis}
+.side-nav .badge{background:var(--accent);color:#fff;font-size:11px;line-height:18px;padding:0 7px;border-radius:999px}
+.side-nav .side-foot{color:var(--nav-ink);gap:8px}
+.side-user-card{display:flex;align-items:center;gap:9px;padding:8px;border-radius:10px;background:rgba(255,255,255,.06)}
+.side-avatar{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:600;flex-shrink:0}
+.side-user-text{min-width:0;flex:1;display:grid;line-height:1.3}.side-nav .side-user{color:var(--nav-ink-strong);font-size:13px}.side-user-text small{color:var(--nav-ink);font-size:12px}
+.side-signout{border:0;background:none;color:var(--nav-ink);padding:6px;border-radius:7px;display:grid;place-items:center;flex-shrink:0}.side-signout:hover{background:rgba(255,255,255,.1);color:#fff}
+.side-nav .role-switch{border-color:rgba(255,255,255,.2);border-radius:8px}.side-nav .role-switch button{background:transparent;color:var(--nav-ink)}.side-nav .role-switch button[aria-pressed=true]{background:rgba(255,255,255,.14);color:#fff}
+.side-foot-label{color:var(--nav-ink)}
+.side-nav.is-collapsed{padding:16px 10px}
+.side-nav.is-collapsed .brand{flex-direction:column;padding:0 0 10px;gap:8px}.side-nav.is-collapsed .brand-text,.side-nav.is-collapsed .nav-label,.side-nav.is-collapsed .side-user-text,.side-nav.is-collapsed .side-foot-label,.side-nav.is-collapsed .role-switch{display:none}
+.side-nav.is-collapsed .nav-group-label{font-size:0;padding:6px 0;margin:4px 10px;border-top:1px solid rgba(255,255,255,.1)}.side-nav.is-collapsed .nav-group:first-child .nav-group-label{border-top:0;padding:0}
+.side-nav.is-collapsed .nav-item{justify-content:center;padding:9px 0;position:relative}
+.side-nav.is-collapsed .badge{position:absolute;top:3px;right:5px;min-width:8px;height:8px;padding:0;font-size:0}
+.side-nav.is-collapsed .side-user-card{flex-direction:column;background:none;padding:4px 0}
+@media(max-width:860px){.app-shell:has(.side-nav.is-collapsed){grid-template-columns:minmax(0,1fr)}.side-nav,.side-nav.is-collapsed{padding:10px 12px;gap:8px;overflow:visible}.side-nav .brand,.side-nav.is-collapsed .brand{flex-direction:row;padding:0}.side-collapse,.nav-group-label{display:none}.nav-group{display:contents}.side-nav.is-collapsed .brand-text,.side-nav.is-collapsed .nav-label,.side-nav.is-collapsed .side-user-text{display:block}.side-nav.is-collapsed .nav-item{padding:8px 10px}.side-nav.is-collapsed .badge{position:static;width:auto;height:auto;font-size:11px;padding:0 7px}.side-user-card{padding:4px 6px}}
+/* Trang Cảnh báo: bộ lọc đang chọn */
+.alert-filters .button[aria-pressed=true]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:600}
+/* Nhóm gộp chứng chỉ: ô tick nằm cạnh chữ; dòng nhóm trong bảng tên gọi */
+.certificate-group-types .check-field{display:inline-flex;flex-direction:row;align-items:center;gap:6px;padding:2px 0;white-space:nowrap}.certificate-group-types .check-field input{width:auto;margin:0;flex:none}
+.certificate-label-group td:first-child{white-space:normal}.certificate-label-group small{display:block;margin-top:2px;font-size:12px}.certificate-label-group td{background:var(--soft)}

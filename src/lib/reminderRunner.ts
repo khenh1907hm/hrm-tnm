@@ -1,4 +1,6 @@
 import type { ReminderRunResult } from "../app-core/createHrApp";
+import type { ReminderTestResult } from "../app-core/use-cases/reminders";
+import { messagesVi } from "../messages.vi";
 import type { Result } from "./result";
 import type { Actor } from "../modules/auth/permissions";
 
@@ -10,6 +12,8 @@ export type ReminderDeps = {
   lookupRole: (userId: string) => Promise<string | null>;
   /** null khi máy chủ chưa cấu hình đủ (khóa Supabase bí mật hoặc SMTP). */
   runReminders: ((actor: Actor) => Promise<Result<ReminderRunResult>>) | null;
+  /** Gửi một email mẫu; null khi máy chủ chưa cấu hình đủ. */
+  sendTest?: ((actor: Actor) => Promise<Result<ReminderTestResult>>) | null;
   fetcher?: Fetch;
 };
 
@@ -39,5 +43,18 @@ export async function handleReminderRequest(request: Request, env: ReminderEnv, 
   if (!deps.runReminders) return fail(503, "REMINDER_NOT_CONFIGURED", "Máy chủ chưa cấu hình gửi email (SUPABASE_SECRET_KEY, SMTP_HOST, SMTP_USER, SMTP_PASS).");
   const result = await deps.runReminders(actor);
   if (!result.ok) return fail(403, result.errors[0]?.code ?? "FORBIDDEN", "Không có quyền gửi nhắc hạn.");
+  return json(200, { ok: true, ...result.value });
+}
+
+/** Admin bấm "Gửi email thử": gửi một email mẫu tới địa chỉ nhận nhắc hạn, không đánh dấu đã gửi. */
+export async function handleReminderTestRequest(request: Request, env: ReminderEnv, deps: ReminderDeps): Promise<Response> {
+  const actor = await resolveActor(request, { ...env, cronSecret: undefined }, deps);
+  if (!actor) return fail(401, "REMINDER_UNAUTHORIZED", "Chỉ Admin được gửi email thử.");
+  if (!deps.sendTest) return fail(503, "REMINDER_NOT_CONFIGURED", "Máy chủ chưa cấu hình gửi email (SUPABASE_SECRET_KEY, SMTP_HOST, SMTP_USER, SMTP_PASS).");
+  const result = await deps.sendTest(actor);
+  if (!result.ok) {
+    const code = result.errors[0]?.code ?? "MAIL_TEST_FAILED";
+    return fail(code === "FORBIDDEN" ? 403 : 400, code, messagesVi[code] ?? "Không gửi được email thử.");
+  }
   return json(200, { ok: true, ...result.value });
 }

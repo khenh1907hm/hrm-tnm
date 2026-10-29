@@ -73,6 +73,7 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | REM-04 | Mỗi chứng chỉ một email. Người nhận lấy từ cài đặt. Nếu không có người nhận thì kết quả skipped: NO_RECIPIENT và không ghi nhật ký đã gửi (để ngày sau còn gửi được). | Đã chốt | `REM_04` |
 | REM-05 | run gửi qua interface Mailer; chỉ ghi nhật ký sau khi gửi thành công. Gửi lỗi thì không ghi, lần sau thử lại, kết quả trả về đủ danh sách thành công và thất bại. | Đã chốt | `REM_05` |
 | REM-06 | Nội dung email (tiếng Việt): tên nhân sự, mã, loại chứng chỉ, số chứng chỉ, ngày hết hạn định dạng dd/mm/yyyy, số ngày còn lại, đường dẫn mở hồ sơ. | Đã chốt | `REM_06` |
+| REM-07 | Admin gửi thử: một email mẫu (chứng chỉ hiện hành hết hạn gần nhất, tiêu đề có "[Gửi thử]") tới các địa chỉ đã lưu; không ghi nhật ký gửi nên không ảnh hưởng lịch nhắc thật; ghi sự kiện reminder.test. Chưa có người nhận → NO_RECIPIENT, chưa cấu hình SMTP → REMINDER_NOT_CONFIGURED, gửi lỗi → MAIL_TEST_FAILED. | Đã chốt | `REM_07` |
 | SIG-01 | Họ tên và chức danh người ký: 2 đến 100 ký tự. Ảnh: image/png, có cờ hasTransparency === true, tối đa 2 MB; thiếu cờ nền trong suốt thì lỗi SIG_NOT_TRANSPARENT. | Đã chốt | `SIG_01` |
 | SIG-02 | Luôn đúng một chữ ký mặc định khi thư viện không rỗng. Chữ ký đầu tiên tự động là mặc định. | Đã chốt | `SIG_02` |
 | SIG-03 | Không xóa được chữ ký cuối cùng. Xóa chữ ký mặc định thì chữ ký tạo sớm nhất còn lại thành mặc định. | Đã chốt | `SIG_03` |
@@ -85,6 +86,10 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | AUD-03 | Nhật ký chỉ thêm, không sửa, không xóa. Chỉ Admin đọc được. | Đã chốt | `AUD_03` |
 | AUD-04 | Chuỗi data URL (ảnh base64) trong before và after được thay bằng dấu "đã lược bỏ" để nhật ký không phình theo ảnh. | Đã chốt | `AUD_04` |
 | AUD-05 | Màn hình Nhật ký đọc theo trang (mới nhất trước, tối đa 100 dòng mỗi trang), lọc được theo loại đối tượng và theo từng đối tượng; hiện tên thao tác, đối tượng và các trường đã đổi. | Đã chốt | `AUD_05` |
+| ACC-01 | Chỉ Admin đã đăng nhập (token hợp lệ, vai trò admin trong profiles) được xem danh sách, thêm và sửa tài khoản; còn lại trả 401. | Đã chốt | `ACC_01` |
+| ACC-02 | Thêm tài khoản: email hợp lệ (chuyển chữ thường), mật khẩu ban đầu tối thiểu 8 ký tự, vai trò thuộc admin/hr/engineer/employee/pending, họ tên tối đa 100 ký tự; email đã có tài khoản thì báo ACCOUNT_EMAIL_TAKEN. | Đã chốt | `ACC_02` |
+| ACC-03 | Admin không tự đổi vai trò khác admin hay tự khóa tài khoản của mình (tránh mất quyền quản trị). Khóa là chặn đăng nhập, không xóa tài khoản. | Đã chốt | `ACC_03` |
+| ACC-04 | Mỗi lần thêm tài khoản, đổi vai trò, sửa họ tên, khóa / mở khóa, đặt lại mật khẩu ghi một sự kiện nhật ký (entityType account) dưới tên Admin; nhật ký không chứa mật khẩu. | Đã chốt | `ACC_04` |
 | EXP-01 | checkReadiness(employee, signDate, signerId) trả danh sách lỗi chặn nếu thiếu bất kỳ trường nào trên phiếu: họ tên, ngày sinh, giới tính, nguyên quán, địa chỉ thường trú, số điện thoại, ngày làm nghề, người liên hệ khẩn cấp, người ký (có trong thư viện), ngày ký hợp lệ. Nhân sự đã ẩn thì chặn. Chưa có nhóm ATLĐ trong khi có chứng chỉ huấn luyện an toàn được tick thì chỉ cảnh báo. | Giả định | `EXP_01` |
 | EXP-02 | Ô tick hệ thống đúng khi có ít nhất một chứng chỉ hiện hành cùng loại còn hạn tại ngày ký; ghi chú hết hạn chỉ khi không còn chứng chỉ nào của loại đó hợp lệ. | Đã chốt | `EXP_02` |
 | EXP-03 | Kinh nghiệm tính từ ngày làm nghề đến ngày ký. Ngày làm nghề sau ngày ký thì hiển thị "0 tháng" kèm cảnh báo. | Đã chốt | `EXP_03` |

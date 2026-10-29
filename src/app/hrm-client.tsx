@@ -11,6 +11,7 @@ import type { ProfileTemplateConfig } from "../modules/excel-template/types";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
+import { AccountsView } from "./_components/AccountsView";
 import { AuditLogView } from "./_components/AuditLogView";
 import { CertificateFormModal, type CertificateFormMode } from "./_components/CertificateFormModal";
 import { EmployeeDetailView } from "./_components/EmployeeDetailView";
@@ -430,7 +431,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "skills" && <SkillsClient embedded />}
         {view === "tools" && <ToolsPage />}
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
-        {view === "settings" && <SettingsPanel app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
+        {view === "accounts" && actor.role === "admin" && <AccountsView actor={actor} mode={backend.mode} setNotice={setNotice} />}
+        {(view === "settings" || view === "certTypes") && <SettingsPanel key={view} section={view === "certTypes" ? "types" : "emails"} app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal
         app={app}

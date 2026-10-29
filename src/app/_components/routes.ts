@@ -10,6 +10,8 @@ export const VIEW_PATHS: Record<PageView, string> = {
   skills: "/skills",
   tools: "/cong-cu",
   audit: "/nhat-ky",
+  accounts: "/tai-khoan",
+  certTypes: "/loai-chung-chi",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
@@ -21,10 +23,12 @@ export const VIEW_TITLES: Record<PageView, string> = {
   alerts: "Chứng chỉ sắp hết hạn",
   signatures: "Thư viện chữ ký",
   reports: "FORM Báo cáo",
-  settings: "Cài đặt",
+  settings: "Cài đặt email",
   skills: "Kho Skill AI",
   tools: "Công cụ",
   audit: "Nhật ký thay đổi",
+  accounts: "Tài khoản & phân quyền",
+  certTypes: "Loại chứng chỉ",
 };
 
 export type AppRoute = { view: PageView; employeeId: string | null };

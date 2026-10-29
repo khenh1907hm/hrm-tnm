@@ -16,7 +16,7 @@ export const FACADE_USE_CASE_PERMISSIONS = {
   settings: { get: "settingsRead", update: "settingsWrite" },
   commanders: { list: "commanderRead", create: "commanderWrite", update: "commanderWrite", archive: "commanderWrite" },
   exports: { checkReadiness: "export", buildWorkerProfile: "export", employeeRoster: "export" },
-  reminders: { computeDue: "reminderRun", run: "reminderRun" },
+  reminders: { computeDue: "reminderRun", run: "reminderRun", sendTest: "reminderRun" },
   ocr: { parseIdText: "ocr", mergeParsed: null },
   audit: { list: "auditRead", listPage: "auditRead", page: "auditRead" },
 } as const satisfies Record<string, Record<string, Permission | null>>;
