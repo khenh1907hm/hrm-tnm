@@ -10,8 +10,9 @@ import { usesSigner } from "../../modules/excel-template/engine/profileConfig";
 import type { Employee } from "../../modules/employees/types";
 import type { CertificateExportConfig, ExcelReportTemplate, ProfileTemplateConfig } from "../../modules/excel-template/types";
 import { certificateRootFolderName } from "../../modules/excel-template/certificateExportNames";
+import { certificateGroups, certificateUnits, expandUnitOrder } from "../../modules/excel-template/certificateGroups";
 import { CertificateExportNaming } from "./CertificateExportNaming";
-import { downloadBlob, downloadXlsx, exportCertificateFiles, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
+import { downloadBlob, downloadXlsx, exportCertificateFiles, exportCertificatesPdf, mergesCertificates, exportProfileBundle, exportProfilePdf, exportProfileWorkbook, isConverterMissing, profileFileName, zipFiles } from "./profileExport";
 import type { App, SetNotice } from "./shared";
 import { moveId, useDragReorder } from "./useDragReorder";
 import { applyFileNamePattern, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
@@ -67,9 +68,16 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
   /** Thứ tự ghép sau phiếu: mặc định theo loại trong mẫu, người xuất kéo thả hoặc chọn số để đổi. */
   const [chosenOrder, setChosenOrder] = useState<string[] | null>(null);
   const certificateOrder = chosenOrder ? [...chosenOrder.filter((id) => defaultOrder.includes(id)), ...defaultOrder.filter((id) => !chosenOrder.includes(id))] : defaultOrder;
-  const { order, draggingId, handleProps } = useDragReorder(certificateOrder, setChosenOrder);
   const byId = new Map(current.map((certificate) => [certificate.id, certificate]));
-  const ordered = order.flatMap((id) => byId.get(id) ?? []);
+  // Chứng chỉ cùng nhóm (mặc định "An toàn": làm việc trên cao, điện, lao động) hiện thành một dòng mở ra chọn từng cái,
+  // kéo/chọn số theo cả nhóm và khi tải từng tệp thì ra chung một PDF
+  const groups = certificateGroups(certConfig);
+  const units = certificateUnits(certificateOrder.flatMap((id) => byId.get(id) ?? []), (item) => item.type, (item) => item.id, groups);
+  const { order: unitOrder, draggingId, handleProps } = useDragReorder(units.map((unit) => unit.id), (ids) => setChosenOrder(expandUnitOrder(ids, units, (item) => item.id)));
+  const unitById = new Map(units.map((unit) => [unit.id, unit]));
+  const orderedUnits = unitOrder.flatMap((id) => unitById.get(id) ?? []);
+  const ordered = orderedUnits.flatMap((unit) => unit.items);
+  const toggle = (ids: readonly string[], checked: boolean) => setSelected((current) => checked ? [...new Set([...current, ...ids])] : current.filter((id) => !ids.includes(id)));
 
   // Admin đổi quy tắc đặt tên thì lưu vào mẫu, lần xuất sau (cả xuất hàng loạt) dùng lại; HR chỉ áp dụng cho lần xuất này
   const saveNaming = () => {
@@ -85,6 +93,15 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
     saveNaming();
     try {
       const chosen = ordered.filter((certificate) => selected.includes(certificate.id));
+      if (mergesCertificates(certConfig)) {
+        // Mặc định: mọi chứng chỉ đã chọn gộp thành MỘT tệp PDF theo thứ tự đang sắp
+        const pdf = await exportCertificatesPdf({ employee, certificates: chosen, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, config: certConfig, fileNamePattern: namePattern, exportDate });
+        if (!pdf.pageCount) throw new Error(pdf.warnings[0] ?? "Không có tệp chứng chỉ nào để tải.");
+        downloadBlob(new Blob([pdf.bytes.slice().buffer], { type: "application/pdf" }), pdf.name);
+        setWarnings(pdf.warnings);
+        props.setNotice(pdf.warnings.length ? `Đã gộp ${chosen.length} chứng chỉ thành 1 PDF (${pdf.pageCount} trang), còn ${pdf.warnings.length} mục cần kiểm tra.` : `Đã gộp ${chosen.length} chứng chỉ thành 1 PDF (${pdf.pageCount} trang).`, pdf.warnings.length ? "warning" : "success");
+        return;
+      }
       const result = await exportCertificateFiles({ employee, certificates: chosen, certificateTypeNames: typeNames, sessionFiles: props.sessionFiles, config: certConfig, fileNamePattern: namePattern, exportDate });
       if (!result.files.length) throw new Error(result.warnings[0] ?? "Không có tệp chứng chỉ nào để tải.");
       const root = certificateRootFolderName(certConfig, { templateName: template.name, count: 1, exportDate });
@@ -152,30 +169,47 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
       <section>
         <h3>Chứng chỉ đính kèm (ghép lần lượt sau phiếu)</h3>
         <p className="muted">Hồ sơ PDF (.zip): phiếu Excel đã điền + một tệp PDF gộp các chứng chỉ (PDF giữ nguyên trang, ảnh scan mỗi ảnh một trang A4). Excel: chỉ chèn được chứng chỉ dạng ảnh.</p>
-        {ordered.length > 1 && <p className="muted">Kéo biểu tượng ⋮⋮ hoặc chọn số thứ tự để đổi thứ tự ghép sau phiếu.</p>}
-        {ordered.length ? ordered.map((certificate, index) => {
-          const hasBinary = Boolean(props.sessionFiles[certificate.document.id]);
-          const expired = !isValidOn(certificate.expiryDate, exportDate);
-          const name = `${typeNames[certificate.type] ?? certificate.type}${certificate.title ? ` (${certificate.title})` : ""}`;
-          // Màu đi theo chứng chỉ (không theo vị trí) để khi kéo dễ nhìn ra dòng nào đang di chuyển
-          const tone = CERT_TONES[Math.max(0, defaultOrder.indexOf(certificate.id)) % CERT_TONES.length]!;
-          return (
-            <div className={certificate.id === draggingId ? "profile-export-cert-row dragging" : "profile-export-cert-row"} key={certificate.id} data-reorder-id={certificate.id} style={{ background: tone.background, borderLeftColor: tone.border }}>
-              {ordered.length > 1 && (
-                <button type="button" className="drag-handle" aria-label={`Kéo để đổi thứ tự ${name} (hoặc bấm ↑/↓)`} title="Kéo để đổi thứ tự" {...handleProps(certificate.id)}>
-                  <GripVertical className="ico" size={16} aria-hidden="true" />
-                </button>
-              )}
-              <label className="check-field profile-export-cert">
-                <input type="checkbox" checked={selected.includes(certificate.id)} onChange={(event) => setSelected(event.target.checked ? [...selected, certificate.id] : selected.filter((id) => id !== certificate.id))} />
+        {orderedUnits.length > 1 && <p className="muted">Kéo biểu tượng ⋮⋮ hoặc chọn số thứ tự để đổi thứ tự ghép sau phiếu.</p>}
+        {orderedUnits.length ? orderedUnits.map((unit, index) => {
+          const certificateLine = (certificate: Certificate) => {
+            const hasBinary = Boolean(props.sessionFiles[certificate.document.id]);
+            const expired = !isValidOn(certificate.expiryDate, exportDate);
+            const name = `${typeNames[certificate.type] ?? certificate.type}${certificate.title ? ` (${certificate.title})` : ""}`;
+            return (
+              <label className="check-field profile-export-cert" key={certificate.id}>
+                <input type="checkbox" checked={selected.includes(certificate.id)} onChange={(event) => toggle([certificate.id], event.target.checked)} />
                 <span><b>{name}</b> · {certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · {certificate.expiryDate ? `Hết hạn ${formatExpiry(certificate.expiryDate)}` : "Không thời hạn"}</span>
                 {expired && <span className="pill bad">Đã hết hạn</span>}
                 {!profile.attachments.includes(certificate.type) && <span className="pill">Ngoài danh sách của mẫu</span>}
                 {!hasBinary && <span className="pill warn">Chưa có tệp trong phiên</span>}
               </label>
-              {ordered.length > 1 && (
-                <select className="cert-position" aria-label={`Thứ tự của ${name}`} title="Thứ tự ghép sau phiếu" value={index + 1} onChange={(event) => setChosenOrder(moveId(order, certificate.id, Number(event.target.value) - 1))}>
-                  {ordered.map((_, position) => <option key={position} value={position + 1}>{position + 1}</option>)}
+            );
+          };
+          const first = unit.items[0]!;
+          const name = unit.group ? unit.group.name : `${typeNames[first.type] ?? first.type}${first.title ? ` (${first.title})` : ""}`;
+          // Màu đi theo chứng chỉ (không theo vị trí) để khi kéo dễ nhìn ra dòng nào đang di chuyển
+          const tone = CERT_TONES[Math.max(0, defaultOrder.indexOf(first.id)) % CERT_TONES.length]!;
+          const ids = unit.items.map((item) => item.id);
+          const chosen = ids.filter((id) => selected.includes(id)).length;
+          return (
+            <div className={unit.id === draggingId ? "profile-export-cert-row dragging" : "profile-export-cert-row"} key={unit.id} data-reorder-id={unit.id} style={{ background: tone.background, borderLeftColor: tone.border }}>
+              {orderedUnits.length > 1 && (
+                <button type="button" className="drag-handle" aria-label={`Kéo để đổi thứ tự ${name} (hoặc bấm ↑/↓)`} title="Kéo để đổi thứ tự" {...handleProps(unit.id)}>
+                  <GripVertical className="ico" size={16} aria-hidden="true" />
+                </button>
+              )}
+              {unit.group ? (
+                <details className="profile-export-group">
+                  <summary>
+                    <input type="checkbox" aria-label={`Chọn cả nhóm ${name}`} checked={chosen === ids.length} ref={(element) => { if (element) element.indeterminate = chosen > 0 && chosen < ids.length; }} onClick={(event) => event.stopPropagation()} onChange={(event) => toggle(ids, event.target.checked)} />
+                    <b>{name}</b> <span className="muted">· đã chọn {chosen}/{ids.length} · gộp chung 1 tệp PDF khi tải chứng chỉ</span>
+                  </summary>
+                  <div className="profile-export-group-items">{unit.items.map(certificateLine)}</div>
+                </details>
+              ) : certificateLine(first)}
+              {orderedUnits.length > 1 && (
+                <select className="cert-position" aria-label={`Thứ tự của ${name}`} title="Thứ tự ghép sau phiếu" value={index + 1} onChange={(event) => setChosenOrder(expandUnitOrder(moveId(unitOrder, unit.id, Number(event.target.value) - 1), units, (item) => item.id))}>
+                  {orderedUnits.map((_, position) => <option key={position} value={position + 1}>{position + 1}</option>)}
                 </select>
               )}
             </div>
@@ -199,12 +233,12 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         {namePreview && namePreview.unknownTokens.length > 0 && <p className="form-error">Không nhận ra: {namePreview.unknownTokens.join(", ")}. Dùng các biến ở trên.</p>}
       </section>
       <details className="file-name-rule certificate-naming-box">
-        <summary>Tên thư mục và tệp khi tải riêng chứng chỉ</summary>
+        <summary>Cách tải riêng chứng chỉ (1 PDF hoặc từng tệp) và đặt tên</summary>
         <CertificateExportNaming value={certConfig} onChange={setCertConfig} typeKeys={[...new Set(ordered.filter((certificate) => selected.includes(certificate.id)).map((certificate) => certificate.type))]} typeNames={typeNames} fileNamePattern={namePattern} templateName={template.name} exportDate={exportDate} person={employee} />
       </details>
       <div className="button-row" style={{ justifyContent: "flex-end" }}>
-        <button type="button" className="button" disabled={busy !== null || !selected.length} title="Chỉ các chứng chỉ đã chọn, mỗi chứng chỉ một tệp đánh số theo thứ tự, không kèm phiếu" onClick={() => void runCertificates()}>
-          {busy === "certs" ? "Đang tạo…" : <><FileArchive className="ico" size={16} aria-hidden="true" /> Tải chứng chỉ (.zip)</>}
+        <button type="button" className="button" disabled={busy !== null || !selected.length} title={mergesCertificates(certConfig) ? "Các chứng chỉ đã chọn gộp thành một tệp PDF theo thứ tự đang sắp, không kèm phiếu" : "Chỉ các chứng chỉ đã chọn, mỗi chứng chỉ một tệp đánh số theo thứ tự, không kèm phiếu"} onClick={() => void runCertificates()}>
+          {busy === "certs" ? "Đang tạo…" : <><FileArchive className="ico" size={16} aria-hidden="true" /> {mergesCertificates(certConfig) ? "Tải chứng chỉ (1 PDF)" : "Tải chứng chỉ (.zip)"}</>}
         </button>
         {!props.pdfOnly && <button type="button" className="button" disabled={busy !== null} onClick={() => void run("xlsx")}>
           {busy === "xlsx" ? "Đang tạo Excel…" : <><Download className="ico" size={16} aria-hidden="true" /> Tải Excel (.xlsx)</>}

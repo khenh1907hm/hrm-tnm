@@ -204,8 +204,8 @@ export function ProfileTemplateEditor(props: { value: ProfileTemplateConfig; onC
       </section>
 
       <section>
-        <h3>6. Xuất riêng chứng chỉ <small>(nút “Tải chứng chỉ (.zip)” khi xuất: không kèm phiếu, mỗi chứng chỉ một tệp)</small></h3>
-        <p className="muted">Chứng chỉ đánh số 1, 2, 3… theo thứ tự ở mục 4.</p>
+        <h3>6. Xuất riêng chứng chỉ <small>(nút “Tải chứng chỉ” khi xuất: không kèm phiếu)</small></h3>
+        <p className="muted">Chứng chỉ xếp theo thứ tự ở mục 4.</p>
         <CertificateExportNaming value={value.certificateExport} onChange={(certificateExport) => onChange({ ...value, certificateExport })} typeKeys={value.attachments} typeNames={Object.fromEntries(certificateTypes.map((type) => [type.key, type.name]))} fileNamePattern={value.fileNamePattern} onFileNamePatternChange={(fileNamePattern) => onChange({ ...value, fileNamePattern })} templateName={props.templateName ?? ""} exportDate={todayVN(systemClock)} />
       </section>
 

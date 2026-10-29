@@ -93,6 +93,31 @@ export interface CertificateExportConfig {
   filePattern?: string;
   /** Tên gọi khi xuất theo khóa loại chứng chỉ, vd { "custom-ctype-cccd": "ID" }; trống = tên loại. */
   typeLabels?: Record<string, string>;
+  /** Trống/"separate" = mỗi chứng chỉ (hoặc mỗi nhóm) một tệp đánh số; "merged" = mỗi nhân sự MỘT tệp PDF gộp mọi chứng chỉ. */
+  layout?: "merged" | "separate";
+  /** Nhóm loại chứng chỉ gộp chung một tệp PDF khi tải từng tệp; trống = nhóm mặc định "An toàn", [] = không gộp. */
+  groups?: CertificateExportGroup[];
+  /**
+   * Gom nhiều loại vào một thư mục con đánh số chung, vd "4. Safety certificate/1. An toàn điện.pdf, 2. An toàn hàn cắt.pdf".
+   * Thư mục con nằm ở vị trí loại đầu tiên của nhóm; bên trong đánh số lại từ 1.
+   */
+  folders?: CertificateFolderGroup[];
+}
+
+/** Một nhóm khi xuất chứng chỉ: các loại trong nhóm ra chung một tệp PDF mang tên nhóm. */
+export interface CertificateExportGroup {
+  id: string;
+  name: string;
+  /** Khóa loại chứng chỉ, theo thứ tự cài (thứ tự ghép lấy theo danh sách đang sắp khi xuất). */
+  types: string[];
+}
+
+/** Một thư mục con khi tải thư mục chứng chỉ. */
+export interface CertificateFolderGroup {
+  id: string;
+  /** Tên thư mục con (không kèm số), vd "Safety certificate"; đổi tên được. */
+  name: string;
+  typeKeys: string[];
 }
 
 export interface ExcelReportTemplate {
