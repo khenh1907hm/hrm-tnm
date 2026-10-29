@@ -3,6 +3,7 @@ import { addDays, addMonths, diffDays, formatTenure, isValidISODate, monthsBetwe
 import { fixedClock, todayVN } from "./clock";
 import { compareCodePoint, compareNormalizedText, normalizeText, naturalCompare } from "./text";
 import { decodeCccd, maskCccd, validateCccd } from "./vietnam/cccd";
+import { PROVINCE_CODES, provinceOfCccd } from "./vietnam/provinceCodes";
 import { formatPhone, normalizePhone, validatePhone } from "./vietnam/phone";
 import { normalizeName, validateName } from "./vietnam/name";
 import { certificateStatus } from "../modules/certificates/status";
@@ -89,6 +90,18 @@ describe("CCCD rules", () => {
   it("CCCD_02 valid province range", () => {
     expect(decodeCccd("001095011111")?.provinceCode).toBe("001");
     expect(validateCccd("097185012345")[0]?.code).toBe("CCCD_PROVINCE_INVALID");
+  });
+  it("CCCD_02 accepts only the 63 official province codes", () => {
+    expect(PROVINCE_CODES.size).toBe(63);
+    // Mã bỏ trống giữa các tỉnh (003, 005, 013...) và 000 không phải mã tỉnh
+    for (const code of ["000", "003", "005", "013", "039", "090"]) expect(validateCccd(`${code}095011111`)[0]?.code).toBe("CCCD_PROVINCE_INVALID");
+    for (const code of ["001", "038", "046", "077", "079", "096"]) expect(validateCccd(`${code}095011111`)).toEqual([]);
+    expect(provinceOfCccd("038095011111")).toBe("Thanh Hóa");
+    expect(provinceOfCccd("079")).toBe("TP. Hồ Chí Minh");
+    expect(provinceOfCccd("003095011111")).toBeNull();
+    expect(provinceOfCccd("07")).toBeNull();
+    // CCCD đã che (hiện ở hồ sơ) vẫn giữ 3 số đầu
+    expect(provinceOfCccd("052•••••1111")).toBe("Bình Định");
   });
   it("CCCD_03 decodes century and gender", () => {
     expect(decodeCccd("052095011111")).toEqual({ provinceCode: "052", gender: "Nam", birthYear: 1995 });

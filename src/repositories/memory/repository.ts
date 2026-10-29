@@ -1,4 +1,4 @@
-import type { Repository, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
+import type { Repository, AuditQuery, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
 import type { AuditEvent } from "../../modules/audit/types";
 import type { HrSettings } from "../../modules/settings/types";
 import { paginate, type Page, type PageInput } from "../../lib/paginate";
@@ -32,6 +32,12 @@ export class MemoryAuditRepository implements AuditRepository {
   async list(): Promise<AuditEvent[]> { return this.events.map((event) => structuredClone(event)); }
   async listPage(input: PageInput = {}): Promise<Page<AuditEvent>> {
     return paginate(await this.list(), { ...input, compare: (a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : 0, direction: "desc" });
+  }
+  async page(query: AuditQuery): Promise<{ items: AuditEvent[]; total: number }> {
+    const matched = this.events
+      .filter((event) => (!query.entityType || event.entityType === query.entityType) && (!query.entityId || event.entityId === query.entityId))
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+    return { items: matched.slice(query.offset, query.offset + query.limit).map((event) => structuredClone(event)), total: matched.length };
   }
 }
 

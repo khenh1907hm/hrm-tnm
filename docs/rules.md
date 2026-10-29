@@ -16,7 +16,7 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | PHONE-04 | Lưu dạng chỉ chữ số; formatPhone hiển thị dạng 0839 395 292. | Đã chốt | `PHONE_04` |
 | PHONE-05 | Trùng số giữa hai nhân sự chỉ cảnh báo, không chặn. | Đã chốt | `PHONE_05` |
 | CCCD-01 | Đúng 12 chữ số. Chuỗi 9 chữ số báo CCCD_IS_OLD_CMND (chứng minh nhân dân cũ, không chấp nhận). | Đã chốt | `CCCD_01` |
-| CCCD-02 | 3 số đầu là mã tỉnh, phải nằm trong 001 đến 096 (đặt trong file cấu hình provinceCodes.ts để thay bằng danh sách chính thức; ghi TODO). | Đã chốt | `CCCD_02` |
+| CCCD-02 | 3 số đầu là mã tỉnh, phải thuộc 63 mã chính thức theo Thông tư 07/2016/TT-BCA (src/lib/vietnam/provinceCodes.ts); form và hồ sơ hiện tên tỉnh đăng ký khai sinh. | Đã chốt | `CCCD_02` |
 | CCCD-03 | Số thứ 4 cho thế kỷ và giới tính: thế kỷ = 1900 + 100 * floor(d / 2), giới tính = chẵn là Nam, lẻ là Nữ. Số thứ 5 và 6 là hai số cuối năm sinh. Hàm decodeCccd trả {provinceCode, gender, birthYear}. | Đã chốt | `CCCD_03` |
 | CCCD-04 | Năm sinh giải mã phải khớp năm của ngày sinh đã nhập; giới tính giải mã phải khớp giới tính đã nhập. Sai thì lỗi CCCD_DOB_MISMATCH hoặc CCCD_GENDER_MISMATCH, trừ khi Admin cung cấp mismatchOverrideReason (từ 5 ký tự trở lên); khi đó cho lưu, kèm cảnh báo lưu trên hồ sơ và ghi vào nhật ký. | Giả định | `CCCD_04` |
 | CCCD-05 | Duy nhất trong toàn hệ thống kể cả nhân sự đã ẩn. Thông báo lỗi nêu mã nhân viên đang giữ số đó. | Đã chốt | `CCCD_05` |
@@ -83,6 +83,8 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | AUD-01 | Mọi thao tác thay đổi dữ liệu thành công ghi một sự kiện {id, at, actorId, role, action, entityType, entityId, before, after}. Thao tác thất bại không ghi. | Đã chốt | `AUD_01` |
 | AUD-02 | Trong before và after, số CCCD được che bằng maskCccd. Việc hiện số CCCD đầy đủ cũng ghi sự kiện cccd.reveal. | Đã chốt | `AUD_02` |
 | AUD-03 | Nhật ký chỉ thêm, không sửa, không xóa. Chỉ Admin đọc được. | Đã chốt | `AUD_03` |
+| AUD-04 | Chuỗi data URL (ảnh base64) trong before và after được thay bằng dấu "đã lược bỏ" để nhật ký không phình theo ảnh. | Đã chốt | `AUD_04` |
+| AUD-05 | Màn hình Nhật ký đọc theo trang (mới nhất trước, tối đa 100 dòng mỗi trang), lọc được theo loại đối tượng và theo từng đối tượng; hiện tên thao tác, đối tượng và các trường đã đổi. | Đã chốt | `AUD_05` |
 | EXP-01 | checkReadiness(employee, signDate, signerId) trả danh sách lỗi chặn nếu thiếu bất kỳ trường nào trên phiếu: họ tên, ngày sinh, giới tính, nguyên quán, địa chỉ thường trú, số điện thoại, ngày làm nghề, người liên hệ khẩn cấp, người ký (có trong thư viện), ngày ký hợp lệ. Nhân sự đã ẩn thì chặn. Chưa có nhóm ATLĐ trong khi có chứng chỉ huấn luyện an toàn được tick thì chỉ cảnh báo. | Giả định | `EXP_01` |
 | EXP-02 | Ô tick hệ thống đúng khi có ít nhất một chứng chỉ hiện hành cùng loại còn hạn tại ngày ký; ghi chú hết hạn chỉ khi không còn chứng chỉ nào của loại đó hợp lệ. | Đã chốt | `EXP_02` |
 | EXP-03 | Kinh nghiệm tính từ ngày làm nghề đến ngày ký. Ngày làm nghề sau ngày ký thì hiển thị "0 tháng" kèm cảnh báo. | Đã chốt | `EXP_03` |

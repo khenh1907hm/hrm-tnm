@@ -18,7 +18,7 @@ export const FACADE_USE_CASE_PERMISSIONS = {
   exports: { checkReadiness: "export", buildWorkerProfile: "export", employeeRoster: "export" },
   reminders: { computeDue: "reminderRun", run: "reminderRun" },
   ocr: { parseIdText: "ocr", mergeParsed: null },
-  audit: { list: "auditRead", listPage: "auditRead" },
+  audit: { list: "auditRead", listPage: "auditRead", page: "auditRead" },
 } as const satisfies Record<string, Record<string, Permission | null>>;
 
 export const FACADE_PERMISSION_MATRIX = Object.fromEntries(

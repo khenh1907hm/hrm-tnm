@@ -9,6 +9,7 @@ import type { CertificateTypeRecord } from "../../modules/certificate-types/type
 import type { Employee } from "../../modules/employees/types";
 import { usePhotoUrl } from "./employeePhoto";
 import { STATUS_LABELS } from "./EmployeeListView";
+import { provinceOfCccd } from "../../lib/vietnam/provinceCodes";
 import type { App, SetNotice } from "./shared";
 
 export function EmployeeDetailView(props: {
@@ -50,7 +51,7 @@ export function EmployeeDetailView(props: {
         )}
         <div style={{ flex: 1, minWidth: "260px" }}>
           <h2>Thông tin cá nhân</h2>
-          <dl>{[["Ngày sinh", formatDate(selected.dob)], ["Giới tính", selected.gender], ["CCCD", selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày làm nghề", formatDate(selected.startDate)], ["Ngày vào TNM", (selected.companyStartDate ? formatDate(selected.companyStartDate) : "") || "Chưa có"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+          <dl>{[["Ngày sinh", formatDate(selected.dob)], ["Giới tính", selected.gender], ["CCCD", provinceOfCccd(selected.cccd) ? `${selected.cccd} (${provinceOfCccd(selected.cccd)})` : selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày làm nghề", formatDate(selected.startDate)], ["Ngày vào TNM", (selected.companyStartDate ? formatDate(selected.companyStartDate) : "") || "Chưa có"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
           <div className="employee-signature-detail"><span className="muted">Chữ ký</span>{selected.signatureImage ? <div className="employee-signature-preview"><img src={selected.signatureImage} alt={`Chữ ký ${selected.name}`} /></div> : "Chưa có"}</div>
           <button className="button" onClick={async () => { const result = await app.employees.revealCccd(actor, selected.id); if (result.ok) props.setNotice(`CCCD đầy đủ: ${result.value}`); }}>Hiện CCCD đầy đủ</button>
         </div>

@@ -226,7 +226,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       if (!has(actor, "employeeReveal")) return err("FORBIDDEN");
       const employee = await getEmployee(id);
       if (!employee) return err("EMP_NOT_FOUND");
-      await writeAudit(actor, "cccd.reveal", "employee", id, null, { employeeId: id, cccd: employee.cccd });
+      await writeAudit(actor, "cccd.reveal", "employee", id, null, { employeeId: id, code: employee.code, name: employee.name, cccd: employee.cccd });
       return success(employee.cccd);
     },
   };

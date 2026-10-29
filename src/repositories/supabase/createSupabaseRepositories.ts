@@ -7,7 +7,7 @@ import type { Employee } from "../../modules/employees/types";
 import type { HrSettings } from "../../modules/settings/types";
 import type { Signature } from "../../modules/signatures/types";
 import { normalizePage, normalizePageSize, type Page, type PageInput } from "../../lib/paginate";
-import type { AuditRepository, ReminderLogEntry, ReminderLogRepository, Repository, SettingsRepository } from "../interfaces";
+import type { AuditQuery, AuditRepository, ReminderLogEntry, ReminderLogRepository, Repository, SettingsRepository } from "../interfaces";
 
 type Versioned = { id: string; version: number };
 type Columns<T> = (value: T) => Record<string, unknown>;
@@ -114,6 +114,15 @@ export class SupabaseAuditRepository implements AuditRepository {
     // Trang vượt quá tổng số trang → lấy trang cuối
     if (page !== wanted) fetched = await fetchPage(page);
     return { items: fetched.items, total: fetched.total, page, pageSize, totalPages };
+  }
+
+  async page(query: AuditQuery): Promise<{ items: AuditEvent[]; total: number }> {
+    let request = this.client.from("audit_events").select("doc", { count: "exact" });
+    if (query.entityType) request = request.eq("entity_type", query.entityType);
+    if (query.entityId) request = request.eq("entity_id", query.entityId);
+    const { data, error, count } = await request.order("at", { ascending: false }).order("id", { ascending: false }).range(query.offset, query.offset + query.limit - 1);
+    if (error) throw new Error(error.message);
+    return { items: (data ?? []).map((item: { doc: unknown }) => item.doc as AuditEvent), total: count ?? 0 };
   }
 }
 

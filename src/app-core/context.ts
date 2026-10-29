@@ -3,6 +3,7 @@ import { todayVN } from "../lib/clock";
 import type { IdGenerator } from "../lib/ids";
 import { failure, issue, type Result } from "../lib/result";
 import { maskCccd } from "../lib/vietnam/cccd";
+import { stripDataUrls } from "../modules/audit/describe";
 import type { Actor, Permission } from "../modules/auth/permissions";
 import { can } from "../modules/auth/permissions";
 import type { AuditRepository, CertificateRepository, CertificateTypeRepository, CommanderRepository, EmployeeRepository, ReminderLogRepository, SettingsRepository, SignatureRepository } from "../repositories/interfaces";
@@ -20,10 +21,12 @@ export type HrAppDeps = { clock: Clock; ids: IdGenerator; repositories?: HrRepos
 export type HrAppContext = ReturnType<typeof createHrAppContext>;
 
 export const err = <T>(code: string, field?: string): Result<T> => failure([issue(code, field)]);
+/** Bản ghi vào nhật ký: che CCCD, bỏ ảnh base64 (stripDataUrls cũng tạo bản sao mới). */
 const auditCopy = (value: unknown): unknown => {
   if (!value || typeof value !== "object") return value;
-  if ("cccd" in value && typeof value.cccd === "string") return { ...value, cccd: maskCccd(value.cccd) };
-  return structuredClone(value);
+  const copy = stripDataUrls(value) as Record<string, unknown>;
+  if (typeof copy.cccd === "string") return { ...copy, cccd: maskCccd(copy.cccd) };
+  return copy;
 };
 
 export function createHrAppContext(deps: HrAppDeps, given: HrRepositories) {
