@@ -51,6 +51,27 @@ describe("employee application use cases", () => {
     expect((await app.employees.validate(({ id: "outsider", role: "pending" } as never), validEmployee)).ok).toBe(false);
   });
 
+  it("INV_02 CCCD của hồ sơ đã lưu trữ dùng lại được cho hồ sơ mới; mã nhân viên thì không; khôi phục hồ sơ cũ bị chặn khi CCCD đang có người dùng", async () => {
+    const repositories = await createDemoRepositories(fixedClock("2026-10-12T09:00:00+07:00"), sequentialIds("seed"));
+    const app = createHrApp({ clock: fixedClock("2026-10-12T09:00:00+07:00"), ids: sequentialIds("case"), repositories });
+    const list = await app.employees.list(admin);
+    if (!list.ok || !list.value.items[0]) throw new Error("missing demo employee");
+    const old = list.value.items[0];
+    const cccd = await app.employees.revealCccd(admin, old.id);
+    if (!cccd.ok) throw new Error("could not reveal demo CCCD");
+    const returning = { ...validEmployee, code: "TNM998", cccd: cccd.value, dob: old.dob, gender: old.gender };
+    // Còn hoạt động: trùng CCCD bị chặn
+    expect(await app.employees.validate(admin, returning)).toMatchObject({ ok: false, errors: expect.arrayContaining([expect.objectContaining({ code: "CCCD_DUPLICATE" })]) });
+
+    const archived = await app.employees.archive(admin, { id: old.id, expectedVersion: old.version, reason: "Nghỉ việc" });
+    if (!archived.ok) throw new Error("could not archive");
+    expect(await app.employees.validate(admin, { ...returning, code: old.code })).toMatchObject({ ok: false, errors: expect.arrayContaining([expect.objectContaining({ code: "EMP_CODE_DUPLICATE" })]) });
+    const created = await app.employees.create(admin, returning);
+    expect(created.ok).toBe(true);
+
+    expect(await app.employees.restore(admin, { id: old.id, expectedVersion: archived.value.version })).toMatchObject({ ok: false, errors: [{ code: "CCCD_DUPLICATE_ACTIVE" }] });
+  });
+
   it("EMP_08 archive hides a record and restore makes it visible", async () => {
     const repositories = await createDemoRepositories(fixedClock("2026-10-12T09:00:00+07:00"), sequentialIds("seed"));
     const app = createHrApp({ clock: fixedClock("2026-10-12T09:00:00+07:00"), ids: sequentialIds("case"), repositories });

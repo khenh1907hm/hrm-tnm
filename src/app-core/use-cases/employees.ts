@@ -125,6 +125,8 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       const before = await getEmployee(input.id);
       if (!before) return err("EMP_NOT_FOUND");
       if (before.version !== input.expectedVersion) return err("CONFLICT");
+      // Khôi phục sẽ có hai hồ sơ hoạt động cùng CCCD nếu đã có hồ sơ mới cho người này
+      if ((await repositories.employees.list()).some((employee) => employee.id !== before.id && !employee.archivedAt && employee.cccd === before.cccd)) return err("CCCD_DUPLICATE_ACTIVE", "cccd");
       const value = { ...before, archivedAt: null, archivedBy: null, archiveReason: null, version: before.version + 1 };
       if (!await repositories.employees.replace(value, input.expectedVersion)) return err("CONFLICT");
       await writeAudit(actor, "employee.restore", "employee", value.id, before, value);

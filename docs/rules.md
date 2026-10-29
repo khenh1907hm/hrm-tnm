@@ -111,7 +111,7 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | OCRUI-08 | Văn bản thô chỉ hiện trong vùng thu gọn, mặc định ẩn và chỉ giữ trong bộ nhớ trang. | Mới | `OCRUI_08` |
 | OCRUI-09 | Lỗi tải ngôn ngữ, ảnh lỗi, hủy giữa chừng đều có thông báo tiếng Việt và vẫn nhập tay được. | Mới | `OCRUI_09` |
 | INV-01 | Không có hai chứng chỉ hiện hành cùng (nhân sự, loại, title chuẩn hóa). | Đã chốt | `INV_01` |
-| INV-02 | Mã nhân viên và CCCD không trùng nhau trong toàn bộ dữ liệu, kể cả đã ẩn. | Đã chốt | `INV_02` |
+| INV-02 | Mã nhân viên không trùng trong toàn bộ dữ liệu, kể cả đã ẩn. CCCD không trùng giữa các hồ sơ đang hoạt động; hồ sơ đã lưu trữ không giữ CCCD (người cũ quay lại tạo hồ sơ mới được), nhưng khôi phục hồ sơ cũ bị chặn (CCCD_DUPLICATE_ACTIVE) khi CCCD đó đang thuộc hồ sơ hoạt động khác. | Đã chốt | `INV_02` |
 | INV-03 | Thư viện chữ ký không rỗng thì có đúng 1 chữ ký mặc định. | Đã chốt | `INV_03` |
 | INV-04 | Nhân sự đã ẩn không xuất hiện trong danh sách mặc định, màn hình hết hạn, kết quả nhắc hạn. | Đã chốt | `INV_04` |
 | INV-05 | Số sự kiện nhật ký tăng đúng bằng số thao tác thay đổi thành công; thao tác lỗi không làm đổi dữ liệu. | Đã chốt | `INV_05` |

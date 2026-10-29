@@ -5,7 +5,7 @@ import { validateName } from "../../lib/vietnam/name";
 import { normalizePhone, validatePhone } from "../../lib/vietnam/phone";
 import type { EmployeeInput } from "./types";
 
-export function validateEmployee(input: EmployeeInput, today: string, existing: { code: string; cccd: string; phone: string; id?: string }[] = [], excludeId?: string, commanderIds: string[] = ["cmd-1", "cmd-2"]): { value: EmployeeInput; errors: Issue[]; warnings: Issue[] } {
+export function validateEmployee(input: EmployeeInput, today: string, existing: { code: string; cccd: string; phone: string; id?: string; archivedAt?: string | null }[] = [], excludeId?: string, commanderIds: string[] = ["cmd-1", "cmd-2"]): { value: EmployeeInput; errors: Issue[]; warnings: Issue[] } {
   const phoneResult = validatePhone(input.phone);
   const value = { ...input, code: input.code.trim().toUpperCase(), companyStartDate: input.companyStartDate?.trim() || null, name: validateName(input.name).value, phone: phoneResult.value ?? normalizePhone(input.phone) };
   const errors: Issue[] = [];
@@ -40,7 +40,8 @@ export function validateEmployee(input: EmployeeInput, today: string, existing: 
     else if (input.companyStartDate > today) warnings.push(issue("EMP_COMPANY_START_FUTURE", "companyStartDate", "warning"));
   }
   add(validateCccd(input.cccd, input.dob, input.gender, input.mismatchOverrideReason));
-  if (existing.some((employee) => employee.cccd === input.cccd && employee.id !== excludeId)) errors.push(issue("CCCD_DUPLICATE", "cccd"));
+  // CCCD chỉ không trùng với hồ sơ đang hoạt động: người cũ đã lưu trữ quay lại thì nhập hồ sơ mới được
+  if (existing.some((employee) => employee.cccd === input.cccd && employee.id !== excludeId && !employee.archivedAt)) errors.push(issue("CCCD_DUPLICATE", "cccd"));
   add(phoneResult.issues);
   if (existing.some((employee) => employee.phone === value.phone && employee.id !== excludeId)) warnings.push(issue("PHONE_DUPLICATE", "phone", "warning"));
   if (input.group !== null && (!Number.isInteger(input.group) || input.group < 1 || input.group > 6)) errors.push(issue("EMP_GROUP_INVALID", "group"));
