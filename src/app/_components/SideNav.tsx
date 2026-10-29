@@ -1,7 +1,8 @@
 "use client";
-import { BellRing, FileSpreadsheet, History, LogOut, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import { BadgeCheck, BellRing, FileSpreadsheet, History, KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { routePath } from "./routes";
 import type { PageView } from "./shared";
 
@@ -9,7 +10,7 @@ type NavItem = readonly [PageView, string, LucideIcon];
 const NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
   { label: "Nhân sự", items: [["employees", "Nhân sự", Users], ["alerts", "Chứng chỉ hết hạn", BellRing], ["signatures", "Thư viện chữ ký", PenLine]] },
   { label: "Tài liệu", items: [["reports", "FORM Báo cáo (Excel)", FileSpreadsheet], ["skills", "Kho Skill AI", Sparkles], ["tools", "Công cụ", Wrench]] },
-  { label: "Hệ thống", items: [["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["audit", "Nhật ký thay đổi", History]] },
+  { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["audit", "Nhật ký thay đổi", History]] },
 ];
 /** Mục chỉ admin thấy. */
 const ADMIN_ONLY: ReadonlySet<PageView> = new Set(["audit", "accounts"]);
@@ -25,6 +26,7 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
   const [collapsed, setCollapsed] = useState(() => {
     try { return typeof window !== "undefined" && window.localStorage.getItem(COLLAPSED_KEY) === "1"; } catch { return false; }
   });
+  const [changingPassword, setChangingPassword] = useState(false);
   const toggle = () => setCollapsed((current) => {
     try { window.localStorage.setItem(COLLAPSED_KEY, current ? "0" : "1"); } catch { /* trình duyệt chặn lưu trữ */ }
     return !current;
@@ -71,10 +73,12 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
           <div className="side-user-card">
             <span className="side-avatar" aria-hidden="true">{initialsOf(props.email)}</span>
             <div className="side-user-text"><span className="side-user" title={props.email ?? ""}>{props.email}</span><small>{ROLE_LABELS[actor.role]}</small></div>
+            <button type="button" className="side-signout" onClick={() => setChangingPassword(true)} aria-label="Đổi mật khẩu" title="Đổi mật khẩu"><KeyRound size={17} aria-hidden="true" /></button>
             <button type="button" className="side-signout" onClick={props.onSignOut} aria-label="Đăng xuất" title="Đăng xuất"><LogOut size={17} aria-hidden="true" /></button>
           </div>
         </div>
       )}
+      {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
     </aside>
   );
 }

@@ -1,9 +1,10 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { LogOut, Sparkles, Wrench, type LucideIcon } from "lucide-react";
+import { KeyRound, LogOut, Sparkles, Wrench, type LucideIcon } from "lucide-react";
 import SkillsClient from "../skills/SkillsClient";
 import { BackgroundRemoverTool } from "./BackgroundRemoverTool";
 import { BeforeAfterTool } from "./BeforeAfterTool";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { EMPLOYEE_VIEWS, parseRoute, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
 import { LIMITED_ROLE_INFO, type LimitedRole } from "./workspaceRole";
@@ -34,6 +35,7 @@ export function EmployeeWorkspace(props: { role?: LimitedRole; email: string | n
   const route = parseRoute(usePathname());
   const allowed = route && EMPLOYEE_VIEWS.includes(route.view) && !route.employeeId;
   const view: PageView = allowed ? route.view : info.home;
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Trang gốc hoặc đường dẫn của trang nhân sự (vd /nhan-su) → chuyển về trang mở đầu của vai trò
   useEffect(() => {
@@ -66,7 +68,9 @@ export function EmployeeWorkspace(props: { role?: LimitedRole; email: string | n
           {props.mode === "demo"
             ? <><span>Đang xem thử vai trò {info.label}</span>{props.onExitPreview && <button type="button" className="button" onClick={props.onExitPreview}>Quay lại Admin</button>}</>
             : <><span className="side-user" title={props.email ?? ""}>{props.email}</span><span className="pill">{info.label}</span></>}
+          {props.mode === "live" && props.email && <button type="button" className="button" onClick={() => setChangingPassword(true)}><KeyRound className="ico" size={16} aria-hidden="true" /> Đổi mật khẩu</button>}
           {props.mode === "live" && <button type="button" className="button" onClick={props.onSignOut}><LogOut className="ico" size={16} aria-hidden="true" /> Đăng xuất</button>}
+          {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
         </div>
       </aside>
       <main className="main-content">

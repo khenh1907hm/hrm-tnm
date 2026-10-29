@@ -1,16 +1,28 @@
+import { FileSpreadsheet } from "lucide-react";
 import { useState } from "react";
+import { buildExpiringCertificatesWorkbook } from "../../modules/exports/expiringCertificates";
 import type { Actor } from "../../modules/auth/permissions";
 import { reminderEmail } from "../../modules/reminders/email";
 import { getSupabaseClient } from "../../lib/supabase/client";
+import { downloadXlsx } from "./profileExport";
 import { issueText, type App, type ExpiringCertificateRow, type SetNotice } from "./shared";
 
 type AlertFilter = "all" | "expired" | "d30" | "d60";
+const FILTER_TITLES: Record<AlertFilter, { title: string; file: string }> = {
+  all: { title: "Chứng chỉ hết hạn và sắp hết hạn", file: "TatCa" },
+  expired: { title: "Chứng chỉ đã hết hạn", file: "DaHetHan" },
+  d30: { title: "Chứng chỉ hết hạn trong 30 ngày", file: "Trong30Ngay" },
+  d60: { title: "Chứng chỉ hết hạn trong 31 đến 60 ngày", file: "31Den60Ngay" },
+};
+/** Ngày hôm nay theo giờ Việt Nam, dạng yyyy-mm-dd. */
+const todayVn = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
 
 export function AlertsView(props: { app: App; actor: Actor; certRows: ExpiringCertificateRow[]; onCertRowsChange: (rows: ExpiringCertificateRow[]) => void; onOpenEmployee: (employeeId: string) => void; setNotice: SetNotice }) {
   const { app, actor, certRows, setNotice } = props;
   const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
   const [reminderPreview, setReminderPreview] = useState<{ recipients: string[]; subject: string; text: string }[]>([]);
   const [sending, setSending] = useState(false);
+  const [exporting, setExporting] = useState(false);
   // Có Supabase thì gửi email thật qua máy chủ; chế độ demo chỉ giả lập
   const live = getSupabaseClient() !== null;
 
@@ -60,9 +72,22 @@ export function AlertsView(props: { app: App; actor: Actor; certRows: ExpiringCe
 
   const visibleRows = certRows.filter((item) => alertFilter === "all" || (alertFilter === "expired" && item.group === "expired") || (alertFilter === "d30" && item.daysLeft >= 0 && item.daysLeft <= 30) || (alertFilter === "d60" && item.daysLeft >= 31 && item.daysLeft <= 60));
 
+  const exportExcel = async () => {
+    setExporting(true);
+    try {
+      const today = todayVn();
+      const bytes = await buildExpiringCertificatesWorkbook(visibleRows, { today, title: FILTER_TITLES[alertFilter].title, exportedBy: actor.id });
+      downloadXlsx(bytes, `ChungChiHetHan_${FILTER_TITLES[alertFilter].file}_${today.replaceAll("-", "")}.xlsx`);
+    } catch { setNotice("Không tạo được tệp Excel."); }
+    finally { setExporting(false); }
+  };
+
   return <>
-    <div className="page-head"><div><h1>Chứng chỉ hết hạn và sắp hết hạn</h1><p>{live ? "Email nhắc hạn tự gửi lúc 8:00 sáng mỗi ngày" : "Giả lập, chưa gửi email thật"}</p></div>{actor.role === "admin" && <button className="button primary" onClick={() => void runReminders()}>{live ? "Xem email cần gửi" : "Chạy nhắc hạn thử"}</button>}</div>
-    <div className="alert-filters"><button className="button" onClick={() => setAlertFilter("all")}>Tất cả ({certRows.length})</button><button className="button" onClick={() => setAlertFilter("expired")}>Đã hết hạn ({certRows.filter((item) => item.group === "expired").length})</button><button className="button" onClick={() => setAlertFilter("d30")}>Trong 30 ngày ({certRows.filter((item) => item.daysLeft >= 0 && item.daysLeft <= 30).length})</button><button className="button" onClick={() => setAlertFilter("d60")}>31 đến 60 ngày ({certRows.filter((item) => item.daysLeft >= 31 && item.daysLeft <= 60).length})</button></div>
+    <div className="page-head"><div><h1>Chứng chỉ hết hạn và sắp hết hạn</h1><p>{live ? "Email nhắc hạn tự gửi lúc 8:00 sáng mỗi ngày" : "Giả lập, chưa gửi email thật"}</p></div><div className="button-row">
+      <button className="button" disabled={exporting || !visibleRows.length} title={visibleRows.length ? "Xuất đúng các dòng đang lọc" : "Không có chứng chỉ nào để xuất"} onClick={() => void exportExcel()}><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> {exporting ? "Đang xuất…" : `Xuất Excel (${visibleRows.length})`}</button>
+      {actor.role === "admin" && <button className="button primary" onClick={() => void runReminders()}>{live ? "Xem email cần gửi" : "Chạy nhắc hạn thử"}</button>}
+    </div></div>
+    <div className="alert-filters"><button className="button" aria-pressed={alertFilter === "all"} onClick={() => setAlertFilter("all")}>Tất cả ({certRows.length})</button><button className="button" aria-pressed={alertFilter === "expired"} onClick={() => setAlertFilter("expired")}>Đã hết hạn ({certRows.filter((item) => item.group === "expired").length})</button><button className="button" aria-pressed={alertFilter === "d30"} onClick={() => setAlertFilter("d30")}>Trong 30 ngày ({certRows.filter((item) => item.daysLeft >= 0 && item.daysLeft <= 30).length})</button><button className="button" aria-pressed={alertFilter === "d60"} onClick={() => setAlertFilter("d60")}>31 đến 60 ngày ({certRows.filter((item) => item.daysLeft >= 31 && item.daysLeft <= 60).length})</button></div>
     <div className="panel table-scroll"><table><thead><tr><th>Nhân sự</th><th>Chứng chỉ</th><th>Ngày hết hạn</th><th>Số ngày còn lại</th><th>Email nhắc</th></tr></thead><tbody>{visibleRows.map((item) => <tr key={item.id} onClick={() => props.onOpenEmployee(item.employeeId)}><td>{item.employeeName} ({item.employeeCode})</td><td>{item.displayName}</td><td>{item.expiryDate}</td><td><span className={item.daysLeft < 0 ? "pill bad" : item.daysLeft <= 30 ? "pill warn" : "pill ok"}>{item.daysLeft}</span></td><td>{item.reminderSent ? `${live ? "Đã gửi" : "Đã gửi giả lập"} ngày ${item.reminderSentDate ?? item.reminderSendDate}` : `Sẽ gửi ngày ${item.reminderSendDate}`}</td></tr>)}</tbody></table></div>
     {reminderPreview.length > 0 && <section className="panel detail-panel"><h2>Email nhắc hạn dự kiến</h2>{reminderPreview.map((email, index) => <article className="email-preview" key={`${email.subject}-${index}`}><b>Người nhận: {email.recipients.join(", ")}</b><h3>{email.subject}</h3><pre>{email.text}</pre></article>)}{actor.role === "admin" && (live
       ? <button className="button primary" disabled={sending} onClick={() => void sendRemindersNow()}>{sending ? "Đang gửi…" : "Gửi email ngay"}</button>
