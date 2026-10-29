@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileDown, FileSpreadsheet, FileUp, PenLine, Plus, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
+import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, FileDown, FileSpreadsheet, FileUp, PenLine, Plus, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeSort } from "../../app-core/createHrApp";
 import type { Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistSummary } from "../../modules/certificates/checklist";
@@ -117,6 +117,8 @@ export function EmployeeListView(props: {
   onExportRoster: () => void;
   rosterBusy: boolean;
   onExportSelected: () => void;
+  /** Tải thư mục chứng chỉ (không cần mẫu Excel) cho các nhân sự đã chọn. */
+  onExportCertificates: () => void;
   onCreate: () => void;
   onImport: () => void;
   /** Nhập file hồ sơ từ Claude (skill /ho-so); có khi đang dùng cơ sở dữ liệu thật. Admin và HR đều dùng được. */
@@ -223,6 +225,7 @@ export function EmployeeListView(props: {
           <span className="selection-actions">
             <button type="button" className="button success" disabled={props.rosterBusy} onClick={props.onExportRoster}><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> {props.rosterBusy ? "Đang tạo Excel…" : "Xuất Excel thông tin"}</button>
             <button type="button" className="button" onClick={props.onExportSelected}><FileDown className="ico" size={16} aria-hidden="true" /> Xuất hồ sơ theo mẫu</button>
+            <button type="button" className="button" onClick={props.onExportCertificates}><FileArchive className="ico" size={16} aria-hidden="true" /> Tải thư mục chứng chỉ</button>
             <button type="button" className="button ghost" onClick={() => onSelectedIdsChange([])}>Bỏ chọn</button>
           </span>
         </div>

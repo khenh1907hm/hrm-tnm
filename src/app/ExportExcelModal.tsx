@@ -3,7 +3,7 @@ import type { SignatureFileLoader } from "./_components/SignerPicker";
 import { Download, FileText, Settings } from "lucide-react";
 import { useState } from "react";
 import type { Employee } from "../modules/employees/types";
-import type { ExcelReportTemplate } from "../modules/excel-template/types";
+import type { ExcelReportTemplate, ProfileTemplateConfig } from "../modules/excel-template/types";
 import { mapEmployeeToExcelData } from "../modules/excel-template/types";
 import { base64ToUint8Array } from "../modules/excel-template/templateStorage";
 import { populateExcelTemplate } from "../modules/excel-template/populateTemplate";
@@ -26,8 +26,8 @@ interface ExportExcelModalProps {
   loadSignatureFile?: SignatureFileLoader;
   /** Nút "Xuất hồ sơ PDF": chỉ mẫu hồ sơ, chỉ tải PDF gộp (phiếu + chứng chỉ). */
   pdfOnly?: boolean;
-  /** Lưu quy tắc đặt tên tệp vào mẫu (đổi ở hộp thoại xuất). */
-  onSaveFileNamePattern?: (templateId: string, pattern: string) => void;
+  /** Lưu quy tắc đặt tên (tệp hồ sơ, xuất riêng chứng chỉ) vào mẫu khi đổi ở hộp thoại xuất. */
+  onSaveNaming?: (templateId: string, patch: Pick<ProfileTemplateConfig, "fileNamePattern" | "certificateExport">) => void;
 }
 
 export function ExportExcelModal({
@@ -42,7 +42,7 @@ export function ExportExcelModal({
   sessionFiles,
   loadSignatureFile,
   pdfOnly = false,
-  onSaveFileNamePattern,
+  onSaveNaming,
 }: ExportExcelModalProps) {
   const templates = pdfOnly ? allTemplates.filter((template) => template.profile) : allTemplates;
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id ?? "");
@@ -124,7 +124,7 @@ export function ExportExcelModal({
           </div>
 
           {activeTemplate?.profile ? (
-            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} loadSignatureFile={loadSignatureFile} pdfOnly={pdfOnly} onSaveFileNamePattern={onSaveFileNamePattern ? (pattern) => onSaveFileNamePattern(activeTemplate.id, pattern) : undefined} />
+            <ProfileExportForm key={activeTemplate.id} app={app} actor={actor} template={{ ...activeTemplate, profile: activeTemplate.profile }} employee={employee} certificates={certificates} sessionFiles={sessionFiles} setNotice={setNotice} loadSignatureFile={loadSignatureFile} pdfOnly={pdfOnly} onSaveNaming={onSaveNaming ? (patch) => onSaveNaming(activeTemplate.id, patch) : undefined} />
           ) : activeTemplate ? (
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", padding: "12px", borderRadius: "6px", fontSize: "13px", marginBottom: "16px" }}>
               <div style={{ fontWeight: "bold", color: "#166534", marginBottom: "6px" }}>

@@ -94,14 +94,30 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
     void readFromFile(primaryFile.file);
   }, [primaryFile?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Đang lưu: chặn bấm "Lưu" nhiều lần khi mạng chậm (mỗi lần bấm sẽ thêm một chứng chỉ trùng). */
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   const saveCertificate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      // Lưu xong thì giữ khóa: cửa sổ đóng ngay sau đó, không cho gửi lại
+      if (!await submitCertificate(event.currentTarget)) { savingRef.current = false; setSaving(false); }
+    } catch (error) {
+      savingRef.current = false; setSaving(false);
+      setErrors({ form: error instanceof Error ? error.message : "Không lưu được chứng chỉ." });
+    }
+  };
+  /** Trả về true khi đã lưu thành công. */
+  const submitCertificate = async (form: HTMLFormElement): Promise<boolean> => {
+    const formData = new FormData(form);
     const knownType = certificateTypes.find((candidate) => candidate.key === type)?.key;
-    if (!knownType) { setNotice("Loại chứng chỉ không hợp lệ."); return; }
-    if (isSafety && !safetyGroup) { setErrors({ safetyGroup: "Chọn nhóm huấn luyện an toàn lao động." }); return; }
+    if (!knownType) { setNotice("Loại chứng chỉ không hợp lệ."); return false; }
+    if (isSafety && !safetyGroup) { setErrors({ safetyGroup: "Chọn nhóm huấn luyện an toàn lao động." }); return false; }
     const { document, supplementaryFiles, newBinaries } = splitFileItems(files);
-    if (!document) { setErrors({ document: "Thêm ít nhất một tệp chứng chỉ (tệp chính)." }); return; }
+    if (!document) { setErrors({ document: "Thêm ít nhất một tệp chứng chỉ (tệp chính)." }); return false; }
     // ATLĐ: để trống tên phân biệt → tên tự là "Nhóm N"
     const title = isSafety ? String(formData.get("title") ?? customTitle) : String(formData.get("title") ?? "");
     const certificateInput = {
@@ -117,16 +133,17 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
     };
     if (app.certificates.preview) {
       const previewResult = await app.certificates.preview(actor, { ...certificateInput, employeeId: selected.id, ...(editingCertificate ? { id: editingCertificate.id } : renewingCertificate ? { id: renewingCertificate.id } : {}) });
-      if (!previewResult.ok) { setErrors(Object.fromEntries(previewResult.errors.map((item) => [item.field ?? "form", issueText(item.code)]))); return; }
-      if (previewResult.warnings.length > 0 && !window.confirm(previewResult.warnings.map((item) => issueText(item.code)).join("\n"))) return;
+      if (!previewResult.ok) { setErrors(Object.fromEntries(previewResult.errors.map((item) => [item.field ?? "form", issueText(item.code)]))); return false; }
+      if (previewResult.warnings.length > 0 && !window.confirm(previewResult.warnings.map((item) => issueText(item.code)).join("\n"))) return false;
     }
     const result = renewingCertificate
       ? await app.certificates.renew(actor, { ...certificateInput, id: renewingCertificate.id, expectedVersion: renewingCertificate.version })
       : editingCertificate
         ? await app.certificates.update(actor, { ...certificateInput, id: editingCertificate.id, expectedVersion: editingCertificate.version })
         : await app.certificates.add(actor, { ...certificateInput, employeeId: selected.id });
-    if (!result.ok) { setErrors(Object.fromEntries(result.errors.map((item) => [item.field ?? "form", issueText(item.code)]))); return; }
+    if (!result.ok) { setErrors(Object.fromEntries(result.errors.map((item) => [item.field ?? "form", issueText(item.code)]))); return false; }
     props.onSaved(newBinaries, renewingCertificate ? "Đã gia hạn chứng chỉ; bản cũ được lưu trong lịch sử." : editingCertificate ? "Đã cập nhật chứng chỉ." : "Đã thêm chứng chỉ.");
+    return true;
   };
 
   const heading = renewingCertificate ? "Gia hạn chứng chỉ" : editingCertificate ? "Sửa chứng chỉ" : "Thêm chứng chỉ";
@@ -191,7 +208,7 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
         </div>
         <footer>
           <button className="button" type="button" onClick={props.onClose}>Hủy</button>
-          <button className="button primary" type="submit">{renewingCertificate ? "Gia hạn" : editingCertificate ? "Lưu thay đổi" : "Lưu chứng chỉ"}</button>
+          <button className="button primary" type="submit" disabled={saving}>{saving ? "Đang lưu…" : renewingCertificate ? "Gia hạn" : editingCertificate ? "Lưu thay đổi" : "Lưu chứng chỉ"}</button>
         </footer>
       </form>
     </div>

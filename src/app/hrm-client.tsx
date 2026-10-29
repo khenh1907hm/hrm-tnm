@@ -7,6 +7,7 @@ import type { CertificateChecklistRow, CertificateChecklistSummary } from "../mo
 import type { Certificate, FileRef } from "../modules/certificates/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
 import type { Employee } from "../modules/employees/types";
+import type { ProfileTemplateConfig } from "../modules/excel-template/types";
 import { ExportExcelModal } from "./ExportExcelModal";
 import { ReportTemplatesPanel } from "./ReportTemplatesPanel";
 import { AlertsView } from "./_components/AlertsView";
@@ -15,6 +16,7 @@ import { EmployeeDetailView } from "./_components/EmployeeDetailView";
 import { EmployeeFormModal, type EmployeeFormInitial } from "./_components/EmployeeFormModal";
 import { DEFAULT_EMPLOYEE_FILTERS, EMPTY_PAGE_INFO, EmployeeListView, toListInput, type EmployeeFilters, type EmployeePageInfo } from "./_components/EmployeeListView";
 import { BatchExportModal } from "./_components/BatchExportModal";
+import { CertificateFolderExportModal } from "./_components/CertificateFolderExportModal";
 import { ExportPdfDialog, prepareExportDialog, type ExportDialogInit } from "./_components/ExportPdfDialog";
 import { FilePreviewModal, type PreviewFile } from "./_components/FilePreviewModal";
 import { SettingsPanel } from "./_components/SettingsPanel";
@@ -77,6 +79,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [rosterBusy, setRosterBusy] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [batchEmployees, setBatchEmployees] = useState<Employee[] | null>(null);
+  /** Tải thư mục chứng chỉ (không cần mẫu Excel) cho một hoặc nhiều nhân sự. */
+  const [certFolderEmployees, setCertFolderEmployees] = useState<Employee[] | null>(null);
   const [listTypes, setListTypes] = useState<{ key: string; name: string }[]>([]);
   const [selected, setSelected] = useState<Employee | null>(null);
   const setNotice = useToast();
@@ -99,6 +103,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const [showClaudeImport, setShowClaudeImport] = useState(false);
   const templateError = useCallback((message: string) => setNotice(message, "error"), [setNotice]);
   const [templates, setTemplates] = useReportTemplates(backend.mode === "live" ? getSupabaseClient() : null, templateError);
+  /** Quy tắc đặt tên đổi ở hộp thoại xuất (Admin) → lưu vào mẫu cho lần xuất sau. */
+  const saveProfileNaming = (templateId: string, patch: Pick<ProfileTemplateConfig, "fileNamePattern" | "certificateExport">) => setTemplates(templates.map((template) => template.id === templateId && template.profile
+    ? { ...template, profile: { ...template.profile, ...patch }, updatedAt: new Date().toISOString() }
+    : template));
   const partnerStore = usePartners(backend.mode === "live" ? getSupabaseClient() : null, templateError);
   const listInput = useMemo(() => toListInput(filters), [filters]);
 
@@ -136,6 +144,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */
   const extraFileRefs = (employee: Employee) => [...Object.values(employee.extraFiles ?? {}), ...[photoRef(employee.photo)].filter((file) => file !== null)].map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
   const loadPhoto = async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "employees" }]))[file.id] ?? null;
+  /** Nhân sự đang chọn ở danh sách (bỏ người đã lưu trữ), sắp theo mã. */
+  const loadSelectedEmployees = async () => (await Promise.all(selectedIds.map((id) => app.employees.get(actor, id)))).flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }));
   const signatureFileRefs = async () => { const listed = await app.signatures.list(actor); return listed.ok ? listed.value.map((signature) => ({ id: signature.file.id, name: signature.file.name, folder: "signatures" as const })) : []; };
 
   const refresh = useCallback(async (instance: App, currentActor: Actor) => {
@@ -374,7 +384,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     <div className="app-shell">
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
-        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void Promise.all(selectedIds.map((id) => app.employees.get(actor, id))).then((results) => setBatchEmployees(results.flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }))))} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void loadSelectedEmployees().then(setBatchEmployees)} onExportCertificates={() => void loadSelectedEmployees().then(setCertFolderEmployees)} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
           app={app}
@@ -389,6 +399,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           onEdit={() => void openEdit()}
           onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
+          onExportCertificates={() => setCertFolderEmployees([detail])}
           onExportExcel={() => void ensureFiles([...certificateFileRefs(employeeCertificates), ...extraFileRefs(detail)]).then(() => { setPdfOnlyExport(false); setShowExcelModal(true); })}
           onExportPdf={() => templates.some((template) => template.profile)
             // Có mẫu hồ sơ: tải ZIP gồm phiếu Excel + PDF gộp chứng chỉ; chưa có mẫu thì dùng phiếu PDF dựng sẵn
@@ -476,7 +487,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       {showClaudeImport && <ClaudeHoSoImportModal setNotice={setNotice} onClose={() => setShowClaudeImport(false)} onSaved={() => void refresh(app, actor)} />}
       {showImport && <ImportEmployeesModal app={app} actor={actor} setNotice={setNotice} onClose={() => setShowImport(false)} onImported={() => void refresh(app, actor)} />}
       {previewFile && <FilePreviewModal file={previewFile} onClose={() => { URL.revokeObjectURL(previewFile.url); setPreviewFile(null); }} />}
-      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} loadSignatureFile={loadSignatureFile} setNotice={setNotice} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
+      {batchEmployees && <BatchExportModal app={app} actor={actor} employees={batchEmployees} ensureFiles={(certificates, employee) => ensureFiles([...certificateFileRefs(certificates), ...extraFileRefs(employee)])} templates={templates} sessionFiles={sessionFiles} loadSignatureFile={loadSignatureFile} setNotice={setNotice} onSaveNaming={saveProfileNaming} onClose={() => setBatchEmployees(null)} onGoToTemplates={() => { setBatchEmployees(null); navigate("reports"); }} />}
+      {certFolderEmployees && <CertificateFolderExportModal app={app} actor={actor} employees={certFolderEmployees} ensureFiles={(certificates) => ensureFiles(certificateFileRefs(certificates))} sessionFiles={sessionFiles} setNotice={setNotice} onClose={() => setCertFolderEmployees(null)} />}
       {showExcelModal && selected && (
         <ExportExcelModal
           employee={selected}
@@ -493,9 +505,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
             setShowExcelModal(false);
             navigate("reports");
           }}
-          onSaveFileNamePattern={(templateId, pattern) => setTemplates(templates.map((template) => template.id === templateId && template.profile
-            ? { ...template, profile: { ...template.profile, fileNamePattern: pattern }, updatedAt: new Date().toISOString() }
-            : template))}
+          onSaveNaming={saveProfileNaming}
         />
       )}
     </div>
