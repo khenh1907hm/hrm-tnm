@@ -1,6 +1,7 @@
 "use client";
 import { X } from "lucide-react";
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { MIN_PASSWORD_LENGTH } from "../../lib/accountAdmin";
 import { changeOwnPassword } from "../../lib/passwordChange";
 import { getSupabaseClient } from "../../lib/supabase/client";
@@ -23,7 +24,8 @@ export function ChangePasswordModal(props: { email: string; onClose: () => void 
     finally { setBusy(false); }
   };
 
-  return (
+  // Mở từ thanh bên (position: sticky tạo lớp xếp chồng riêng): đưa ra body để không bị trang chính đè lên
+  return createPortal(
     <div className="modal-backdrop" role="presentation">
       <section className="modal-card accounts-modal" role="dialog" aria-modal="true" aria-labelledby="change-password-title">
         <header>
@@ -44,6 +46,7 @@ export function ChangePasswordModal(props: { email: string; onClose: () => void 
             : <><button type="button" className="button" onClick={props.onClose}>Hủy</button><button type="button" className="button primary" disabled={busy} onClick={() => void submit()}>{busy ? "Đang lưu…" : "Đổi mật khẩu"}</button></>}
         </footer>
       </section>
-    </div>
+    </div>,
+    document.body,
   );
 }
