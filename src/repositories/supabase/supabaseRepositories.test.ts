@@ -41,6 +41,18 @@ describe("Supabase repositories", () => {
     expect((await repo.list()).map((item) => item.id)).toEqual(["c1", "c2"]);
   });
 
+  it("AUD_05 reads hand-inserted audit rows whose doc lacks actorId, action or entity fields", async () => {
+    // Dòng nhập thẳng bằng SQL: doc chỉ có id, at, role, after, note; các cột bắt buộc vẫn đủ
+    const { client } = createFakeSupabase({ audit_events: [
+      { id: "sql1", at: "2026-10-28T07:13:45Z", actor_id: "import", action: "employee.create", entity_type: "employee", entity_id: "e9", doc: { id: "sql1", at: "2026-10-28T07:13:45Z", role: "admin", note: "nhập hồ sơ", after: { id: "e9", name: "Lê Văn C" } } },
+    ] });
+    const audit = new SupabaseAuditRepository(client);
+    const expected = { id: "sql1", actorId: "import", role: "admin", action: "employee.create", entityType: "employee", entityId: "e9", before: null, after: { id: "e9", name: "Lê Văn C" } };
+    expect((await audit.page({ offset: 0, limit: 10 })).items[0]).toMatchObject(expected);
+    expect((await audit.listPage()).items[0]).toMatchObject(expected);
+    expect((await audit.list())[0]).toMatchObject(expected);
+  });
+
   it("appends audit events, keeps settings versions and logs reminders", async () => {
     const { client } = createFakeSupabase(settingsSeed);
     const audit = new SupabaseAuditRepository(client);

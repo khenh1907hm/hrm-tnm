@@ -88,6 +88,15 @@ export class SupabaseCertificateRepository extends SupabaseDocRepository<Certifi
   }
 }
 
+const AUDIT_COLUMNS = "id, at, actor_id, action, entity_type, entity_id, doc";
+type AuditRow = { id: string; at: string; actor_id: string; action: string; entity_type: string; entity_id: string; doc: unknown };
+
+/** Sự kiện từ một dòng nhật ký. Dòng ghi tay bằng SQL có thể thiếu trường trong doc: lấy bù từ các cột bắt buộc. */
+export function auditFromRow(row: AuditRow): AuditEvent {
+  const doc = (row.doc && typeof row.doc === "object" && !Array.isArray(row.doc) ? row.doc : {}) as Partial<AuditEvent>;
+  return { ...doc, id: doc.id ?? row.id, at: doc.at ?? row.at, actorId: doc.actorId ?? row.actor_id, role: doc.role ?? "admin", action: doc.action ?? row.action, entityType: doc.entityType ?? row.entity_type, entityId: doc.entityId ?? row.entity_id, before: doc.before ?? null, after: doc.after ?? null };
+}
+
 export class SupabaseAuditRepository implements AuditRepository {
   constructor(private readonly client: SupabaseClient) {}
 
@@ -96,8 +105,8 @@ export class SupabaseAuditRepository implements AuditRepository {
   }
 
   async list(): Promise<AuditEvent[]> {
-    const rows = await selectAll<{ id: string; at: string; doc: unknown }>(this.client, "audit_events", "id, at, doc", "id");
-    return rows.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1).map((item) => item.doc as AuditEvent);
+    const rows = await selectAll<AuditRow>(this.client, "audit_events", AUDIT_COLUMNS, "id");
+    return rows.sort((a, b) => a.at < b.at ? -1 : a.at > b.at ? 1 : a.id < b.id ? -1 : 1).map(auditFromRow);
   }
 
   /** Một trang nhật ký ở máy chủ (mới nhất trước), không nạp cả bảng. */
@@ -105,8 +114,8 @@ export class SupabaseAuditRepository implements AuditRepository {
     const pageSize = normalizePageSize(input.pageSize);
     const fetchPage = async (page: number) => {
       const from = (page - 1) * pageSize;
-      const result = await this.client.from("audit_events").select("doc", { count: "exact" }).order("at", { ascending: false }).order("id", { ascending: false }).range(from, from + pageSize - 1);
-      return { items: ((check(result) ?? []) as { doc: unknown }[]).map((item) => item.doc as AuditEvent), total: result.count ?? 0 };
+      const result = await this.client.from("audit_events").select(AUDIT_COLUMNS, { count: "exact" }).order("at", { ascending: false }).order("id", { ascending: false }).range(from, from + pageSize - 1);
+      return { items: ((check(result) ?? []) as AuditRow[]).map(auditFromRow), total: result.count ?? 0 };
     };
     const wanted = normalizePage(input.page, Number.MAX_SAFE_INTEGER, pageSize).page;
     let fetched = await fetchPage(wanted);
@@ -117,12 +126,12 @@ export class SupabaseAuditRepository implements AuditRepository {
   }
 
   async page(query: AuditQuery): Promise<{ items: AuditEvent[]; total: number }> {
-    let request = this.client.from("audit_events").select("doc", { count: "exact" });
+    let request = this.client.from("audit_events").select(AUDIT_COLUMNS, { count: "exact" });
     if (query.entityType) request = request.eq("entity_type", query.entityType);
     if (query.entityId) request = request.eq("entity_id", query.entityId);
     const { data, error, count } = await request.order("at", { ascending: false }).order("id", { ascending: false }).range(query.offset, query.offset + query.limit - 1);
     if (error) throw new Error(error.message);
-    return { items: (data ?? []).map((item: { doc: unknown }) => item.doc as AuditEvent), total: count ?? 0 };
+    return { items: ((data ?? []) as AuditRow[]).map(auditFromRow), total: count ?? 0 };
   }
 }
 
