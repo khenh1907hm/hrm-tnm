@@ -36,6 +36,7 @@ export function CertificateFolderExportModal(props: { app: App; actor: Actor; em
       setPresets(loaded.presets);
       setDraft((current) => loaded.presets.find((item) => item.id === current.id) ?? loaded.presets[0]!);
       if (loaded.warning) setNotice(loaded.warning);
+      else if (loaded.copied) setNotice(`Đã chép ${loaded.copied} cấu hình trên trình duyệt này lên máy chủ: từ giờ mọi máy, mọi người dùng chung.`, "success");
     });
     return () => { active = false; };
   }, [setNotice]);

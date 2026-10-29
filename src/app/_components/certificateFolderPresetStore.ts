@@ -15,7 +15,7 @@ function writeLocalPresets(presets: readonly CertificateFolderPreset[]) {
   try { window.localStorage.setItem(LOCAL_KEY, JSON.stringify(presets)); } catch { /* chế độ riêng tư / bị chặn: chỉ dùng trong lần này */ }
 }
 
-export type PresetLoad = { presets: CertificateFolderPreset[]; shared: boolean; warning?: string };
+export type PresetLoad = { presets: CertificateFolderPreset[]; shared: boolean; warning?: string; copied?: number };
 
 /**
  * Đọc cấu hình: chế độ thật lấy từ máy chủ (dùng chung); máy chủ chưa có mà trình duyệt này còn cấu hình cũ thì chép lên.
@@ -27,10 +27,18 @@ export async function loadPresets(client: SupabaseClient | null): Promise<Preset
   const { data, error } = await client.from("settings").select("version, doc").eq("id", PRESET_ROW_ID).maybeSingle();
   if (error || !data) return { presets: local, shared: false, warning: "Máy chủ chưa có chỗ lưu cấu hình dùng chung: đang dùng cấu hình trên trình duyệt này." };
   const raw = (data.doc as { presets?: unknown } | null)?.presets;
-  if (Array.isArray(raw) && raw.length) return { presets: parseCertificateFolderPresets(JSON.stringify(raw)), shared: true };
+  if (Array.isArray(raw) && raw.length) {
+    const server = parseCertificateFolderPresets(JSON.stringify(raw));
+    // Máy chủ đã có cấu hình (vd lưu từ máy khác) mà trình duyệt này còn cấu hình riêng: gộp thêm, không bỏ công cài trước đó
+    const missing = isDefaultOnly(local) ? [] : local.filter((item) => !server.some((existing) => existing.id === item.id));
+    if (!missing.length) return { presets: server, shared: true };
+    const merged = [...server, ...missing];
+    const saved = await savePresets(client, merged);
+    return saved ? { presets: merged, shared: false, warning: saved } : { presets: merged, shared: true, copied: missing.length };
+  }
   if (!isDefaultOnly(local)) {
     const saved = await savePresets(client, local);
-    return saved ? { presets: local, shared: false, warning: saved } : { presets: local, shared: true };
+    return saved ? { presets: local, shared: false, warning: saved } : { presets: local, shared: true, copied: local.length };
   }
   return { presets: [DEFAULT_CERTIFICATE_FOLDER_PRESET], shared: true };
 }
