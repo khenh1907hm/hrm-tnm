@@ -26,6 +26,8 @@ export function EmployeeDetailView(props: {
   onRestore: () => void;
   onExportExcel: () => void;
   onExportPdf: () => void;
+  /** Tải thư mục chứng chỉ (không cần mẫu Excel). */
+  onExportCertificates: () => void;
   onShowFile: (file: FileRef) => void;
   loadPhoto: (file: FileRef) => Promise<File | null>;
   onCertificateForm: (type: string, certificate?: Certificate) => void;
@@ -38,7 +40,7 @@ export function EmployeeDetailView(props: {
   const photoUrl = usePhotoUrl(selected.photo, props.loadPhoto);
   return <>
     <button className="back-button" onClick={props.onBack}>← Quay lại danh sách</button>
-    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{actor.role === "admin" && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
+    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{actor.role === "admin" && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
     <section className="panel detail-panel">
       <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {selected.photo && (

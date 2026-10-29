@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { certificateFileBaseName, certificateRootFolderName, certificateTypeLabel, DEFAULT_CERTIFICATE_FILE_PATTERN, DEFAULT_CERTIFICATE_FOLDER_PATTERN, DEFAULT_EMPLOYEE_FOLDER_PATTERN, employeeFolderName } from "../../modules/excel-template/certificateExportNames";
 import { applyFileNamePattern, CERTIFICATE_FILE_TOKENS, CERTIFICATE_FOLDER_TOKENS, FILE_NAME_TOKENS } from "../../modules/excel-template/fileNamePattern";
 import { certificateGroups, certificateUnits, DEFAULT_CERTIFICATE_GROUPS } from "../../modules/excel-template/certificateGroups";
@@ -6,6 +7,16 @@ import type { CertificateExportConfig, CertificateExportGroup } from "../../modu
 type Person = { code: string; name: string; position?: string };
 
 const SAMPLE: Person = { code: "TNM0001", name: "Nguyễn Văn A", position: "Nhân viên hiện trường" };
+/** Các kiểu tên thư mục từng nhân sự hay dùng, chọn nhanh trong danh sách (ví dụ theo người đang chọn). */
+const EMPLOYEE_FOLDER_PATTERNS = [
+  DEFAULT_EMPLOYEE_FOLDER_PATTERN,
+  "{tên nhân viên} - {mã nhân viên}",
+  "{tên nhân viên}",
+  "{mã nhân viên}",
+  "{mã nhân viên} - {tên nhân viên} - {chức vụ}",
+  "{tên nhân viên} - {chức vụ}",
+];
+const CUSTOM = "__custom";
 const append = (current: string | undefined, token: string) => current?.trim() ? `${current.trimEnd()} ${token}` : token;
 
 /**
@@ -28,6 +39,9 @@ export function CertificateExportNaming(props: {
   count?: number;
 }) {
   const value = props.value ?? {};
+  const folderPattern = props.fileNamePattern?.trim() ?? "";
+  const [customFolder, setCustomFolder] = useState(() => Boolean(folderPattern) && !EMPLOYEE_FOLDER_PATTERNS.includes(folderPattern));
+  const showFolderInput = customFolder || (Boolean(folderPattern) && !EMPLOYEE_FOLDER_PATTERNS.includes(folderPattern));
   const person = props.person ?? SAMPLE;
   const set = (patch: Partial<CertificateExportConfig>) => props.onChange({ ...value, ...patch });
   const setLabel = (key: string, label: string) => {
@@ -75,12 +89,23 @@ export function CertificateExportNaming(props: {
       {props.onFileNamePatternChange && <>
         <label className="field">
           <span>{merged ? "Tên tệp PDF của từng nhân sự" : "Tên thư mục từng nhân sự"} <small>(cũng là quy tắc đặt tên tệp hồ sơ)</small></span>
-          <input type="text" maxLength={150} value={props.fileNamePattern ?? ""} placeholder={DEFAULT_EMPLOYEE_FOLDER_PATTERN} onChange={(event) => props.onFileNamePatternChange!(event.target.value)} />
+          <select value={showFolderInput ? CUSTOM : folderPattern || DEFAULT_EMPLOYEE_FOLDER_PATTERN} onChange={(event) => {
+            if (event.target.value === CUSTOM) { setCustomFolder(true); return; }
+            setCustomFolder(false);
+            props.onFileNamePatternChange!(event.target.value === DEFAULT_EMPLOYEE_FOLDER_PATTERN ? "" : event.target.value);
+          }}>
+            {EMPLOYEE_FOLDER_PATTERNS.map((pattern) => <option key={pattern} value={pattern}>{employeeFolderName(pattern, person, props.exportDate)}</option>)}
+            <option value={CUSTOM}>Tự đặt (thêm chữ riêng, vd “Vinci - …”)…</option>
+          </select>
         </label>
-        <div className="file-name-tokens">
-          <span className="muted">Chèn:</span>
-          {FILE_NAME_TOKENS.map((item) => <button type="button" className="pill" key={item.token} title={item.label} onClick={() => props.onFileNamePatternChange!(append(props.fileNamePattern, item.token))}>{item.token}</button>)}
-        </div>
+        {showFolderInput && <>
+          <input type="text" maxLength={150} aria-label="Tên thư mục từng nhân sự (tự đặt)" value={props.fileNamePattern ?? ""} placeholder={`Vinci - ${DEFAULT_EMPLOYEE_FOLDER_PATTERN}`} onChange={(event) => props.onFileNamePatternChange!(event.target.value)} />
+          <div className="file-name-tokens">
+            <span className="muted">Chèn:</span>
+            {FILE_NAME_TOKENS.map((item) => <button type="button" className="pill" key={item.token} title={item.label} onClick={() => props.onFileNamePatternChange!(append(props.fileNamePattern, item.token))}>{item.token}</button>)}
+          </div>
+          <p className="muted file-name-example">Ví dụ: <b>{folder}</b></p>
+        </>}
       </>}
 
       {!merged && (

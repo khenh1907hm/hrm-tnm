@@ -7,8 +7,8 @@ import { normalizeText } from "../../lib/text";
 import { applyFileNamePattern } from "../../modules/excel-template/fileNamePattern";
 import { base64ToUint8Array } from "../../modules/excel-template/templateStorage";
 import type { CertificateExportConfig, ExcelReportTemplate } from "../../modules/excel-template/types";
-import { certificateFileBaseName, certificateTypeLabel, employeeFolderName, uniqueFileNames } from "../../modules/excel-template/certificateExportNames";
-import { certificateGroups, certificateUnits } from "../../modules/excel-template/certificateGroups";
+import { certificateFileBaseName, certificateGroupFolderName, certificateTypeLabel, employeeFolderName, groupCertificateEntries, uniqueFileNames } from "../../modules/excel-template/certificateExportNames";
+import { certificateGroups, certificateUnits, type CertificateUnit } from "../../modules/excel-template/certificateGroups";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Commander } from "../../modules/commanders/types";
 import type { Employee } from "../../modules/employees/types";
@@ -314,30 +314,49 @@ export async function exportCertificateFiles(input: CertificateExportInput): Pro
   const { employee, exportDate } = input;
   const folder = employeeFolderName(input.fileNamePattern, employee, exportDate);
   const warnings: string[] = [];
-  const files: ProfileBundleFile[] = [];
-  // Chứng chỉ cùng nhóm (mặc định: làm việc trên cao, an toàn điện, an toàn lao động) ra chung một tệp mang tên nhóm
-  const units = certificateUnits(input.certificates, (item) => item.type, (item) => item.id, certificateGroups(input.config));
-  for (const unit of units) {
-    const labelOf = (certificate: Certificate) => certificateTypeLabel(input.config, certificate.type, input.certificateTypeNames);
+  const labelOf = (certificate: Certificate) => certificateTypeLabel(input.config, certificate.type, input.certificateTypeNames);
+  /** Một đơn vị → một tệp: chứng chỉ lẻ, hoặc các chứng chỉ cùng nhóm gộp chung một PDF mang tên nhóm. */
+  const unitFile = async (unit: CertificateUnit<Certificate>, index: number): Promise<ProfileBundleFile | null> => {
     const typeLabel = unit.group ? unit.group.name.trim() || labelOf(unit.items[0]!) : labelOf(unit.items[0]!);
     const binaries = unit.items.flatMap((certificate) => certificateBinaries(certificate, labelOf(certificate), input.sessionFiles, warnings).map((entry) => ({ ...entry, label: labelOf(certificate) })));
-    if (!binaries.length) continue;
+    if (!binaries.length) return null;
     const first = unit.items[0]!;
-    const base = certificateFileBaseName(input.config, { index: files.length + 1, typeLabel, title: unit.group ? "" : first.title, expiryDate: unit.group ? earliestExpiry(unit.items) : first.expiryDate }, employee, exportDate);
+    const base = certificateFileBaseName(input.config, { index, typeLabel, title: unit.group ? "" : first.title, expiryDate: unit.group ? earliestExpiry(unit.items) : first.expiryDate }, employee, exportDate);
     if (binaries.length === 1) {
       const { file, binary } = binaries[0]!;
-      files.push({ name: `${base}.${extensionOf(file.name, binary.type || file.mime)}`, bytes: new Uint8Array(await binary.arrayBuffer()) });
-      continue;
+      return { name: `${base}.${extensionOf(file.name, binary.type || file.mime)}`, bytes: new Uint8Array(await binary.arrayBuffer()) };
     }
     const mergeParts: MergePart[] = [];
     for (const entry of binaries) mergeParts.push(...await toMergeParts([entry], entry.label, warnings));
     const merged = await mergeProfilePdf(null, mergeParts);
     warnings.push(...merged.warnings);
-    if (merged.pageCount) files.push({ name: `${base}.pdf`, bytes: merged.bytes });
+    return merged.pageCount ? { name: `${base}.pdf`, bytes: merged.bytes } : null;
+  };
+  // Chứng chỉ cùng nhóm (mặc định: làm việc trên cao, an toàn điện, an toàn lao động) ra chung một tệp mang tên nhóm;
+  // sau đó mỗi vị trí đánh số là một tệp, hoặc một thư mục con (folders) chứa các tệp đánh số lại từ 1
+  const units = certificateUnits(input.certificates, (item) => item.type, (item) => item.id, certificateGroups(input.config));
+  const top: ProfileBundleFile[] = [];
+  let position = 0;
+  for (const entry of groupCertificateEntries(units, (unit) => unit.items[0]!.type, input.config?.folders)) {
+    if (!entry.group) {
+      const file = await unitFile(entry.items[0]!, position + 1);
+      if (file) { position += 1; top.push(file); }
+      continue;
+    }
+    const inner: ProfileBundleFile[] = [];
+    for (const unit of entry.items) {
+      const file = await unitFile(unit, inner.length + 1);
+      if (file) inner.push(file);
+    }
+    if (!inner.length) continue;
+    position += 1;
+    const sub = certificateGroupFolderName(position, entry.group, exportDate);
+    const innerNames = uniqueFileNames(inner.map((file) => file.name));
+    top.push(...inner.map((file, index) => ({ ...file, name: `${sub}/${innerNames[index]!}` })));
   }
   if (!input.certificates.length) warnings.push("Không có chứng chỉ nào được chọn để xuất");
-  const names = uniqueFileNames(files.map((file) => file.name));
-  return { folder, files: files.map((file, index) => ({ ...file, name: names[index]! })), warnings };
+  const names = uniqueFileNames(top.map((file) => file.name));
+  return { folder, files: top.map((file, index) => ({ ...file, name: names[index]! })), warnings };
 }
 
 /** Nén các tệp thành ZIP; folder (nếu có) để mỗi nhân sự một thư mục khi xuất hàng loạt. */

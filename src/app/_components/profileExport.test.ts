@@ -99,6 +99,54 @@ describe("exportCertificateFiles (xuất riêng chứng chỉ)", () => {
       "Chứng chỉ - 28-10-2026/Vinci - TNM0018 - Trần Ngọc Đức/3. An toàn lao động.pdf",
     ]);
   });
+
+  it("gom các loại cùng nhóm vào một thư mục con đánh số, bên trong đánh số lại từ 1; nhóm trống không chiếm số", async () => {
+    const pdf = (name: string) => pdfFile(1, name);
+    const result = await exportCertificateFiles({
+      employee: { code: "TNM0018", name: "Trần Ngọc Đức", position: "Nhân viên hiện trường" },
+      certificates: [
+        cert("c1", "cccd", "1", { id: "f1", name: "id.pdf", mime: "application/pdf" }),
+        cert("c2", "atd", "2", { id: "f2", name: "atd.pdf", mime: "application/pdf" }),
+        cert("c3", "health", "3", { id: "f3", name: "ksk.pdf", mime: "application/pdf" }),
+        cert("c4", "han", "4", { id: "f4", name: "han.pdf", mime: "application/pdf" }),
+        cert("c5", "bang", "5", { id: "f5", name: "missing.pdf", mime: "application/pdf" }),
+        cert("c6", "insurance", "6", { id: "f6", name: "bh.pdf", mime: "application/pdf" }),
+      ],
+      certificateTypeNames: { cccd: "ID", atd: "An toàn điện", health: "KSK", han: "An toàn hàn cắt", bang: "Bằng kỹ sư", insurance: "Bảo hiểm tai nạn" },
+      sessionFiles: { f1: await pdf("id.pdf"), f2: await pdf("atd.pdf"), f3: await pdf("ksk.pdf"), f4: await pdf("han.pdf"), f6: await pdf("bh.pdf") },
+      config: { folders: [{ id: "g1", name: "Safety certificate", typeKeys: ["atd", "han"] }, { id: "g2", name: "Qualification", typeKeys: ["bang"] }, { id: "g3", name: "Accident insurance", typeKeys: ["insurance"] }] },
+      fileNamePattern: "{mã nhân viên}",
+      exportDate: "2026-10-28",
+    });
+    expect(result.files.map((file) => file.name)).toEqual([
+      "1. ID.pdf",
+      "2. Safety certificate/1. An toàn điện.pdf",
+      "2. Safety certificate/2. An toàn hàn cắt.pdf",
+      "3. KSK.pdf",
+      "4. Accident insurance/1. Bảo hiểm tai nạn.pdf",
+    ]);
+  });
+
+  it("nhóm gộp 1 PDF (An toàn) và thư mục con dùng chung: nhóm thành một tệp bên trong thư mục con", async () => {
+    const pdf = (name: string) => pdfFile(1, name);
+    const result = await exportCertificateFiles({
+      employee: { code: "TNM0848", name: "Phan Đức Phi", position: "Nhân viên hiện trường" },
+      certificates: [
+        cert("c1", "custom-ctype-cccd", "1", { id: "f1", name: "id.pdf", mime: "application/pdf" }),
+        cert("c2", "atld", "2", { id: "f2", name: "atld.pdf", mime: "application/pdf" }),
+        cert("c3", "elec", "3", { id: "f3", name: "elec.pdf", mime: "application/pdf" }),
+        cert("c4", "custom-ctype-height-health", "4", { id: "f4", name: "cao.pdf", mime: "application/pdf" }),
+        cert("c5", "weld", "5", { id: "f5", name: "han.pdf", mime: "application/pdf" }),
+      ],
+      certificateTypeNames: { "custom-ctype-cccd": "ID", atld: "An toàn lao động", elec: "An toàn điện", "custom-ctype-height-health": "Làm việc trên cao", weld: "Chứng chỉ hàn" },
+      sessionFiles: { f1: await pdf("id.pdf"), f2: await pdf("atld.pdf"), f3: await pdf("elec.pdf"), f4: await pdf("cao.pdf"), f5: await pdf("han.pdf") },
+      config: { folders: [{ id: "s", name: "Safety certificate", typeKeys: ["atld", "weld"] }] },
+      fileNamePattern: "{mã nhân viên}",
+      exportDate: "2026-10-28",
+    });
+    expect(result.files.map((file) => file.name)).toEqual(["1. ID.pdf", "2. Safety certificate/1. An toàn.pdf", "2. Safety certificate/2. Chứng chỉ hàn.pdf"]);
+    expect((await PDFDocument.load(result.files[1]!.bytes)).getPageCount()).toBe(3);
+  });
 });
 
 describe("exportCertificatesPdf (gộp chứng chỉ thành 1 PDF)", () => {

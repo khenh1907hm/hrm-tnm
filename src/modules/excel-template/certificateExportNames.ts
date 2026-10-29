@@ -1,5 +1,5 @@
 import { applyFileNamePattern } from "./fileNamePattern";
-import type { CertificateExportConfig } from "./types";
+import type { CertificateExportConfig, CertificateFolderGroup } from "./types";
 
 export const DEFAULT_CERTIFICATE_FOLDER_PATTERN = "Chứng chỉ - {ngày xuất}";
 export const DEFAULT_CERTIFICATE_FILE_PATTERN = "{stt}. {loại chứng chỉ}";
@@ -55,4 +55,26 @@ export function uniqueFileNames(names: readonly string[]): string[] {
     used.add(candidate.toLowerCase());
     return candidate;
   });
+}
+
+/** Tên thư mục con của một nhóm, vd "4. Safety certificate". */
+export function certificateGroupFolderName(index: number, group: Pick<CertificateFolderGroup, "name">, exportDate: string): string {
+  return applyFileNamePattern("{stt}. {ten nhom}", null, exportDate, { stt: String(index), "ten nhom": group.name.trim() || "Nhóm" }).name;
+}
+
+export type CertificateFolderEntry<T> = { group: CertificateFolderGroup | null; items: T[] };
+
+/**
+ * Sắp các mục (đã đúng thứ tự) thành từng vị trí đánh số ở thư mục nhân sự: mục không thuộc nhóm đứng riêng,
+ * mục thuộc nhóm gom lại tại vị trí mục đầu tiên của nhóm đó.
+ */
+export function groupCertificateEntries<T>(items: readonly T[], typeOf: (item: T) => string, groups: readonly CertificateFolderGroup[] | undefined): CertificateFolderEntry<T>[] {
+  const groupOf = (type: string) => groups?.find((group) => group.typeKeys.includes(type)) ?? null;
+  const entries: CertificateFolderEntry<T>[] = [];
+  for (const item of items) {
+    const group = groupOf(typeOf(item));
+    const existing = group ? entries.find((entry) => entry.group?.id === group.id) : undefined;
+    if (existing) existing.items.push(item); else entries.push({ group, items: [item] });
+  }
+  return entries;
 }
