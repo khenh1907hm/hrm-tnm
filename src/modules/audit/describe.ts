@@ -24,6 +24,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "signature.remove": "Xóa chữ ký",
   "settings.update": "Sửa cài đặt email",
   "reminder.sent": "Gửi email nhắc hạn",
+  "reminder.test": "Gửi thử email nhắc hạn",
   "account.create": "Thêm tài khoản",
   "account.role": "Đổi vai trò tài khoản",
   "account.update": "Sửa tài khoản",
