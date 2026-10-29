@@ -596,3 +596,5 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 /* Nhóm gộp chứng chỉ: ô tick nằm cạnh chữ; dòng nhóm trong bảng tên gọi */
 .certificate-group-types .check-field{display:inline-flex;flex-direction:row;align-items:center;gap:6px;padding:2px 0;white-space:nowrap}.certificate-group-types .check-field input{width:auto;margin:0;flex:none}
 .certificate-label-group td:first-child{white-space:normal}.certificate-label-group small{display:block;margin-top:2px;font-size:12px}.certificate-label-group td{background:var(--soft)}
+/* Xem trước email nhắc hạn (HTML) trong Cài đặt email */
+.email-preview-frame{display:block;width:100%;max-width:660px;height:760px;border:1px solid var(--line);border-radius:8px;background:#f1f5f9}

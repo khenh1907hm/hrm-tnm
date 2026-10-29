@@ -51,16 +51,16 @@ export function createReminderUseCases(ctx: HrAppContext) {
       const soonest = (await repositories.certificates.list())
         .filter((item) => item.state === "current" && item.expiryDate !== null && employees.has(item.employeeId))
         .sort((a, b) => (a.expiryDate ?? "").localeCompare(b.expiryDate ?? ""))[0];
-      let message = { subject: "Kiểm tra email nhắc hạn chứng chỉ", text: "Hiện chưa có chứng chỉ nào có ngày hết hạn để làm mẫu." };
+      let message: { subject: string; text: string; html?: string } = { subject: "Kiểm tra email nhắc hạn chứng chỉ", text: `${TEST_NOTE}
+
+Hiện chưa có chứng chỉ nào có ngày hết hạn để làm mẫu.` };
       if (soonest?.expiryDate) {
         const employee = employees.get(soonest.employeeId)!;
         const category = (await repositories.certificateTypes.list()).find((item) => item.key === soonest.type);
-        message = reminderEmail(employee, soonest, diffDays(today(), soonest.expiryDate), `${deps.profileBaseUrl ?? "/employees/"}${employee.id}`, category);
+        message = reminderEmail(employee, soonest, diffDays(today(), soonest.expiryDate), `${deps.profileBaseUrl ?? "/employees/"}${employee.id}`, category, { note: TEST_NOTE });
       }
       const subject = TEST_PREFIX + message.subject;
-      try { await deps.mailer.send({ to: settings.reminderEmails, subject, text: `${TEST_NOTE}
-
-${message.text}` }); }
+      try { await deps.mailer.send({ to: settings.reminderEmails, ...message, subject }); }
       catch { return err("MAIL_TEST_FAILED"); }
       await writeAudit(actor, "reminder.test", "settings", "global", null, { to: settings.reminderEmails, subject });
       return success({ to: settings.reminderEmails, subject });

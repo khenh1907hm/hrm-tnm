@@ -10,7 +10,7 @@ import type { AuditRepository, CertificateRepository, CertificateTypeRepository,
 import { MemoryReminderLogRepository, MemoryRepository, MemorySettingsRepository } from "../repositories/memory/repository";
 import type { Signature } from "../modules/signatures/types";
 
-export interface Mailer { send(message: { to: string[]; subject: string; text: string }): Promise<void> }
+export interface Mailer { send(message: { to: string[]; subject: string; text: string; html?: string }): Promise<void> }
 export interface HrRepositories {
   employees: EmployeeRepository; certificates: CertificateRepository; certificateTypes: CertificateTypeRepository; commanders: CommanderRepository; audit: AuditRepository;
   /** Không truyền thì dùng bản lưu trong bộ nhớ. */
