@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { PenLine, Plus, Star, Trash2, X } from "lucide-react";
-import type { Actor } from "../../modules/auth/permissions";
+import { can, type Actor } from "../../modules/auth/permissions";
 import type { Signature } from "../../modules/signatures/types";
 import { SignatureFormModal } from "./SignatureFormModal";
 import { issueText, type App, type SetNotice, type SignatureRow } from "./shared";
@@ -12,7 +12,7 @@ export function SignaturesView(props: {
   onFilesAdded: (files: Record<string, File>) => void; setNotice: SetNotice;
 }) {
   const { app, actor, signatureRows, sessionFiles } = props;
-  const isAdmin = actor.role === "admin";
+  const isAdmin = can(actor, "signatureWrite");
   const [form, setForm] = useState<{ editing: Signature | null } | null>(null);
   const [removing, setRemoving] = useState<Signature | null>(null);
   const [busy, setBusy] = useState(false);

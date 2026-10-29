@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import type { Actor } from "../modules/auth/permissions";
+import { can, type Actor } from "../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../modules/certificates/types";
 import type { CertificateTypeRecord } from "../modules/certificate-types/types";
@@ -224,7 +224,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const fetchDetail = async (employeeId: string) => {
     const full = await app.employees.get(actor, employeeId);
     if (!full.ok) return null;
-    const [certificates, checklist, types] = await Promise.all([app.certificates.listByEmployee(actor, employeeId), app.certificates.checklist(actor, employeeId), app.certificateTypes.list(actor, actor.role === "admin")]);
+    const [certificates, checklist, types] = await Promise.all([app.certificates.listByEmployee(actor, employeeId), app.certificates.checklist(actor, employeeId), app.certificateTypes.list(actor, can(actor, "certificateTypeWrite"))]);
     return { employee: full.value, certificates, checklist, types };
   };
   /** Đưa dữ liệu vào state cùng lúc, để không hiện chứng chỉ của người trước. */

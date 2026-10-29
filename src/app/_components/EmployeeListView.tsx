@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowDownAZ, ArrowUpAZ, Check, ChevronDown, ChevronLeft, ChevronRight, FileArchive, FileDown, FileSpreadsheet, FileUp, PenLine, Plus, Search, ShieldCheck, Sparkles, Users, X } from "lucide-react";
 import type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeSort } from "../../app-core/createHrApp";
-import type { Actor } from "../../modules/auth/permissions";
+import { can, type Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import { POSITIONS, type Employee, type EmploymentStatus } from "../../modules/employees/types";
 import { issueText } from "./shared";
@@ -180,10 +180,10 @@ export function EmployeeListView(props: {
   return <>
     <div className="page-head">
       <div><h1>Nhân sự</h1><p>Quản lý hồ sơ và tình trạng nhân sự</p></div>
-      {(actor.role === "admin" || props.onImportClaude) && <div className="button-row">
+      {(can(actor, "employeeWrite") || props.onImportClaude) && <div className="button-row">
         {props.onImportClaude && <button className="button" onClick={props.onImportClaude}><Sparkles className="ico" size={16} aria-hidden="true" /> Nhập từ Claude</button>}
-        {actor.role === "admin" && <button className="button" onClick={props.onImport}><FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel</button>}
-        {actor.role === "admin" && <button className="button primary" onClick={props.onCreate}><Plus className="ico" size={16} aria-hidden="true" /> Thêm nhân sự</button>}
+        {can(actor, "employeeWrite") && <button className="button" onClick={props.onImport}><FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel</button>}
+        {can(actor, "employeeWrite") && <button className="button primary" onClick={props.onCreate}><Plus className="ico" size={16} aria-hidden="true" /> Thêm nhân sự</button>}
       </div>}
     </div>
 
@@ -209,7 +209,7 @@ export function EmployeeListView(props: {
             <button type="button" aria-pressed={filters.certificateTypeMode === "all"} onClick={() => update({ certificateTypeMode: "all" })}>tất cả</button>
             <button type="button" aria-pressed={filters.certificateTypeMode === "any"} onClick={() => update({ certificateTypeMode: "any" })}>một trong</button>
           </span><span>loại đã chọn (còn hạn)</span></div>} />
-        {actor.role === "admin" && <label className="toolbar-check"><input type="checkbox" checked={filters.includeArchived} onChange={(event) => update({ includeArchived: event.target.checked })} /> Đã lưu trữ</label>}
+        {can(actor, "employeeArchive") && <label className="toolbar-check"><input type="checkbox" checked={filters.includeArchived} onChange={(event) => update({ includeArchived: event.target.checked })} /> Đã lưu trữ</label>}
         {filtered && <button type="button" className="link-button toolbar-clear" onClick={clearAll}>Xóa lọc</button>}
       </div>
       {activeChips.length > 0 && (
@@ -247,7 +247,7 @@ export function EmployeeListView(props: {
             <td><b>{employee.name}</b></td>
             <td>{employee.phone}</td><td>{employee.position}</td><td>{employee.startDate.split("-").reverse().join("/")}</td>
             <td>{health ? <span className={health.missing || health.expired ? "pill bad" : health.expiring ? "pill warn" : "pill ok"}>{health.missing ? `Thiếu ${health.missing} bắt buộc` : health.expired ? `Hết hạn ${health.expired}` : health.expiring ? `Sắp hết hạn ${health.expiring}` : "Đầy đủ"}</span> : <span className="pill none">Đang kiểm tra</span>}</td>
-            <td><span className={employee.archivedAt ? "pill bad" : employee.status === "active" ? "pill ok" : "pill warn"}>{employee.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[employee.status]}</span>{employee.archivedAt && actor.role === "admin" && <button className="button" onClick={(event) => { event.stopPropagation(); props.onRestore(employee); }}>Khôi phục</button>}</td>
+            <td><span className={employee.archivedAt ? "pill bad" : employee.status === "active" ? "pill ok" : "pill warn"}>{employee.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[employee.status]}</span>{employee.archivedAt && can(actor, "employeeWrite") && <button className="button" onClick={(event) => { event.stopPropagation(); props.onRestore(employee); }}>Khôi phục</button>}</td>
           </tr>;
         })}{!rows.length && (props.error
           ? <tr><td colSpan={8} className="empty" role="alert">{issueText("LIST_LOAD_FAILED")} <button type="button" className="button" onClick={props.onRetry}>Thử lại</button></td></tr>

@@ -1,7 +1,7 @@
 import { Download, FileArchive, FileText, GripVertical } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { systemClock, todayVN } from "../../lib/clock";
-import type { Actor } from "../../modules/auth/permissions";
+import { can, type Actor } from "../../modules/auth/permissions";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Commander } from "../../modules/commanders/types";
 import { ContactPicker, EMPTY_CONTACT, type ContactChoice } from "./ContactPicker";
@@ -81,7 +81,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
 
   // Admin đổi quy tắc đặt tên thì lưu vào mẫu, lần xuất sau (cả xuất hàng loạt) dùng lại; HR chỉ áp dụng cho lần xuất này
   const saveNaming = () => {
-    if (actor.role !== "admin") return;
+    if (!can(actor, "export")) return;
     const patternChanged = namePattern.trim() !== (profile.fileNamePattern ?? "").trim();
     const certChanged = JSON.stringify(certConfig ?? {}) !== JSON.stringify(profile.certificateExport ?? {});
     if (patternChanged || certChanged) props.onSaveNaming?.({ fileNamePattern: namePattern.trim(), ...(certConfig ? { certificateExport: certConfig } : {}) });

@@ -42,7 +42,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       const shape = employeeInputSchema.safeParse(input);
       if (!shape.success) return failure(shape.error.issues.map((item) => { const field = String(item.path[0] ?? "form"); return issue(field === "position" ? "EMP_POSITION_INVALID" : field === "group" ? "EMP_GROUP_INVALID" : "EMP_INPUT_INVALID", field); }));
       const existing = (await repositories.employees.list()).filter((employee) => employee.id !== input.excludeId);
-      const validationInput = actor.role === "admin" || input.mismatchOverrideReason === undefined ? input : { ...input, mismatchOverrideReason: "" };
+      const validationInput = has(actor, "employeeWrite") || input.mismatchOverrideReason === undefined ? input : { ...input, mismatchOverrideReason: "" };
       const commanderIds = await getCommanderIds();
       const validation = validateEmployee(validationInput, today(), existing, input.excludeId, commanderIds);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
@@ -53,7 +53,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       const shape = employeeInputSchema.safeParse(input);
       if (!shape.success) return failure(shape.error.issues.map((item) => { const field = String(item.path[0] ?? "form"); return issue(field === "position" ? "EMP_POSITION_INVALID" : field === "group" ? "EMP_GROUP_INVALID" : "EMP_INPUT_INVALID", field); }));
       const existing = await repositories.employees.list();
-      const validationInput = actor.role === "admin" || input.mismatchOverrideReason === undefined ? input : { ...input, mismatchOverrideReason: "" };
+      const validationInput = has(actor, "employeeWrite") || input.mismatchOverrideReason === undefined ? input : { ...input, mismatchOverrideReason: "" };
       const commanderIds = await getCommanderIds();
       const validation = validateEmployee(validationInput, today(), existing, undefined, commanderIds);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
@@ -100,7 +100,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       if (!before) return err("EMP_NOT_FOUND");
       if (before.version !== input.expectedVersion) return err("CONFLICT");
       const all = (await repositories.employees.list()).filter((employee) => employee.id !== input.id);
-      const validationInput = actor.role === "admin" || input.mismatchOverrideReason === undefined ? input : { ...input, mismatchOverrideReason: "" };
+      const validationInput = has(actor, "employeeWrite") || input.mismatchOverrideReason === undefined ? input : { ...input, mismatchOverrideReason: "" };
       const commanderIds = await getCommanderIds();
       const validation = validateEmployee(validationInput, today(), all, input.id, commanderIds);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);

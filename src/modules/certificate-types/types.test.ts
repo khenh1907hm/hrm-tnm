@@ -65,7 +65,7 @@ describe("certificate type rules", () => {
     const app = createHrApp({ clock: fixedClock("2026-10-12T09:00:00+07:00"), ids: sequentialIds("ctype") });
     const listed = await app.certificateTypes.list({ id: "hr", role: "hr" });
     expect(listed.ok && listed.value.map((type) => type.sortOrder)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect((await app.certificateTypes.create({ id: "hr", role: "hr" }, { ...customInput })).ok).toBe(false);
+    expect((await app.certificateTypes.create(({ id: "outsider", role: "pending" } as never), { ...customInput })).ok).toBe(false);
     const created = await app.certificateTypes.create({ id: "admin", role: "admin" }, { ...customInput });
     expect(created.ok).toBe(true);
     if (created.ok) {

@@ -33,7 +33,7 @@ describe("gửi thử email nhắc hạn", () => {
     expect(await app.reminders.computeDue(admin)).toEqual(dueBefore);
     const audit = await app.audit.list(admin);
     expect(audit.ok && audit.value.some((event) => event.action === "reminder.test")).toBe(true);
-    expect((await app.reminders.sendTest(hr)).ok).toBe(false);
+    expect((await app.reminders.sendTest(({ id: "outsider", role: "pending" } as never))).ok).toBe(false);
   });
 
   it("REM_06 mỗi lần chạy gửi MỘT email cho mọi chứng chỉ đến hạn, ghi nhận tất cả; lỗi thì không ghi chứng chỉ nào", async () => {
@@ -65,13 +65,14 @@ describe("gửi thử email nhắc hạn", () => {
     expect(await broken.reminders.sendTest(admin)).toMatchObject({ ok: false, errors: [{ code: "MAIL_TEST_FAILED" }] });
   });
 
-  it("REM_07 API chỉ nhận token Admin, không nhận CRON_SECRET", async () => {
+  it("REM_07 API nhận token Admin hoặc HR, không nhận CRON_SECRET hay tài khoản chưa cấp quyền", async () => {
     const env = { cronSecret: "cron-secret", supabaseUrl: "https://example.supabase.co", supabaseKey: "publishable" };
     const fetcher = (async () => new Response(JSON.stringify({ id: "u1" }), { status: 200 })) as unknown as typeof fetch;
     const request = (authorization: string) => new Request("http://localhost/api/reminders/test", { method: "POST", headers: { authorization } });
     const sendTest = async () => ({ ok: true as const, value: { to: ["hr@example.test"], subject: "[Gửi thử] x", count: 1 }, warnings: [] });
     expect((await handleReminderTestRequest(request("Bearer cron-secret"), env, { lookupRole: async () => null, runReminders: null, sendTest, fetcher })).status).toBe(401);
-    expect((await handleReminderTestRequest(request("Bearer jwt"), env, { lookupRole: async () => "hr", runReminders: null, sendTest, fetcher })).status).toBe(401);
+    expect((await handleReminderTestRequest(request("Bearer jwt"), env, { lookupRole: async () => "hr", runReminders: null, sendTest, fetcher })).status).toBe(200);
+    expect((await handleReminderTestRequest(request("Bearer jwt"), env, { lookupRole: async () => "pending", runReminders: null, sendTest, fetcher })).status).toBe(401);
     expect((await handleReminderTestRequest(request("Bearer jwt"), env, { lookupRole: async () => "admin", runReminders: null, sendTest: null, fetcher })).status).toBe(503);
     const ok = await handleReminderTestRequest(request("Bearer jwt"), env, { lookupRole: async () => "admin", runReminders: null, sendTest, fetcher });
     expect(await ok.json()).toEqual({ ok: true, to: ["hr@example.test"], subject: "[Gửi thử] x", count: 1 });

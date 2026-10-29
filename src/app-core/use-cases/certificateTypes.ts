@@ -13,7 +13,7 @@ export function createCertificateTypeUseCases(ctx: HrAppContext) {
     list: async (actor: Actor, includeArchived = false): Promise<Result<CertificateTypeRecord[]>> => {
       if (!has(actor, "certificateTypeRead")) return err("FORBIDDEN");
       const all = await repositories.certificateTypes.list();
-      return success(includeArchived && actor.role === "admin" ? all.sort((a, b) => a.sortOrder - b.sortOrder || compareNormalizedText(a.name, b.name) || compareNormalizedText(a.id, b.id)) : sortCertificateTypes(all));
+      return success(includeArchived && has(actor, "certificateTypeWrite") ? all.sort((a, b) => a.sortOrder - b.sortOrder || compareNormalizedText(a.name, b.name) || compareNormalizedText(a.id, b.id)) : sortCertificateTypes(all));
     },
     create: async (actor: Actor, input: { name: string; englishName?: string | null; requiredForPositions: CertificateTypeRecord["requiredForPositions"]; noExpiry?: boolean | undefined }): Promise<Result<CertificateTypeRecord>> => {
       if (!has(actor, "certificateTypeWrite")) return err("FORBIDDEN");

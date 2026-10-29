@@ -38,8 +38,11 @@ describe("handleReminderRequest", () => {
     expect(d.runReminders).toHaveBeenCalledWith({ id: "u1", role: "admin" });
   });
 
-  it("chặn HR và tài khoản chưa cấp quyền", async () => {
-    for (const role of ["hr", "pending", null]) {
+  it("cho HR chạy nhắc hạn, chặn tài khoản chưa cấp quyền", async () => {
+    const asHr = deps({ lookupRole: async () => "hr" });
+    expect((await handleReminderRequest(request("Bearer user-jwt"), env, asHr)).status).toBe(200);
+    expect(asHr.runReminders).toHaveBeenCalledWith({ id: "u1", role: "hr" });
+    for (const role of ["pending", "employee", null]) {
       const d = deps({ lookupRole: async () => role });
       const response = await handleReminderRequest(request("Bearer user-jwt"), env, d);
       expect(response.status).toBe(401);

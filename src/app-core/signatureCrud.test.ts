@@ -25,7 +25,7 @@ describe("signature CRUD", () => {
     expect(await app.signatures.update(admin, { id: "missing", expectedVersion: 1, name: "X Y", role: "Z W" })).toMatchObject({ ok: false, errors: [{ code: "SIGNATURE_NOT_FOUND" }] });
     expect(await app.signatures.update(admin, { id: second.value.id, expectedVersion: 3, name: "X", role: "Z W" })).toMatchObject({ ok: false, errors: [{ code: "SIG_INVALID" }] });
     expect(await app.signatures.update(admin, { id: second.value.id, expectedVersion: 3, name: "X Y", role: "Z W", file: png("f4", { hasTransparency: false }) })).toMatchObject({ ok: false, errors: [{ code: "SIG_NOT_TRANSPARENT" }] });
-    expect(await app.signatures.update(hr, { id: second.value.id, expectedVersion: 3, name: "X Y", role: "Z W" })).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
+    expect(await app.signatures.update(({ id: "outsider", role: "pending" } as never), { id: second.value.id, expectedVersion: 3, name: "X Y", role: "Z W" })).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
 
     expect(await app.signatures.setDefault(admin, second.value.id)).toMatchObject({ ok: true, value: { isDefault: true } });
     expect(await app.signatures.remove(admin, second.value.id)).toMatchObject({ ok: true });

@@ -1,9 +1,10 @@
 export type Role = "admin" | "hr";
 export type Actor = { id: string; role: Role };
 export const PERMISSIONS = {
-  employeeRead: ["admin", "hr"], employeeWrite: ["admin"], employeeArchive: ["admin"], employeeReveal: ["admin", "hr"],
-  certificateRead: ["admin", "hr"], certificateWrite: ["admin"], certificateTypeRead: ["admin", "hr"], certificateTypeWrite: ["admin"], signatureRead: ["admin", "hr"], signatureWrite: ["admin"],
-  settingsRead: ["admin", "hr"], settingsWrite: ["admin"], commanderRead: ["admin", "hr"], commanderWrite: ["admin"], export: ["admin", "hr"], reminderRun: ["admin"], auditRead: ["admin"], ocr: ["admin", "hr"],
+  // HR xử lý toàn bộ nghiệp vụ nhân sự và hành chính; chỉ Nhật ký thay đổi (và quản trị tài khoản ở API riêng) dành cho Admin
+  employeeRead: ["admin", "hr"], employeeWrite: ["admin", "hr"], employeeArchive: ["admin", "hr"], employeeReveal: ["admin", "hr"],
+  certificateRead: ["admin", "hr"], certificateWrite: ["admin", "hr"], certificateTypeRead: ["admin", "hr"], certificateTypeWrite: ["admin", "hr"], signatureRead: ["admin", "hr"], signatureWrite: ["admin", "hr"],
+  settingsRead: ["admin", "hr"], settingsWrite: ["admin", "hr"], commanderRead: ["admin", "hr"], commanderWrite: ["admin", "hr"], export: ["admin", "hr"], reminderRun: ["admin", "hr"], auditRead: ["admin"], ocr: ["admin", "hr"],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 export function can(actor: Actor, permission: Permission): boolean { return PERMISSIONS[permission].some((role) => role === actor.role); }

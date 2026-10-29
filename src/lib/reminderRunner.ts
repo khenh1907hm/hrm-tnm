@@ -33,13 +33,14 @@ async function resolveActor(request: Request, env: ReminderEnv, deps: ReminderDe
   const user = await response.json() as { id?: string };
   if (!user.id) return null;
   const role = await deps.lookupRole(user.id);
-  return role === "admin" ? { id: user.id, role: "admin" } : null;
+  // Admin và HR được gửi nhắc hạn; quyền cụ thể kiểm tra tiếp trong use case
+  return role === "admin" || role === "hr" ? { id: user.id, role } : null;
 }
 
 /** Chạy nhắc hạn: lịch Vercel Cron (CRON_SECRET) hoặc Admin bấm nút trong app (token đăng nhập). */
 export async function handleReminderRequest(request: Request, env: ReminderEnv, deps: ReminderDeps): Promise<Response> {
   const actor = await resolveActor(request, env, deps);
-  if (!actor) return fail(401, "REMINDER_UNAUTHORIZED", "Chỉ Admin hoặc lịch chạy tự động được gửi nhắc hạn.");
+  if (!actor) return fail(401, "REMINDER_UNAUTHORIZED", "Chỉ Admin, HR hoặc lịch chạy tự động được gửi nhắc hạn.");
   if (!deps.runReminders) return fail(503, "REMINDER_NOT_CONFIGURED", "Máy chủ chưa cấu hình gửi email (SUPABASE_SECRET_KEY, SMTP_HOST, SMTP_USER, SMTP_PASS).");
   const result = await deps.runReminders(actor);
   if (!result.ok) return fail(403, result.errors[0]?.code ?? "FORBIDDEN", "Không có quyền gửi nhắc hạn.");
@@ -49,7 +50,7 @@ export async function handleReminderRequest(request: Request, env: ReminderEnv, 
 /** Admin bấm "Gửi email thử": gửi một email mẫu tới địa chỉ nhận nhắc hạn, không đánh dấu đã gửi. */
 export async function handleReminderTestRequest(request: Request, env: ReminderEnv, deps: ReminderDeps): Promise<Response> {
   const actor = await resolveActor(request, { ...env, cronSecret: undefined }, deps);
-  if (!actor) return fail(401, "REMINDER_UNAUTHORIZED", "Chỉ Admin được gửi email thử.");
+  if (!actor) return fail(401, "REMINDER_UNAUTHORIZED", "Chỉ Admin hoặc HR được gửi email thử.");
   if (!deps.sendTest) return fail(503, "REMINDER_NOT_CONFIGURED", "Máy chủ chưa cấu hình gửi email (SUPABASE_SECRET_KEY, SMTP_HOST, SMTP_USER, SMTP_PASS).");
   const result = await deps.sendTest(actor);
   if (!result.ok) {

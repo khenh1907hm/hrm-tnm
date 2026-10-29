@@ -8,7 +8,9 @@ import type { Employee } from "../../modules/employees/types";
 import { certificateFileBaseName, certificateGroupFolderName, certificateRootFolderName, certificateTypeLabel, employeeFolderName, groupCertificateEntries } from "../../modules/excel-template/certificateExportNames";
 import { certificateGroups, certificateUnits, type CertificateUnit } from "../../modules/excel-template/certificateGroups";
 import type { CertificateFolderGroup } from "../../modules/excel-template/types";
-import { DEFAULT_CERTIFICATE_FOLDER_PRESET, parseCertificateFolderPresets, pickCertificatesForFolder, type CertificateFolderPreset } from "../../modules/excel-template/certificateFolderPresets";
+import { DEFAULT_CERTIFICATE_FOLDER_PRESET, pickCertificatesForFolder, type CertificateFolderPreset } from "../../modules/excel-template/certificateFolderPresets";
+import { getSupabaseClient } from "../../lib/supabase/client";
+import { loadPresets, readLocalPresets, savePresets as persistPresets } from "./certificateFolderPresetStore";
 import { CertificateExportNaming } from "./CertificateExportNaming";
 import { downloadBlob, exportCertificateFiles, zipFiles, type ProfileBundleFile } from "./profileExport";
 import type { App, SetNotice } from "./shared";
@@ -16,15 +18,6 @@ import { moveId, useDragReorder } from "./useDragReorder";
 
 type PersonResult = { employee: Employee; warnings: string[]; error?: string };
 
-const STORAGE_KEY = "tnm-hrm:certificate-folder-presets";
-
-/** Cấu hình lưu trên trình duyệt này (localStorage); không đọc được thì dùng cấu hình mặc định. */
-function readPresets(): CertificateFolderPreset[] {
-  try { return parseCertificateFolderPresets(window.localStorage.getItem(STORAGE_KEY)); } catch { return [DEFAULT_CERTIFICATE_FOLDER_PRESET]; }
-}
-function writePresets(presets: readonly CertificateFolderPreset[]) {
-  try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(presets)); } catch { /* chế độ riêng tư / bị chặn: chỉ dùng trong lần này */ }
-}
 
 /**
  * Tải thư mục chứng chỉ cho một hoặc nhiều nhân sự, không cần mẫu Excel:
@@ -33,8 +26,19 @@ function writePresets(presets: readonly CertificateFolderPreset[]) {
 export function CertificateFolderExportModal(props: { app: App; actor: Actor; employees: readonly Employee[]; sessionFiles: Readonly<Record<string, File>>; ensureFiles?: (certificates: readonly Certificate[], employee: Employee) => Promise<Readonly<Record<string, File>>>; setNotice: SetNotice; onClose: () => void }) {
   const { app, actor, employees, setNotice } = props;
   const exportDate = todayVN(systemClock);
-  const [presets, setPresets] = useState<CertificateFolderPreset[]>(readPresets);
+  // Cấu hình dùng chung lưu trên máy chủ; trong lúc tải hiện tạm cấu hình của trình duyệt
+  const [presets, setPresets] = useState<CertificateFolderPreset[]>(readLocalPresets);
   const [draft, setDraft] = useState<CertificateFolderPreset>(() => presets[0]!);
+  useEffect(() => {
+    let active = true;
+    void loadPresets(getSupabaseClient()).then((loaded) => {
+      if (!active) return;
+      setPresets(loaded.presets);
+      setDraft((current) => loaded.presets.find((item) => item.id === current.id) ?? loaded.presets[0]!);
+      if (loaded.warning) setNotice(loaded.warning);
+    });
+    return () => { active = false; };
+  }, [setNotice]);
   const [types, setTypes] = useState<{ key: string; name: string }[]>([]);
   const [typeNames, setTypeNames] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -91,24 +95,27 @@ export function CertificateFolderExportModal(props: { app: App; actor: Actor; em
   const pdfGroupOf = (key: string) => pdfGroups.find((group) => group.types.includes(key));
 
   const choosePreset = (id: string) => { const next = presets.find((item) => item.id === id); if (next) { setDraft(next); setResults(null); } };
-  const savePresets = (next: CertificateFolderPreset[], current: CertificateFolderPreset) => { setPresets(next); writePresets(next); setDraft(current); };
+  /** Lưu cả danh sách lên máy chủ (dùng chung); lỗi thì vẫn giữ trên trình duyệt và báo lại. */
+  const savePresets = async (next: CertificateFolderPreset[], current: CertificateFolderPreset, done?: string) => {
+    setPresets(next); setDraft(current);
+    const problem = await persistPresets(getSupabaseClient(), next);
+    if (problem) setNotice(problem); else if (done) setNotice(done, "success");
+  };
   const saveCurrent = () => {
     const name = draft.name.trim() || "Không tên";
     const current = { ...draft, name };
-    savePresets(presets.some((item) => item.id === draft.id) ? presets.map((item) => item.id === draft.id ? current : item) : [...presets, current], current);
-    setNotice(`Đã lưu cấu hình "${name}".`);
+    void savePresets(presets.some((item) => item.id === draft.id) ? presets.map((item) => item.id === draft.id ? current : item) : [...presets, current], current, `Đã lưu cấu hình "${name}" cho mọi người dùng.`);
   };
   const saveAsNew = () => {
     const base = draft.name.trim() || "Cấu hình mới";
     const name = presets.some((item) => item.name === base) ? `${base} (bản sao)` : base;
     const current = { ...draft, id: crypto.randomUUID(), name };
-    savePresets([...presets, current], current);
-    setNotice(`Đã lưu cấu hình mới "${name}".`);
+    void savePresets([...presets, current], current, `Đã lưu cấu hình mới "${name}" cho mọi người dùng.`);
   };
   const removeCurrent = () => {
     const rest = presets.filter((item) => item.id !== draft.id);
     const next = rest.length ? rest : [DEFAULT_CERTIFICATE_FOLDER_PRESET];
-    savePresets(next, next[0]!);
+    void savePresets(next, next[0]!);
   };
 
   const picked = singleCertificates ? pickCertificatesForFolder(singleCertificates, draft, exportDate, allKeys) : [];

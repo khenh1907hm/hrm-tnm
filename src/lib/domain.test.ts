@@ -161,7 +161,9 @@ describe("other domain rules", () => {
     expect(naturalCompare("TNM001", "TNM1")).toBe(0);
   });
   it("RBAC_01 declares the allowed access matrix", () => {
-    expect(PERMISSIONS.employeeWrite).toEqual(["admin"]);
+    // HR xử lý toàn bộ nghiệp vụ nhân sự, hành chính; chỉ Nhật ký thay đổi dành riêng Admin
+    for (const permission of ["employeeWrite", "employeeArchive", "certificateWrite", "certificateTypeWrite", "signatureWrite", "settingsWrite", "commanderWrite", "reminderRun"] as const) expect(PERMISSIONS[permission]).toEqual(["admin", "hr"]);
+    expect(PERMISSIONS.auditRead).toEqual(["admin"]);
     expect(PERMISSIONS.export).toContain("hr");
   });
   it("OCR_01 OCR_02 parse labels and ignore old nine digit ID numbers", () => {

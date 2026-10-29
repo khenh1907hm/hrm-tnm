@@ -3,7 +3,7 @@ import { Eraser, ImagePlus, RotateCw, Save, Trash2 } from "lucide-react";
 import { randomIds } from "../../lib/ids";
 import { rotateImageFile } from "../../lib/image/rotateImage";
 import { toTransparentPng } from "../../lib/image/toTransparentPng";
-import type { Actor } from "../../modules/auth/permissions";
+import { can, type Actor } from "../../modules/auth/permissions";
 import type { FileRef } from "../../modules/certificates/types";
 import type { Employee } from "../../modules/employees/types";
 import { IMAGE_FIELDS, isIdCardImage, isPortraitImage, isSignatureImage } from "../../modules/excel-template/engine/profileConfig";
@@ -32,7 +32,7 @@ export function employeeExtraFields(templates: readonly ExcelReportTemplate[]): 
 export function EmployeeExtraPanel(props: { app: App; actor: Actor; employee: Employee; templates: readonly ExcelReportTemplate[]; sessionFiles: Readonly<Record<string, File>>; ensureFiles: (refs: { id: string; name: string }[]) => Promise<unknown>; onSaved: (employee: Employee, files: Record<string, File>) => void; setNotice: SetNotice }) {
   const { employee, actor } = props;
   const fields = useMemo(() => employeeExtraFields(props.templates), [props.templates]);
-  const canEdit = actor.role === "admin";
+  const canEdit = can(actor, "employeeWrite");
   const [values, setValues] = useState<Record<string, string>>(() => ({ ...employee.extraFields }));
   const [pending, setPending] = useState<Record<string, { ref: FileRef; file: File } | null>>({});
   const [busy, setBusy] = useState(false);

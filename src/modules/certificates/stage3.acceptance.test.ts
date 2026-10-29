@@ -153,7 +153,7 @@ describe("certificate, export, and invariant acceptance", () => {
       id: created.value.id, expectedVersion: 3, supplementaryFiles: Array.from({ length: 11 }, (_, index) => supplement(`extra-${index}`)),
     });
     expect(tooMany.ok).toBe(false);
-    const hr = await app.certificates.updateAttachments({ id: "hr", role: "hr" }, { id: created.value.id, expectedVersion: 3, supplementaryFiles: [] });
+    const hr = await app.certificates.updateAttachments(({ id: "outsider", role: "pending" } as never), { id: created.value.id, expectedVersion: 3, supplementaryFiles: [] });
     expect(hr).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
     const audit = await app.audit.list(admin);
     expect(audit.ok && audit.value.filter((event) => event.entityType === "certificate").map((event) => event.action)).toContain("certificate.attachments.update");

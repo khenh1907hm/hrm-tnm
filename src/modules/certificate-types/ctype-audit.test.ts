@@ -77,8 +77,8 @@ describe("certificate type acceptance checks", () => {
     const app = createHrApp({ clock: fixedClock("2026-10-12T09:00:00+07:00"), ids: sequentialIds("ctype-rbac") });
     const createdByAdmin = await app.certificateTypes.create({ id: "admin", role: "admin" }, input("Sơ cứu nâng cao"));
     if (!createdByAdmin.ok) throw new Error("could not create fixture category");
-    const hr = { id: "hr", role: "hr" as const };
-    expect(await app.certificateTypes.create(hr, input("Cẩu tháp phụ"))).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
+    const hr = ({ id: "outsider", role: "pending" } as never);
+    expect(await app.certificateTypes.create(({ id: "outsider", role: "pending" } as never), input("Cẩu tháp phụ"))).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
     expect(await app.certificateTypes.update(hr, { id: createdByAdmin.value.id, expectedVersion: 1, name: "Sơ cứu 2", requiredForPositions: [], sortOrder: 9 })).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
     expect(await app.certificateTypes.archive(hr, { id: createdByAdmin.value.id, expectedVersion: 1, reason: "Ngừng dùng" })).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
 

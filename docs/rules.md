@@ -78,7 +78,7 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | SIG-02 | Luôn đúng một chữ ký mặc định khi thư viện không rỗng. Chữ ký đầu tiên tự động là mặc định. | Đã chốt | `SIG_02` |
 | SIG-03 | Không xóa được chữ ký cuối cùng. Xóa chữ ký mặc định thì chữ ký tạo sớm nhất còn lại thành mặc định. | Đã chốt | `SIG_03` |
 | SET-01 | reminderEmails: tối đa 10 địa chỉ, mỗi địa chỉ hợp lệ, chuyển chữ thường, loại trùng. reminderDays cố định 30, không cho sửa. | Đã chốt | `SET_01` |
-| RBAC-01 | Admin được mọi quyền. HR chỉ được: đọc nhân sự, đọc chứng chỉ, đọc chữ ký, đọc cài đặt, xuất PDF, hiện số CCCD đầy đủ. | Giả định | `RBAC_01` |
+| RBAC-01 | Admin được mọi quyền. HR xử lý toàn bộ nghiệp vụ nhân sự và hành chính: đọc / thêm / sửa / lưu trữ nhân sự, chứng chỉ, loại chứng chỉ, chữ ký, chỉ huy trưởng, cài đặt email, gửi nhắc hạn, xuất hồ sơ, hiện số CCCD đầy đủ. Chỉ Admin: Nhật ký thay đổi và quản trị tài khoản. Tài khoản chưa cấp quyền bị chặn mọi thao tác. | Đã chốt | `RBAC_01` |
 | RBAC-02 | Quyền kiểm tra bên trong từng use case (không chỉ ở giao diện). Vi phạm trả lỗi FORBIDDEN. | Đã chốt | `RBAC_02` |
 | RBAC-03 | Có test kiểu bảng chạy toàn bộ tổ hợp (use case × vai trò) và so với ma trận quyền khai báo duy nhất ở một nơi. | Đã chốt | `RBAC_03` |
 | AUD-01 | Mọi thao tác thay đổi dữ liệu thành công ghi một sự kiện {id, at, actorId, role, action, entityType, entityId, before, after}. Thao tác thất bại không ghi. | Đã chốt | `AUD_01` |

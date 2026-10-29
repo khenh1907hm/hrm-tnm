@@ -11,7 +11,7 @@ export function createCommanderUseCases(ctx: HrAppContext) {
     list: async (actor: Actor, includeArchived = false): Promise<Result<Commander[]>> => {
       if (!has(actor, "commanderRead")) return err("FORBIDDEN");
       const list = await repositories.commanders.list();
-      const filtered = actor.role === "admin" && includeArchived ? list : list.filter((item) => !item.archived);
+      const filtered = has(actor, "commanderWrite") && includeArchived ? list : list.filter((item) => !item.archived);
       return success(sortCommanders(filtered));
     },
     create: async (actor: Actor, input: CommanderInput): Promise<Result<Commander>> => {

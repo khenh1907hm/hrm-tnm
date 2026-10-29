@@ -29,6 +29,6 @@ describe("certificateTypes.reorder (kéo thả thứ tự)", () => {
     const ids = listed.value.map((type) => type.id);
     expect((await app.certificateTypes.reorder(admin, ids.slice(1))).ok).toBe(false);
     expect((await app.certificateTypes.reorder(admin, [...ids, "khong-co"])).ok).toBe(false);
-    expect((await app.certificateTypes.reorder({ id: "hr", role: "hr" }, ids)).ok).toBe(false);
+    expect((await app.certificateTypes.reorder(({ id: "outsider", role: "pending" } as never), ids)).ok).toBe(false);
   });
 });

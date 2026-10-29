@@ -23,7 +23,7 @@ describe("commanders facade and RBAC", () => {
     if (!listHr.ok) throw new Error("Expected success");
     expect(listHr.value.length).toBe(2);
 
-    const createHr = await app.commanders.create(hr, {
+    const createHr = await app.commanders.create(({ id: "outsider", role: "pending" } as never), {
       name: "Nguyễn Văn Mới",
       role: "Chỉ huy trưởng công trường",
       phone: "0901234567",

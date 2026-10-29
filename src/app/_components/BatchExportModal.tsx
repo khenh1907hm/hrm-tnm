@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { FileArchive, FileDown, FileText, X } from "lucide-react";
 import { systemClock, todayVN } from "../../lib/clock";
-import type { Actor } from "../../modules/auth/permissions";
+import { can, type Actor } from "../../modules/auth/permissions";
 import type { Certificate } from "../../modules/certificates/types";
 import type { Commander } from "../../modules/commanders/types";
 import { ContactPicker, EMPTY_CONTACT, type ContactChoice } from "./ContactPicker";
@@ -65,7 +65,7 @@ export function BatchExportModal(props: { app: App; actor: Actor; employees: rea
   const runCertificates = async () => {
     if (!template) return;
     setBusy("certs"); setProgress(0); setResults(null);
-    if (actor.role === "admin" && (namePattern.trim() !== (template.profile.fileNamePattern ?? "").trim() || JSON.stringify(certConfig ?? {}) !== JSON.stringify(template.profile.certificateExport ?? {}))) {
+    if (can(actor, "export") && (namePattern.trim() !== (template.profile.fileNamePattern ?? "").trim() || JSON.stringify(certConfig ?? {}) !== JSON.stringify(template.profile.certificateExport ?? {}))) {
       props.onSaveNaming?.(template.id, { fileNamePattern: namePattern.trim(), ...(certConfig ? { certificateExport: certConfig } : {}) });
     }
     try {

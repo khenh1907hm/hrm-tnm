@@ -15,8 +15,9 @@ const newApp = () => createHrApp({ clock: fixedClock("2026-10-12T09:00:00+07:00"
 const codes = (outcome: { ok: boolean; errors?: { code: string }[] }) => (outcome.ok ? [] : outcome.errors!.map((item) => item.code));
 
 describe("nhập nhiều hồ sơ từ Excel", () => {
-  it("chỉ Admin được nhập", async () => {
-    expect((await newApp().employees.importMany(hr, { rows: [base], dryRun: true })).ok).toBe(false);
+  it("Admin và HR được nhập, tài khoản chưa cấp quyền thì không", async () => {
+    expect((await newApp().employees.importMany(hr, { rows: [base], dryRun: true })).ok).toBe(true);
+    expect((await newApp().employees.importMany(({ id: "outsider", role: "pending" } as never), { rows: [base], dryRun: true })).ok).toBe(false);
   });
 
   it("chạy thử không lưu gì", async () => {

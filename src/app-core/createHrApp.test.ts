@@ -48,7 +48,7 @@ describe("employee application use cases", () => {
     const after = await app.audit.list(admin);
     if (!before.ok || !after.ok) throw new Error("audit list unavailable");
     expect(after.value).toHaveLength(before.value.length);
-    expect((await app.employees.validate(hr, validEmployee)).ok).toBe(false);
+    expect((await app.employees.validate(({ id: "outsider", role: "pending" } as never), validEmployee)).ok).toBe(false);
   });
 
   it("EMP_08 archive hides a record and restore makes it visible", async () => {
@@ -98,7 +98,7 @@ describe("certificate, reminders, and access", () => {
     expect(due.ok && due.value.length).toBeGreaterThan(0);
     const run = await app.reminders.run(admin);
     expect(run.ok && run.value.skipped.length).toBeGreaterThan(0);
-    expect((await app.reminders.run(hr)).ok).toBe(false);
+    expect((await app.reminders.run(({ id: "outsider", role: "pending" } as never))).ok).toBe(false);
   });
 
   it("CERT_01 CERT_06 CERT_07 CERT_08 CERT_09 CERT_10 honors current and replaced states", async () => {
@@ -142,7 +142,7 @@ describe("signature and settings use cases", () => {
     if (!finalList.ok || !finalList.value[0]) throw new Error("missing signature");
     expect(finalList.value[0].isDefault).toBe(true);
     expect((await app.signatures.remove(admin, finalList.value[0].id)).ok).toBe(false);
-    expect((await app.signatures.add(hr, signature("HR user"))).ok).toBe(false);
+    expect((await app.signatures.add(({ id: "outsider", role: "pending" } as never), signature("HR user"))).ok).toBe(false);
   });
 
   it("SET_01 validates recipients and optimistic version", async () => {

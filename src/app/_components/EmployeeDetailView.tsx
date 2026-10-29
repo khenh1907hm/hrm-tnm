@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Paperclip, Plus, Star } from "lucide-react";
-import type { Actor } from "../../modules/auth/permissions";
+import { can, type Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistRow, CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import type { Certificate, FileRef } from "../../modules/certificates/types";
 import { formatDate } from "../../lib/dates";
@@ -41,7 +41,7 @@ export function EmployeeDetailView(props: {
   const photoUrl = usePhotoUrl(selected.photo, props.loadPhoto);
   return <>
     <button className="back-button" onClick={props.onBack}>← Quay lại danh sách</button>
-    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{actor.role === "admin" && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
+    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{can(actor, "employeeArchive") && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
     <section className="panel detail-panel">
       <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {selected.photo && (
@@ -64,7 +64,7 @@ export function EmployeeDetailView(props: {
       </div>
       <div className="table-scroll">
         <table className="certificate-table">
-          <thead><tr><th>Loại chứng chỉ</th><th>Số chứng chỉ</th><th>Ngày hết hạn</th><th>Tình trạng</th><th>Tệp đính kèm</th>{actor.role === "admin" && <th><span className="sr-only">Thao tác</span></th>}</tr></thead>
+          <thead><tr><th>Loại chứng chỉ</th><th>Số chứng chỉ</th><th>Ngày hết hạn</th><th>Tình trạng</th><th>Tệp đính kèm</th>{can(actor, "employeeWrite") && <th><span className="sr-only">Thao tác</span></th>}</tr></thead>
           <tbody>{checklistRows.map((row) => {
             const certificate = employeeCertificates.find((item) => item.type === row.type && item.title === row.title && item.state === "current");
             return (
@@ -79,7 +79,7 @@ export function EmployeeDetailView(props: {
                     {certificate.supplementaryFiles.map((item) => <button type="button" className="file-chip" key={item.file.id} title={`Xem ${item.file.name}`} onClick={() => props.onShowFile(item.file)}><Paperclip size={12} aria-hidden="true" /> {item.label ?? item.file.name}</button>)}
                   </div>
                 ) : <span className="muted">—</span>}</td>
-                {actor.role === "admin" && <td className="cert-actions">{certificate
+                {can(actor, "certificateWrite") && <td className="cert-actions">{certificate
                   ? <><button className="button" onClick={() => props.onCertificateForm(row.type, certificate)}>Sửa</button><button className="button" onClick={() => props.onRenewCertificate(certificate)}>Gia hạn</button><button className="button danger" onClick={() => props.onArchiveCertificate(certificate)}>Ẩn</button></>
                   : <button className="button primary" onClick={() => props.onCertificateForm(row.type)}><Plus className="ico" size={14} aria-hidden="true" /> Thêm</button>}</td>}
               </tr>
@@ -87,13 +87,13 @@ export function EmployeeDetailView(props: {
           })}</tbody>
         </table>
       </div>
-      {actor.role === "admin" && (
+      {can(actor, "employeeWrite") && (
         <div className="cert-add-more">
           <span className="muted">Thêm chứng chỉ khác cùng loại:</span>
           {certificateTypes.filter((type) => !type.archived).map((type) => <button className="button" key={type.id} onClick={() => props.onCertificateForm(type.key)}><Plus className="ico" size={14} aria-hidden="true" /> {type.key === "atld" ? "Nhóm ATLĐ khác" : type.name}</button>)}
         </div>
       )}
-      {showCertificateHistory && employeeCertificates.filter((item) => item.state !== "current").map((certificate) => <div className="certificate-row" key={certificate.id}><b>{certificateTypes.find((type) => type.key === certificate.type)?.name ?? "Chứng chỉ"}{certificate.title ? ` (${certificate.title})` : ""}</b><span>{certificate.number || "Không ghi số"} · {certificate.state === "replaced" ? "Đã thay thế" : "Đã ẩn"}</span>{actor.role === "admin" && certificate.state === "archived" && <button className="button" onClick={() => props.onRestoreCertificate(certificate)}>Khôi phục</button>}</div>)}
+      {showCertificateHistory && employeeCertificates.filter((item) => item.state !== "current").map((certificate) => <div className="certificate-row" key={certificate.id}><b>{certificateTypes.find((type) => type.key === certificate.type)?.name ?? "Chứng chỉ"}{certificate.title ? ` (${certificate.title})` : ""}</b><span>{certificate.number || "Không ghi số"} · {certificate.state === "replaced" ? "Đã thay thế" : "Đã ẩn"}</span>{can(actor, "certificateWrite") && certificate.state === "archived" && <button className="button" onClick={() => props.onRestoreCertificate(certificate)}>Khôi phục</button>}</div>)}
     </section>
   </>;
 }

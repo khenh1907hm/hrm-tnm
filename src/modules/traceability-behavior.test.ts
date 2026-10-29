@@ -119,12 +119,12 @@ describe("dedicated rule behavior", () => {
   });
   it("RBAC_02 returns FORBIDDEN from the protected HR certificate-type use case", async () => {
     const { app } = await makeApp();
-    expect(await app.certificateTypes.create(hr, { name: "Không được phép", requiredForPositions: [] })).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
+    expect(await app.certificateTypes.create(({ id: "outsider", role: "pending" } as never), { name: "Không được phép", requiredForPositions: [] })).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
   });
   it("AUD_01 writes an audit event for successful changes and none for denied changes", async () => {
     const { app } = await makeApp();
     const before = await app.audit.list(admin);
-    const denied = await app.employees.create(hr, employeeInput);
+    const denied = await app.employees.create(({ id: "outsider", role: "pending" } as never), employeeInput);
     expect(denied).toMatchObject({ ok: false, errors: [{ code: "FORBIDDEN" }] });
     const added = await app.signatures.add(admin, { name: "Nguyễn An", role: "Giám đốc", file: { id: "aud1", name: "s.png", mime: "image/png", size: 100, hasTransparency: true } });
     const after = await app.audit.list(admin);

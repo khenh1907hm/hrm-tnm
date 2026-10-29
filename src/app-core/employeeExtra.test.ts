@@ -16,7 +16,7 @@ describe("employee values for user-defined template fields", () => {
     const employee = list.ok ? list.value.items[0]! : null;
     if (!employee) throw new Error("no employee");
 
-    expect((await app.employees.updateExtra(hr, { id: employee.id, expectedVersion: employee.version, fields: {}, files: {} })).ok).toBe(false);
+    expect((await app.employees.updateExtra(({ id: "outsider", role: "pending" } as never), { id: employee.id, expectedVersion: employee.version, fields: {}, files: {} })).ok).toBe(false);
     const first = await app.employees.updateExtra(admin, { id: employee.id, expectedVersion: employee.version, fields: { badgeNo: "TK-0099", note: "" }, files: { badgePhoto: photo } });
     expect(first.ok && first.value).toMatchObject({ extraFields: { badgeNo: "TK-0099" }, extraFiles: { badgePhoto: photo }, version: employee.version + 1 });
     if (!first.ok) return;
