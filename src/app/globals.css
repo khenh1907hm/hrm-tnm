@@ -593,3 +593,6 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 @media(max-width:860px){.app-shell:has(.side-nav.is-collapsed){grid-template-columns:minmax(0,1fr)}.side-nav,.side-nav.is-collapsed{padding:10px 12px;gap:8px;overflow:visible}.side-nav .brand,.side-nav.is-collapsed .brand{flex-direction:row;padding:0}.side-collapse,.nav-group-label{display:none}.nav-group{display:contents}.side-nav.is-collapsed .brand-text,.side-nav.is-collapsed .nav-label,.side-nav.is-collapsed .side-user-text{display:block}.side-nav.is-collapsed .nav-item{padding:8px 10px}.side-nav.is-collapsed .badge{position:static;width:auto;height:auto;font-size:11px;padding:0 7px}.side-user-card{padding:4px 6px}}
 /* Trang Cảnh báo: bộ lọc đang chọn */
 .alert-filters .button[aria-pressed=true]{background:var(--brand-soft);border-color:var(--brand);color:var(--brand);font-weight:600}
+/* Nhóm gộp chứng chỉ: ô tick nằm cạnh chữ; dòng nhóm trong bảng tên gọi */
+.certificate-group-types .check-field{display:inline-flex;flex-direction:row;align-items:center;gap:6px;padding:2px 0;white-space:nowrap}.certificate-group-types .check-field input{width:auto;margin:0;flex:none}
+.certificate-label-group td:first-child{white-space:normal}.certificate-label-group small{display:block;margin-top:2px;font-size:12px}.certificate-label-group td{background:var(--soft)}

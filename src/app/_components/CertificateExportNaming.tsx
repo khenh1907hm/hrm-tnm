@@ -144,12 +144,25 @@ export function CertificateExportNaming(props: {
         <table className="profile-table certificate-labels">
           <thead><tr><th>Loại chứng chỉ</th><th>Tên gọi khi xuất <small>(trống = giữ tên loại)</small></th></tr></thead>
           <tbody>
-            {props.typeKeys.map((key) => (
-              <tr key={key}>
-                <td>{props.typeNames[key] ?? key}</td>
-                <td><input type="text" maxLength={60} aria-label={`Tên gọi khi xuất của ${props.typeNames[key] ?? key}`} value={value.typeLabels?.[key] ?? ""} placeholder={props.typeNames[key] ?? key} onChange={(event) => setLabel(key, event.target.value)} /></td>
-              </tr>
-            ))}
+            {/* Loại đã gộp nhóm ra chung một tệp mang tên nhóm: một dòng cho cả nhóm, sửa tên nhóm ngay tại đây */}
+            {certificateUnits(props.typeKeys, (key) => key, (key) => key, certificateGroups({ groups })).map((unit) => {
+              if (unit.group) {
+                const groupIndex = groups.findIndex((group) => group.id === unit.group!.id);
+                return (
+                  <tr key={unit.id} className="certificate-label-group">
+                    <td><b>Nhóm {unit.group.name.trim() || "(chưa đặt tên)"}</b><small className="muted">{unit.items.map((key) => props.typeNames[key] ?? key).join(" + ")}</small></td>
+                    <td><input type="text" maxLength={60} aria-label={`Tên tệp của nhóm ${unit.group.name}`} value={unit.group.name} placeholder="Tên nhóm, vd An toàn" onChange={(event) => setGroups(groups.map((item, index) => index === groupIndex ? { ...item, name: event.target.value } : item))} /></td>
+                  </tr>
+                );
+              }
+              const key = unit.items[0]!;
+              return (
+                <tr key={key}>
+                  <td>{props.typeNames[key] ?? key}</td>
+                  <td><input type="text" maxLength={60} aria-label={`Tên gọi khi xuất của ${props.typeNames[key] ?? key}`} value={value.typeLabels?.[key] ?? ""} placeholder={props.typeNames[key] ?? key} onChange={(event) => setLabel(key, event.target.value)} /></td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
