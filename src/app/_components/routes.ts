@@ -10,6 +10,7 @@ export const VIEW_PATHS: Record<PageView, string> = {
   skills: "/skills",
   tools: "/cong-cu",
   audit: "/nhat-ky",
+  accounts: "/tai-khoan",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
@@ -25,6 +26,7 @@ export const VIEW_TITLES: Record<PageView, string> = {
   skills: "Kho Skill AI",
   tools: "Công cụ",
   audit: "Nhật ký thay đổi",
+  accounts: "Tài khoản & phân quyền",
 };
 
 export type AppRoute = { view: PageView; employeeId: string | null };

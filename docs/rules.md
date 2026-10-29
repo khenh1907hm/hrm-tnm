@@ -85,6 +85,10 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | AUD-03 | Nhật ký chỉ thêm, không sửa, không xóa. Chỉ Admin đọc được. | Đã chốt | `AUD_03` |
 | AUD-04 | Chuỗi data URL (ảnh base64) trong before và after được thay bằng dấu "đã lược bỏ" để nhật ký không phình theo ảnh. | Đã chốt | `AUD_04` |
 | AUD-05 | Màn hình Nhật ký đọc theo trang (mới nhất trước, tối đa 100 dòng mỗi trang), lọc được theo loại đối tượng và theo từng đối tượng; hiện tên thao tác, đối tượng và các trường đã đổi. | Đã chốt | `AUD_05` |
+| ACC-01 | Chỉ Admin đã đăng nhập (token hợp lệ, vai trò admin trong profiles) được xem danh sách, thêm và sửa tài khoản; còn lại trả 401. | Đã chốt | `ACC_01` |
+| ACC-02 | Thêm tài khoản: email hợp lệ (chuyển chữ thường), mật khẩu ban đầu tối thiểu 8 ký tự, vai trò thuộc admin/hr/engineer/employee/pending, họ tên tối đa 100 ký tự; email đã có tài khoản thì báo ACCOUNT_EMAIL_TAKEN. | Đã chốt | `ACC_02` |
+| ACC-03 | Admin không tự đổi vai trò khác admin hay tự khóa tài khoản của mình (tránh mất quyền quản trị). Khóa là chặn đăng nhập, không xóa tài khoản. | Đã chốt | `ACC_03` |
+| ACC-04 | Mỗi lần thêm tài khoản, đổi vai trò, sửa họ tên, khóa / mở khóa, đặt lại mật khẩu ghi một sự kiện nhật ký (entityType account) dưới tên Admin; nhật ký không chứa mật khẩu. | Đã chốt | `ACC_04` |
 | EXP-01 | checkReadiness(employee, signDate, signerId) trả danh sách lỗi chặn nếu thiếu bất kỳ trường nào trên phiếu: họ tên, ngày sinh, giới tính, nguyên quán, địa chỉ thường trú, số điện thoại, ngày làm nghề, người liên hệ khẩn cấp, người ký (có trong thư viện), ngày ký hợp lệ. Nhân sự đã ẩn thì chặn. Chưa có nhóm ATLĐ trong khi có chứng chỉ huấn luyện an toàn được tick thì chỉ cảnh báo. | Giả định | `EXP_01` |
 | EXP-02 | Ô tick hệ thống đúng khi có ít nhất một chứng chỉ hiện hành cùng loại còn hạn tại ngày ký; ghi chú hết hạn chỉ khi không còn chứng chỉ nào của loại đó hợp lệ. | Đã chốt | `EXP_02` |
 | EXP-03 | Kinh nghiệm tính từ ngày làm nghề đến ngày ký. Ngày làm nghề sau ngày ký thì hiển thị "0 tháng" kèm cảnh báo. | Đã chốt | `EXP_03` |

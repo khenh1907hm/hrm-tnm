@@ -24,10 +24,16 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "signature.remove": "Xóa chữ ký",
   "settings.update": "Sửa cài đặt email",
   "reminder.sent": "Gửi email nhắc hạn",
+  "account.create": "Thêm tài khoản",
+  "account.role": "Đổi vai trò tài khoản",
+  "account.update": "Sửa tài khoản",
+  "account.password": "Đặt lại mật khẩu",
+  "account.lock": "Khóa tài khoản",
+  "account.unlock": "Mở khóa tài khoản",
 };
 
 export const AUDIT_ENTITY_LABELS: Readonly<Record<string, string>> = {
-  employee: "Nhân sự", certificate: "Chứng chỉ", commander: "Chỉ huy trưởng", signature: "Chữ ký", settings: "Cài đặt",
+  employee: "Nhân sự", certificate: "Chứng chỉ", commander: "Chỉ huy trưởng", signature: "Chữ ký", settings: "Cài đặt", account: "Tài khoản",
 };
 
 const FIELD_LABELS: Readonly<Record<string, string>> = {
@@ -39,7 +45,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   type: "Loại", title: "Tên chứng chỉ", number: "Số", issueDate: "Ngày cấp", expiryDate: "Ngày hết hạn",
   document: "Tệp chính", supplementaryFiles: "Tệp bổ sung", state: "Tình trạng", safetyGroup: "Nhóm an toàn",
   label: "Nhãn", file: "Tệp", reminderEmails: "Email nhận nhắc hạn", sendExpiredNotice: "Nhắc cả chứng chỉ đã hết hạn",
-  role: "Vai trò",
+  role: "Vai trò", email: "Email", fullName: "Họ tên", locked: "Đã khóa",
 };
 
 /** Trường kỹ thuật, không cần hiện khi so sánh (expectedVersion lọt vào bản ghi cũ từ dữ liệu nhập). */
@@ -95,6 +101,7 @@ export function auditSubject(event: Pick<AuditEvent, "before" | "after" | "entit
   if (doc) {
     if (event.entityType === "employee" && typeof doc.name === "string") return typeof doc.code === "string" ? `${doc.name} (${doc.code})` : doc.name;
     if (event.entityType === "certificate" && typeof doc.number === "string") return `Số ${doc.number}`;
+    if (event.entityType === "account" && typeof doc.email === "string") return doc.email;
     if (typeof doc.name === "string") return doc.name;
     if (typeof doc.label === "string") return doc.label;
   }

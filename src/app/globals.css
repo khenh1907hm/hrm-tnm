@@ -570,3 +570,8 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .audit-table .nowrap{white-space:nowrap}.audit-entity{display:block;font-size:12px}.audit-table tr.is-open>td{background:var(--soft)}
 .audit-detail>td{background:var(--soft);padding:4px 14px 14px}.audit-detail table{background:var(--surface);border:1px solid var(--line);border-radius:6px}.audit-detail th,.audit-detail td{padding:7px 12px;cursor:default}.audit-detail tbody tr:hover{background:transparent}
 .audit-before{color:var(--muted);text-decoration:line-through}.audit-after{font-weight:600}
+/* Tài khoản & phân quyền */
+.accounts-table td{vertical-align:middle}.accounts-table .pill.info{margin-left:6px}.accounts-table select{min-height:32px;border:1px solid var(--line);border-radius:6px;padding:0 6px;background:var(--surface)}.accounts-table tr.is-locked td{color:var(--muted)}.accounts-table .nowrap{white-space:nowrap}
+.accounts-actions{white-space:nowrap;text-align:right}.accounts-actions .button{padding:5px 10px;font-size:13px}.accounts-actions .button+.button{margin-left:6px}
+.accounts-roles{margin-top:16px;padding:14px 18px}.accounts-roles h2{font-size:15px;margin:0 0 8px}.accounts-roles dl{display:grid;gap:4px;margin:0}.accounts-roles div{display:grid;grid-template-columns:120px 1fr;gap:8px;font-size:13px}.accounts-roles dt{font-weight:600}.accounts-roles dd{margin:0;color:var(--muted)}
+.accounts-modal{max-width:460px}.accounts-modal-body{display:grid;gap:12px;padding:16px 20px}.accounts-modal-body .field{margin:0}.accounts-modal-body .field input,.accounts-modal-body .field select{width:100%}.accounts-modal-body p{margin:0}

@@ -1,4 +1,4 @@
-import { BellRing, FileSpreadsheet, History, LogOut, PenLine, Settings, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import { BellRing, FileSpreadsheet, History, LogOut, ShieldCheck, PenLine, Settings, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
 import { routePath } from "./routes";
 import type { PageView } from "./shared";
@@ -12,9 +12,10 @@ const NAV_ITEMS: readonly (readonly [PageView, string, LucideIcon])[] = [
   ["skills", "Kho Skill AI", Sparkles],
   ["tools", "Công cụ", Wrench],
   ["audit", "Nhật ký thay đổi", History],
+  ["accounts", "Tài khoản & phân quyền", ShieldCheck],
 ];
 /** Mục chỉ admin thấy. */
-const ADMIN_ONLY: ReadonlySet<PageView> = new Set(["audit"]);
+const ADMIN_ONLY: ReadonlySet<PageView> = new Set(["audit", "accounts"]);
 
 export function SideNav(props: { mode: "demo" | "live"; email: string | null; onSignOut: () => void; view: PageView; onNavigate: (view: PageView) => void; alertCount: number; actor: Actor; onActorChange: (actor: Actor) => void; onPreviewEmployee?: (() => void) | undefined }) {
   const { view, onNavigate, alertCount, actor, onActorChange } = props;
