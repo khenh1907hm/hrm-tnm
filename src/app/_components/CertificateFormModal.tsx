@@ -117,7 +117,6 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
     if (!knownType) { setNotice("Loại chứng chỉ không hợp lệ."); return false; }
     if (isSafety && !safetyGroup) { setErrors({ safetyGroup: "Chọn nhóm huấn luyện an toàn lao động." }); return false; }
     const { document, supplementaryFiles, newBinaries } = splitFileItems(files);
-    if (!document) { setErrors({ document: "Thêm ít nhất một tệp chứng chỉ (tệp chính)." }); return false; }
     // ATLĐ: để trống tên phân biệt → tên tự là "Nhóm N"
     const title = isSafety ? String(formData.get("title") ?? customTitle) : String(formData.get("title") ?? "");
     const certificateInput = {

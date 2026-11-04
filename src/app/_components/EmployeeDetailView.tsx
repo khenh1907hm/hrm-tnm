@@ -75,7 +75,7 @@ export function EmployeeDetailView(props: {
                 <td><span className={`pill ${row.status === "valid" ? "ok" : row.status === "expiring" ? "warn" : row.status === "expired" || row.status === "missing" ? "bad" : "none"}`}>{row.statusLabel}{row.status === "expiring" && row.daysLeft !== null ? ` (còn ${row.daysLeft} ngày)` : ""}</span></td>
                 <td>{certificate ? (
                   <div className="file-chips">
-                    <button type="button" className="file-chip is-primary" title={`Xem tệp chính: ${certificate.document.name}`} onClick={() => props.onShowFile(certificate.document)}><Star size={12} aria-hidden="true" /> Tệp chính</button>
+                    {certificate.document ? (() => { const document = certificate.document; return <button type="button" className="file-chip is-primary" title={`Xem tệp chính: ${document.name}`} onClick={() => props.onShowFile(document)}><Star size={12} aria-hidden="true" /> Tệp chính</button>; })() : <span className="muted">Chưa có tệp</span>}
                     {certificate.supplementaryFiles.map((item) => <button type="button" className="file-chip" key={item.file.id} title={`Xem ${item.file.name}`} onClick={() => props.onShowFile(item.file)}><Paperclip size={12} aria-hidden="true" /> {item.label ?? item.file.name}</button>)}
                   </div>
                 ) : <span className="muted">—</span>}</td>

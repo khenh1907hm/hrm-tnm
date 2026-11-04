@@ -274,7 +274,7 @@ describe("validation boundary branches", () => {
 
   it("CERT_02 CERT_03 CERT_04 CERT_05 CERT_06 validates absent and optional files", () => {
     const common = { type: "health" as const, title: "", number: "KSK-123", issueDate: null, expiryDate: "2027-01-01", supplementaryFiles: [] };
-    expect(validateCertificate({ ...common, document: null }, "2026-10-12", "1988-05-12").errors.map((item) => item.code)).toContain("CERT_FILE_REQUIRED");
+    expect(validateCertificate({ ...common, document: null }, "2026-10-12", "1988-05-12").errors.map((item) => item.code)).not.toContain("CERT_FILE_REQUIRED");
     expect(validateCertificate({ ...common, document: sampleFile, supplementaryFiles: [{ file: { ...sampleFile, size: 0 }, label: null }] }, "2026-10-12", "1988-05-12").errors.map((item) => item.field)).toContain("supplementaryFiles.0.file");
     expect(validateCertificate({ ...common, issueDate: "2026-01-01", expiryDate: "2025-12-31", document: sampleFile }, "2026-10-12", "1988-05-12").errors.map((item) => item.code)).toContain("CERT_EXPIRY_BEFORE_ISSUE");
     expect(validateCertificate({ ...common, expiryDate: "bad-date", document: sampleFile }, "2026-10-12", "1988-05-12").errors.map((item) => item.code)).toContain("DATE_INVALID");

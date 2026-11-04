@@ -173,7 +173,7 @@ export async function exportProfileWorkbook(input: ProfileExportInput): Promise<
     });
   for (const certificate of ordered) {
     const typeName = input.certificateTypeNames[certificate.type] ?? certificate.type;
-    const files = [{ file: certificate.document, label: "Tệp chính" }, ...certificate.supplementaryFiles.map((item) => ({ file: item.file, label: `Tệp bổ sung: ${item.label ?? item.file.name}` }))];
+    const files = [...(certificate.document ? [{ file: certificate.document, label: "Tệp chính" }] : []), ...certificate.supplementaryFiles.map((item) => ({ file: item.file, label: `Tệp bổ sung: ${item.label ?? item.file.name}` }))];
     for (const { file, label } of files) {
       const binary = input.sessionFiles[file.id];
       if (!binary) { warnings.push(`${typeName}: chưa có dữ liệu tệp "${file.name}" trong phiên này`); continue; }
@@ -267,7 +267,7 @@ const earliestExpiry = (items: readonly Certificate[]) => items.map((item) => it
 
 /** Tệp chính rồi tệp bổ sung của một chứng chỉ có trong phiên; thiếu tệp nào thì ghi cảnh báo. */
 function certificateBinaries(certificate: Certificate, typeLabel: string, sessionFiles: Readonly<Record<string, File>>, warnings: string[]) {
-  return [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)].flatMap((file) => {
+  return [...(certificate.document ? [certificate.document] : []), ...certificate.supplementaryFiles.map((item) => item.file)].flatMap((file) => {
     const binary = sessionFiles[file.id];
     if (!binary) warnings.push(`${typeLabel}: chưa có dữ liệu tệp "${file.name}" trong phiên này`);
     return binary ? [{ file, binary }] : [];

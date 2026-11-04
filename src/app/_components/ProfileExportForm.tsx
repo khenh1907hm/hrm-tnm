@@ -172,7 +172,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
         {orderedUnits.length > 1 && <p className="muted">Kéo biểu tượng ⋮⋮ hoặc chọn số thứ tự để đổi thứ tự ghép sau phiếu.</p>}
         {orderedUnits.length ? orderedUnits.map((unit, index) => {
           const certificateLine = (certificate: Certificate) => {
-            const hasBinary = Boolean(props.sessionFiles[certificate.document.id]);
+            const hasBinary = Boolean(certificate.document && props.sessionFiles[certificate.document.id]);
             const expired = !isValidOn(certificate.expiryDate, exportDate);
             const name = `${typeNames[certificate.type] ?? certificate.type}${certificate.title ? ` (${certificate.title})` : ""}`;
             return (
@@ -181,7 +181,7 @@ export function ProfileExportForm(props: { app: App; actor: Actor; template: Pro
                 <span><b>{name}</b> · {certificate.number ? `Số ${certificate.number}` : "Không ghi số"} · {certificate.expiryDate ? `Hết hạn ${formatExpiry(certificate.expiryDate)}` : "Không thời hạn"}</span>
                 {expired && <span className="pill bad">Đã hết hạn</span>}
                 {!profile.attachments.includes(certificate.type) && <span className="pill">Ngoài danh sách của mẫu</span>}
-                {!hasBinary && <span className="pill warn">Chưa có tệp trong phiên</span>}
+                {!hasBinary && <span className="pill warn">{certificate.document ? "Chưa có tệp trong phiên" : "Chưa có tệp"}</span>}
               </label>
             );
           };

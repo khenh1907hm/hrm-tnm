@@ -44,7 +44,7 @@ export function buildCertificateScanSelection(
   const extraIds = new Set(options.extraCertificateIds ?? []);
   const extras = certificates.filter((item) => !systemTypeSet.has(item.type) && extraIds.has(item.id) && item.state === "current" && isValidOn(item.expiryDate, signDate));
   selected.push(...extras);
-  const allScans = selected.flatMap((certificate) => [certificate.document, ...(options.includeSupplementary ? certificate.supplementaryFiles.map((item) => item.file) : [])]);
+  const allScans = selected.flatMap((certificate) => [...(certificate.document ? [certificate.document] : []), ...(options.includeSupplementary ? certificate.supplementaryFiles.map((item) => item.file) : [])]);
   if (options.selectedFileIds !== undefined) {
     const allowed = new Set(options.selectedFileIds);
     return allScans.filter((file) => allowed.has(file.id));

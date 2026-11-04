@@ -33,7 +33,6 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const validation = validateCertificate(normalizedInput, today(), employee.dob, availableTypes);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
       const document = normalizedInput.document;
-      if (!document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
       const value: Certificate = { id: deps.ids.next(), employeeId: input.employeeId, type: input.type, title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, state: "current", version: 1, replacedBy: null, archiveReason: null, safetyGroup: normalizeSafetyGroup(input.type, shape.data.safetyGroup) };
       await repositories.certificates.insert(value);
       await writeAudit(actor, "certificate.add", "certificate", value.id, null, value);
@@ -63,7 +62,6 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const validation = validateCertificate(normalizedInput, today(), employee.dob, availableTypes);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
       const document = normalizedInput.document;
-      if (!document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
       const replacementId = deps.ids.next();
       const replacement: Certificate = { id: replacementId, employeeId: before.employeeId, type: before.type, title: before.title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, state: "current", version: 1, replacedBy: null, archiveReason: null, safetyGroup: normalizeSafetyGroup(before.type, shape.data.safetyGroup ?? before.safetyGroup) };
       const old = { ...before, state: "replaced" as const, replacedBy: replacement.id, version: before.version + 1 };
@@ -94,7 +92,6 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const validation = validateCertificate(normalizedInput, today(), employee.dob, types);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
       const document = normalizedInput.document;
-      if (!document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
       const value: Certificate = { ...before, type: input.type, title, number: input.number, issueDate: input.issueDate, expiryDate: input.expiryDate, document, supplementaryFiles: normalizedInput.supplementaryFiles, version: before.version + 1, safetyGroup: normalizeSafetyGroup(input.type, shape.data.safetyGroup === undefined ? before.safetyGroup : shape.data.safetyGroup) };
       if (!await repositories.certificates.replace(value, input.expectedVersion)) return err("CONFLICT");
       await writeAudit(actor, "certificate.update", "certificate", value.id, before, value);
@@ -195,7 +192,6 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const normalizedInput = { ...shape.data, title, supplementaryFiles: (shape.data.supplementaryFiles ?? []).map((item) => ({ ...item, label: item.label?.trim() || null })) };
       const validation = validateCertificate(normalizedInput, today(), employee.dob, availableTypes);
       if (validation.errors.length) return failure(validation.errors, validation.warnings);
-      if (!normalizedInput.document) return failure([issue("CERT_FILE_REQUIRED", "document")], validation.warnings);
       const warnings = [...validation.warnings];
       if (all.some((item) => item.employeeId !== input.employeeId && item.type === input.type && item.number === input.number && item.id !== input.id)) {
         warnings.push(issue("CERT_NUMBER_OTHER_EMPLOYEE", "number", "warning"));

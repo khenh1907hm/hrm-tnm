@@ -70,7 +70,8 @@ export function validateCertificate(
     if (!file) { if (required) errors.push(issue("CERT_FILE_REQUIRED", field)); return; }
     if (!allowedMime.has(file.mime) || file.size <= 0 || file.size > MAX_FILE_SIZE) errors.push(issue("CERT_FILE_INVALID", field));
   };
-  checkFile(input.document, "document", true);
+  // Tệp chính không bắt buộc: chứng chỉ nhập từ danh sách có thể chưa có bản scan
+  checkFile(input.document, "document", false);
   if (isSafetyCertificateType(input.type) && input.safetyGroup !== undefined && input.safetyGroup !== null && !isValidSafetyGroup(input.safetyGroup)) errors.push(issue("CERT_SAFETY_GROUP_INVALID", "safetyGroup"));
   if (supplementaryFiles.length > 10) errors.push(issue("CERT_SUPPLEMENT_COUNT_INVALID", "supplementaryFiles"));
   supplementaryFiles.forEach((attachment, index) => {
@@ -85,7 +86,7 @@ export function validateCertificateAttachments(document: FileRef | null, supplem
   const check = (file: FileRef | null, field: string) => {
     if (!file || !allowedMime.has(file.mime) || file.size <= 0 || file.size > MAX_FILE_SIZE) errors.push(issue(file ? "CERT_FILE_INVALID" : "CERT_FILE_REQUIRED", field));
   };
-  check(document, "document");
+  if (document) check(document, "document");
   if (supplementaryFiles.length > 10) errors.push(issue("CERT_SUPPLEMENT_COUNT_INVALID", "supplementaryFiles"));
   supplementaryFiles.forEach((attachment, index) => {
     check(attachment.file, `supplementaryFiles.${index}.file`);

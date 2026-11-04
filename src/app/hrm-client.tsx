@@ -140,7 +140,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     return { ...sessionFiles, ...found };
   }, [fileStore, sessionFiles]);
 
-  const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [certificate.document, ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
+  const certificateFileRefs = (certificates: readonly Certificate[]) => certificates.flatMap((certificate) => [...(certificate.document ? [certificate.document] : []), ...certificate.supplementaryFiles.map((item) => item.file)]).map((file) => ({ id: file.id, name: file.name, folder: "certificates" as const }));
   /** Ảnh chữ ký của người ký khi xuất mẫu hồ sơ (vùng IMG_signature). */
   const loadSignatureFile = useCallback(async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "signatures" }]))[file.id] ?? null, [ensureFiles]);
   /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */

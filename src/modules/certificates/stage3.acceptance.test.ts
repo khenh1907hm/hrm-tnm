@@ -61,7 +61,7 @@ describe("certificate, export, and invariant acceptance", () => {
     expect(tooMany.ok).toBe(false);
     const longLabel = await app.certificates.add(admin, draft(employee.id, "health", "SAFE-004C", "Taikisha", { supplementaryFiles: [supplement("long-label", "x".repeat(101))] }));
     expect(longLabel.ok).toBe(false);
-    expect(certificateRules.validateCertificateAttachments(null, [])).toMatchObject([{ code: "CERT_FILE_REQUIRED" }]);
+    expect(certificateRules.validateCertificateAttachments(null, [])).toEqual([]);
     expect(certificateRules.validateCertificateAttachments(pdf, [{ file: pdf, label: "x".repeat(101) }])).toMatchObject([{ code: "CERT_SUPPLEMENT_LABEL_INVALID" }]);
     expect(certificateRules.validateCertificateAttachments({ ...pdf, mime: "text/plain" }, [])).toMatchObject([{ code: "CERT_FILE_INVALID" }]);
     expect(certificateRules.validateCertificateAttachments(pdf, [{ file: pdf, label: null }])).toEqual([]);
@@ -138,6 +138,18 @@ describe("certificate, export, and invariant acceptance", () => {
     expect(await app.certificates.restore(admin, { id: hidden.value.id, expectedVersion: hidden.value.version })).toMatchObject({ ok: false, errors: [{ code: "CERT_RESTORE_CONFLICT" }] });
   });
 
+  it("allows a certificate without a primary file and adds the file later", async () => {
+    const { app, employee } = await setup();
+    const created = await app.certificates.add(admin, draft(employee.id, "atld", "SAFE-060", "Chưa scan", { document: null }));
+    if (!created.ok) throw new Error("could not add certificate without a file");
+    expect(created.value.document).toBeNull();
+    const edited = await app.certificates.update(admin, { ...draft(employee.id, "atld", "SAFE-061", "Chưa scan", { document: null }), id: created.value.id, expectedVersion: 1 });
+    expectOk(edited);
+    expect(edited.value.document).toBeNull();
+    const attached = await app.certificates.updateAttachments(admin, { id: created.value.id, expectedVersion: 2, document: pdf, supplementaryFiles: [] });
+    expect(attached.ok && attached.value.document?.id).toBe("primary");
+  });
+
   it("CERT_11 manages supplementary files and replaces a required primary file", async () => {
     const { app, employee } = await setup();
     const created = await app.certificates.add(admin, draft(employee.id, "atld", "SAFE-050", "Taikisha"));
@@ -145,10 +157,10 @@ describe("certificate, export, and invariant acceptance", () => {
     const changed = await app.certificates.updateAttachments(admin, {
       id: created.value.id, expectedVersion: 1, document: { ...pdf, id: "replacement" }, supplementaryFiles: [supplement("supp-2")],
     });
-    expect(changed.ok && changed.value.document.id).toBe("replacement");
+    expect(changed.ok && changed.value.document?.id).toBe("replacement");
     expect(changed.ok && changed.value.supplementaryFiles.map((item) => item.file.id)).toEqual(["supp-2"]);
     const keptPrimary = await app.certificates.updateAttachments(admin, { id: created.value.id, expectedVersion: 2, supplementaryFiles: [] });
-    expect(keptPrimary.ok && keptPrimary.value.document.id).toBe("replacement");
+    expect(keptPrimary.ok && keptPrimary.value.document?.id).toBe("replacement");
     const tooMany = await app.certificates.updateAttachments(admin, {
       id: created.value.id, expectedVersion: 3, supplementaryFiles: Array.from({ length: 11 }, (_, index) => supplement(`extra-${index}`)),
     });
