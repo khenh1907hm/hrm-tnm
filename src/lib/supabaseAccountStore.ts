@@ -1,10 +1,11 @@
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Account, AccountRole, AccountStore } from "./accountAdmin";
 import { ACCOUNT_ROLES } from "./accountAdmin";
+import { normalizeAccess } from "../modules/auth/permissions";
 
 /** Khóa "vĩnh viễn" (100 năm) theo cách Supabase Auth hiểu ban_duration. */
 const LOCK_DURATION = "876000h";
-type ProfileRow = { id: string; role: string; full_name: string };
+type ProfileRow = { id: string; role: string; full_name: string; permissions: string[] | null };
 
 const roleOf = (raw: string | undefined): AccountRole => ACCOUNT_ROLES.includes(raw as AccountRole) ? raw as AccountRole : "pending";
 const toAccount = (user: User, profile: ProfileRow | undefined): Account => {
@@ -17,6 +18,7 @@ const toAccount = (user: User, profile: ProfileRow | undefined): Account => {
     createdAt: user.created_at,
     lastSignInAt: user.last_sign_in_at ?? null,
     locked: Boolean(bannedUntil && Date.parse(bannedUntil) > Date.now()),
+    permissions: profile?.permissions ? normalizeAccess(profile.permissions) : null,
   };
 };
 
@@ -28,7 +30,7 @@ function check<T extends { error: { message: string } | null }>(result: T): T {
 /** Kho tài khoản trên Supabase Auth + bảng profiles; client phải dùng khóa bí mật (bỏ qua RLS). */
 export function createSupabaseAccountStore(admin: SupabaseClient): AccountStore {
   const profilesById = async (ids?: string[]) => {
-    let query = admin.from("profiles").select("id, role, full_name");
+    let query = admin.from("profiles").select("id, role, full_name, permissions");
     if (ids) query = query.in("id", ids);
     const { data } = check(await query);
     return new Map((data as ProfileRow[] | null ?? []).map((row) => [row.id, row]));
@@ -58,12 +60,13 @@ export function createSupabaseAccountStore(admin: SupabaseClient): AccountStore 
       }
       // Trigger handle_new_user đã tạo dòng profiles (vai trò pending); gán vai trò admin chọn
       check(await admin.from("profiles").upsert({ id: data.user.id, role: input.role, full_name: input.fullName }));
-      return { ok: true, account: toAccount(data.user, { id: data.user.id, role: input.role, full_name: input.fullName }) };
+      return { ok: true, account: toAccount(data.user, { id: data.user.id, role: input.role, full_name: input.fullName, permissions: null }) };
     },
     async update(change) {
       const profile: Partial<ProfileRow> = {};
       if (change.role !== undefined) profile.role = change.role;
       if (change.fullName !== undefined) profile.full_name = change.fullName;
+      if (change.permissions !== undefined) profile.permissions = change.permissions;
       if (Object.keys(profile).length) check(await admin.from("profiles").update(profile).eq("id", change.id));
       if (change.password !== undefined || change.locked !== undefined) {
         check(await admin.auth.admin.updateUserById(change.id, {

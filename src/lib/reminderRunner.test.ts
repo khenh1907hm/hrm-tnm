@@ -38,10 +38,18 @@ describe("handleReminderRequest", () => {
     expect(d.runReminders).toHaveBeenCalledWith({ id: "u1", role: "admin" });
   });
 
+  it("theo mục quyền đã tick: Kỹ sư được cấp thì chạy được, HR bị bỏ tick thì không", async () => {
+    const engineer = deps({ lookupRole: async () => "engineer", lookupPermissions: async () => ["reminders.manage"] });
+    expect((await handleReminderRequest(request("Bearer user-jwt"), env, engineer)).status).toBe(200);
+    const hr = deps({ lookupRole: async () => "hr", lookupPermissions: async () => ["employees.view"] });
+    expect((await handleReminderRequest(request("Bearer user-jwt"), env, hr)).status).toBe(401);
+    expect(hr.runReminders).not.toHaveBeenCalled();
+  });
+
   it("cho HR chạy nhắc hạn, chặn tài khoản chưa cấp quyền", async () => {
     const asHr = deps({ lookupRole: async () => "hr" });
     expect((await handleReminderRequest(request("Bearer user-jwt"), env, asHr)).status).toBe(200);
-    expect(asHr.runReminders).toHaveBeenCalledWith({ id: "u1", role: "hr" });
+    expect(asHr.runReminders).toHaveBeenCalledWith(expect.objectContaining({ id: "u1", role: "hr" }));
     for (const role of ["pending", "employee", null]) {
       const d = deps({ lookupRole: async () => role });
       const response = await handleReminderRequest(request("Bearer user-jwt"), env, d);

@@ -67,7 +67,7 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
      * và các dòng phía trên (bắt trùng mã/CCCD ngay trong file). dryRun: chỉ kiểm tra, không lưu.
      */
     importMany: async (actor: Actor, input: { rows: readonly EmployeeInput[]; dryRun: boolean }): Promise<Result<EmployeeImportOutcome[]>> => {
-      if (!has(actor, "employeeWrite")) return err("FORBIDDEN");
+      if (!has(actor, "employeeImport")) return err("FORBIDDEN");
       // Mỗi bản ghi cần id: validateEmployee chỉ tính trùng với bản ghi có id khác bản đang kiểm tra
       const known: { code: string; cccd: string; phone: string; id: string }[] = await repositories.employees.list();
       const commanderIds = await getCommanderIds();

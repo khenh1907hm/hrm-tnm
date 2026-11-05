@@ -1,4 +1,5 @@
 import type { AuditEvent } from "../modules/audit/types";
+import { ACCESS_KEYS, normalizeAccess, type AccessKey } from "../modules/auth/permissions";
 
 type Fetch = typeof fetch;
 
@@ -7,9 +8,11 @@ export const ACCOUNT_ROLES = ["admin", "hr", "engineer", "employee", "pending"] 
 export type AccountRole = typeof ACCOUNT_ROLES[number];
 export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = { admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên", pending: "Chờ cấp quyền" };
 
-export type Account = { id: string; email: string; fullName: string; role: AccountRole; createdAt: string; lastSignInAt: string | null; locked: boolean };
+export type Account = { id: string; email: string; fullName: string; role: AccountRole; createdAt: string; lastSignInAt: string | null; locked: boolean;
+  /** Các mục quyền Admin đã tick riêng; null là dùng mặc định của vai trò. */
+  permissions: AccessKey[] | null };
 export type NewAccount = { email: string; password: string; fullName: string; role: AccountRole };
-export type AccountChange = { id: string; role?: AccountRole; fullName?: string; password?: string; locked?: boolean };
+export type AccountChange = { id: string; role?: AccountRole; fullName?: string; password?: string; locked?: boolean; permissions?: AccessKey[] | null };
 
 /** Thao tác trên Supabase Auth + profiles bằng khóa bí mật (chỉ ở máy chủ). */
 export type AccountStore = {
@@ -40,7 +43,7 @@ const isRole = (value: unknown): value is AccountRole => ACCOUNT_ROLES.includes(
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 /** Bản ghi nhật ký của tài khoản: không bao giờ chứa mật khẩu. */
-const auditDoc = (account: Pick<Account, "email" | "fullName" | "role" | "locked">) => ({ email: account.email, fullName: account.fullName, role: account.role, locked: account.locked });
+const auditDoc = (account: Pick<Account, "email" | "fullName" | "role" | "locked" | "permissions">) => ({ email: account.email, fullName: account.fullName, role: account.role, locked: account.locked, permissions: account.permissions ?? "Theo vai trò" });
 
 async function resolveAdmin(request: Request, env: AccountEnv, deps: AccountDeps): Promise<string | null> {
   const header = request.headers.get("authorization") ?? "";
@@ -79,10 +82,14 @@ function validateChange(body: unknown): { ok: true; value: AccountChange } | { o
     change.password = body.password;
   }
   if (body.locked !== undefined) { if (typeof body.locked !== "boolean") return { ok: false, code: "ACCOUNT_INVALID", message: "Trạng thái khóa không hợp lệ." }; change.locked = body.locked; }
+  if (body.permissions !== undefined) {
+    if (body.permissions !== null && !(Array.isArray(body.permissions) && body.permissions.every((key) => ACCESS_KEYS.includes(key as AccessKey)))) return { ok: false, code: "ACCOUNT_PERMISSIONS_INVALID", message: "Danh sách quyền không hợp lệ." };
+    change.permissions = body.permissions === null ? null : normalizeAccess(body.permissions);
+  }
   return { ok: true, value: change };
 }
 
-/** Quản trị tài khoản: GET danh sách, POST thêm, PATCH sửa vai trò / họ tên / mật khẩu / khóa. Chỉ Admin. */
+/** Quản trị tài khoản: GET danh sách, POST thêm, PATCH sửa vai trò / quyền / họ tên / mật khẩu / khóa. Chỉ Admin. */
 export async function handleAccountRequest(request: Request, env: AccountEnv, deps: AccountDeps): Promise<Response> {
   const adminId = await resolveAdmin(request, env, deps);
   if (!adminId) return fail(401, "ACCOUNT_UNAUTHORIZED", "Chỉ Admin được quản trị tài khoản.");
@@ -112,9 +119,11 @@ export async function handleAccountRequest(request: Request, env: AccountEnv, de
     if (change.id === adminId && ((change.role !== undefined && change.role !== "admin") || change.locked === true)) return fail(400, "ACCOUNT_SELF_LOCKOUT", "Không thể tự đổi vai trò hoặc tự khóa tài khoản của mình.");
     const before = await store.get(change.id);
     if (!before) return fail(404, "ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản.");
+    if (change.permissions !== undefined && (change.role ?? before.role) === "admin") return fail(400, "ACCOUNT_ADMIN_FULL_ACCESS", "Admin luôn có toàn quyền, không cần chọn từng mục.");
     await store.update(change);
-    const after: Account = { ...before, ...(change.role !== undefined ? { role: change.role } : {}), ...(change.fullName !== undefined ? { fullName: change.fullName } : {}), ...(change.locked !== undefined ? { locked: change.locked } : {}) };
+    const after: Account = { ...before, ...(change.permissions !== undefined ? { permissions: change.permissions } : {}), ...(change.role !== undefined ? { role: change.role } : {}), ...(change.fullName !== undefined ? { fullName: change.fullName } : {}), ...(change.locked !== undefined ? { locked: change.locked } : {}) };
     if (change.role !== undefined && change.role !== before.role) await audit("account.role", change.id, auditDoc(before), auditDoc(after));
+    if (change.permissions !== undefined && JSON.stringify(change.permissions) !== JSON.stringify(before.permissions)) await audit("account.permissions", change.id, auditDoc(before), auditDoc(after));
     if (change.fullName !== undefined && change.fullName !== before.fullName) await audit("account.update", change.id, auditDoc(before), auditDoc(after));
     if (change.locked !== undefined && change.locked !== before.locked) await audit(change.locked ? "account.lock" : "account.unlock", change.id, auditDoc(before), auditDoc(after));
     if (change.password !== undefined) await audit("account.password", change.id, null, { email: before.email });

@@ -3,7 +3,7 @@ import { BadgeCheck, BellRing, FileSpreadsheet, History, KeyRound, LogOut, Panel
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
 import { ChangePasswordModal } from "./ChangePasswordModal";
-import { routePath } from "./routes";
+import { canOpenView, routePath } from "./routes";
 import type { PageView } from "./shared";
 
 type NavItem = readonly [PageView, string, LucideIcon];
@@ -12,10 +12,8 @@ const NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
   { label: "Tài liệu", items: [["reports", "FORM Báo cáo (Excel)", FileSpreadsheet], ["skills", "Kho Skill AI", Sparkles], ["tools", "Công cụ", Wrench]] },
   { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["audit", "Nhật ký thay đổi", History]] },
 ];
-/** Mục chỉ admin thấy. */
-const ADMIN_ONLY: ReadonlySet<PageView> = new Set(["audit", "accounts"]);
 const COLLAPSED_KEY = "tnm.sideNav.collapsed";
-const ROLE_LABELS: Record<Actor["role"], string> = { admin: "Admin", hr: "HR" };
+const ROLE_LABELS: Record<Actor["role"], string> = { admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên" };
 
 /** Hai chữ đầu của email, làm hình đại diện. */
 const initialsOf = (email: string | null) => (email ?? "?").replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
@@ -43,7 +41,7 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
       </div>
       <nav aria-label="Chức năng">
         {NAV_GROUPS.map((group) => {
-          const items = group.items.filter(([key]) => actor.role === "admin" || !ADMIN_ONLY.has(key));
+          const items = group.items.filter(([key]) => canOpenView(actor, key));
           if (!items.length) return null;
           return <div className="nav-group" key={group.label}>
             <span className="nav-group-label">{group.label}</span>

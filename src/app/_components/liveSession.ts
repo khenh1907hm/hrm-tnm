@@ -1,9 +1,7 @@
-import type { Role } from "../../modules/auth/permissions";
-
-/** App chế độ thật dựng cho đúng một người dùng và một vai trò; bộ nhớ tạm sống cùng nó. */
-export type LiveBinding<A> = { userId: string; role: Role; app: A; dispose(): void };
+/** App chế độ thật dựng cho đúng một người dùng và một bộ quyền; bộ nhớ tạm sống cùng nó. `role` gồm cả vai trò lẫn các mục quyền. */
+export type LiveBinding<A> = { userId: string; role: string; app: A; dispose(): void };
 /** Phiên hiện tại: `role: null` là đang đọc vai trò từ hồ sơ. */
-export type CurrentSession = { userId: string; role: Role | null } | null;
+export type CurrentSession = { userId: string; role: string | null } | null;
 
 /** Chỉ trả app khi khớp đúng người và đúng vai trò của phiên hiện tại; không bao giờ trả app của tài khoản cũ. */
 export function readyLive<L extends LiveBinding<unknown>>(live: L | null, session: CurrentSession): L | null {

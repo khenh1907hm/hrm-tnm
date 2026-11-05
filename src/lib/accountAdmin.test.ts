@@ -6,7 +6,7 @@ const env = { supabaseUrl: "https://example.supabase.co", supabaseKey: "publisha
 const userFetch = (id: string | null) => vi.fn(async () => id ? new Response(JSON.stringify({ id }), { status: 200 }) : new Response("{}", { status: 401 })) as unknown as typeof fetch;
 const request = (method: string, body?: unknown, authorization = "Bearer user-jwt") => new Request("http://localhost/api/admin/accounts", { method, headers: { authorization, "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
-const account = (overrides: Partial<Account> = {}): Account => ({ id: "u2", email: "hr@tnm.vn", fullName: "Lan", role: "hr", createdAt: "2026-10-01T00:00:00Z", lastSignInAt: null, locked: false, ...overrides });
+const account = (overrides: Partial<Account> = {}): Account => ({ id: "u2", email: "hr@tnm.vn", fullName: "Lan", role: "hr", createdAt: "2026-10-01T00:00:00Z", lastSignInAt: null, locked: false, permissions: null, ...overrides });
 
 function memoryStore(initial: Account[] = [account({ id: "admin1", email: "admin@tnm.vn", role: "admin" }), account()]) {
   const accounts = new Map(initial.map((item) => [item.id, item]));
@@ -78,6 +78,20 @@ describe("handleAccountRequest", () => {
     expect((await patch({ id: "u2", role: "admin", locked: true })).status).toBe(200);
     expect(accounts.get("u2")).toMatchObject({ role: "admin", locked: true });
     expect((await patch({ id: "khong-co", role: "hr" })).status).toBe(404);
+  });
+
+  it("ACC_05 Admin chọn quyền từng người: tự thêm mục bắt buộc, chặn khóa lạ, ghi nhật ký, đặt lại được", async () => {
+    const { store, audit } = memoryStore();
+    const patch = (body: unknown) => handleAccountRequest(request("PATCH", body), env, deps(store));
+    const saved = await (await patch({ id: "u2", permissions: ["employees.export"] })).json() as { account: Account };
+    expect(saved.account.permissions).toEqual(["employees.view", "employees.export"]);
+    expect(saved.account.role).toBe("hr");
+    expect(audit.at(-1)).toMatchObject({ action: "account.permissions", entityId: "u2", actorId: "admin1" });
+    expect(await (await patch({ id: "u2", permissions: ["xoa-het"] })).json()).toMatchObject({ code: "ACCOUNT_PERMISSIONS_INVALID" });
+    expect(await (await patch({ id: "u2", permissions: "tools" })).json()).toMatchObject({ code: "ACCOUNT_PERMISSIONS_INVALID" });
+    expect(await (await patch({ id: "admin1", permissions: [] })).json()).toMatchObject({ code: "ACCOUNT_ADMIN_FULL_ACCESS" });
+    const reset = await (await patch({ id: "u2", permissions: null })).json() as { account: Account };
+    expect(reset.account.permissions).toBeNull();
   });
 
   it("ACC_04 mọi thay đổi tài khoản ghi nhật ký dưới tên Admin, không bao giờ chứa mật khẩu", async () => {

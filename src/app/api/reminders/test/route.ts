@@ -21,6 +21,11 @@ function buildDeps(): ReminderDeps {
       const { data } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
       return data?.role ?? null;
     },
+    lookupPermissions: async (userId) => {
+      if (!admin) return null;
+      const { data } = await admin.from("profiles").select("permissions").eq("id", userId).maybeSingle();
+      return data?.permissions ?? null;
+    },
     runReminders: null,
     sendTest: admin && mailer
       ? (actor) => createHrApp({ clock: systemClock, ids: randomIds(), repositories: createSupabaseRepositories(admin), mailer, profileBaseUrl: `${appUrl}/nhan-su/` }).reminders.sendTest(actor)

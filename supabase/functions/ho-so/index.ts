@@ -4,7 +4,7 @@
 // Quy tắc (đọc file, cấp mã, so CCCD, kiểm tra nhân sự) nằm ở src/modules/claude-ho-so và được đóng gói
 // vào hoSoRules.mjs bằng `npm run build:ho-so-fn` — web và máy chủ dùng chung một bộ quy tắc.
 //
-// Xác thực: Authorization: Bearer <JWT> của tài khoản vai trò admin hoặc hr (đọc từ bảng profiles).
+// Xác thực: Authorization: Bearer <JWT> của tài khoản có quyền "Nhập nhân sự" (đọc từ bảng profiles).
 // Tuỳ chọn: header x-ho-so-token (mã trong bảng ho_so_keys, chỉ lưu SHA-256) cho môi trường gọi thẳng.
 //
 // Body: { mode, file, overrides?: { phone?, startDate?, group? }, replace_photo?: boolean,
@@ -34,7 +34,7 @@ const rules = bundled as unknown as {
   updatedEmployeeRecord: (employee: Employee, input: Record<string, any>, changes: Change[], photo: unknown) => Employee;
 };
 const { HO_SO_FIELD_LABELS, messagesVi, maskCccd, parseHoSoFile, planHoSo, newEmployeeRecord, updatedEmployeeRecord } = rules;
-type Caller = { label: string; role: "admin" | "hr"; actorId: string; source: "web-nhap-tu-claude" | "skill-ho-so" };
+type Caller = { label: string; role: string; actorId: string; source: "web-nhap-tu-claude" | "skill-ho-so" };
 
 const BUCKET = "hr-files";
 const db = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -71,9 +71,12 @@ async function authenticate(req: Request): Promise<Caller | Response> {
   if (!jwt) return json(401, { ok: false, error: "Chưa đăng nhập" });
   const { data: auth, error: authErr } = await db.auth.getUser(jwt);
   if (authErr || !auth?.user) return json(401, { ok: false, error: "Phiên đăng nhập đã hết hạn, hãy đăng nhập lại" });
-  const { data: profile, error: profErr } = await db.from("profiles").select("role, full_name").eq("id", auth.user.id).maybeSingle();
+  const { data: profile, error: profErr } = await db.from("profiles").select("role, full_name, permissions").eq("id", auth.user.id).maybeSingle();
   if (profErr) return json(500, { ok: false, error: profErr.message });
-  if (profile?.role !== "admin" && profile?.role !== "hr") return fail(403, "FORBIDDEN");
+  // Khớp private.has_access('employees.import'): Admin luôn được; HR chưa tùy chỉnh được; ai được tick mục này thì được
+  const custom: unknown = profile?.permissions;
+  const allowed = profile?.role === "admin" || (["hr", "engineer", "employee"].includes(profile?.role ?? "") && (Array.isArray(custom) ? custom.includes("employees.import") : profile?.role === "hr"));
+  if (!profile || !allowed) return fail(403, "FORBIDDEN");
   return { label: profile.full_name || auth.user.email || auth.user.id, role: profile.role, actorId: auth.user.id, source: "web-nhap-tu-claude" };
 }
 

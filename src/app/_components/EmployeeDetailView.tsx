@@ -41,7 +41,7 @@ export function EmployeeDetailView(props: {
   const photoUrl = usePhotoUrl(selected.photo, props.loadPhoto);
   return <>
     <button className="back-button" onClick={props.onBack}>← Quay lại danh sách</button>
-    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{can(actor, "employeeArchive") && <>{selected.archivedAt ? <button className="button" onClick={props.onRestore}>Khôi phục</button> : <><button className="button" onClick={props.onEdit}>Sửa hồ sơ</button><button className="button danger" onClick={props.onArchive}>Lưu trữ</button></>}</>}{!selected.archivedAt && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
+    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{selected.archivedAt ? can(actor, "employeeArchive") && <button className="button" onClick={props.onRestore}>Khôi phục</button> : <>{can(actor, "employeeWrite") && <button className="button" onClick={props.onEdit}>Sửa hồ sơ</button>}{can(actor, "employeeArchive") && <button className="button danger" onClick={props.onArchive}>Lưu trữ</button>}</>}{!selected.archivedAt && can(actor, "export") && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
     <section className="panel detail-panel">
       <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {selected.photo && (
@@ -53,7 +53,7 @@ export function EmployeeDetailView(props: {
           <h2>Thông tin cá nhân</h2>
           <dl>{[["Ngày sinh", formatDate(selected.dob)], ["Giới tính", selected.gender], ["CCCD", provinceOfCccd(selected.cccd) ? `${selected.cccd} (${provinceOfCccd(selected.cccd)})` : selected.cccd], ["Điện thoại", selected.phone], ["Nguyên quán", selected.home || "Chưa có"], ["Thường trú", selected.address || "Chưa có"], ["Địa chỉ hiện tại", selected.currentAddress || "Chưa có"], ["Ngày làm nghề", formatDate(selected.startDate)], ["Ngày vào TNM", (selected.companyStartDate ? formatDate(selected.companyStartDate) : "") || "Chưa có"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
           <div className="employee-signature-detail"><span className="muted">Chữ ký</span>{selected.signatureImage ? <div className="employee-signature-preview"><img src={selected.signatureImage} alt={`Chữ ký ${selected.name}`} /></div> : "Chưa có"}</div>
-          <button className="button" onClick={async () => { const result = await app.employees.revealCccd(actor, selected.id); if (result.ok) props.setNotice(`CCCD đầy đủ: ${result.value}`); }}>Hiện CCCD đầy đủ</button>
+          {can(actor, "employeeReveal") && <button className="button" onClick={async () => { const result = await app.employees.revealCccd(actor, selected.id); if (result.ok) props.setNotice(`CCCD đầy đủ: ${result.value}`); }}>Hiện CCCD đầy đủ</button>}
         </div>
       </div>
     </section>
@@ -87,7 +87,7 @@ export function EmployeeDetailView(props: {
           })}</tbody>
         </table>
       </div>
-      {can(actor, "employeeWrite") && (
+      {can(actor, "certificateWrite") && (
         <div className="cert-add-more">
           <span className="muted">Thêm chứng chỉ khác cùng loại:</span>
           {certificateTypes.filter((type) => !type.archived).map((type) => <button className="button" key={type.id} onClick={() => props.onCertificateForm(type.key)}><Plus className="ico" size={14} aria-hidden="true" /> {type.key === "atld" ? "Nhóm ATLĐ khác" : type.name}</button>)}

@@ -41,7 +41,7 @@ import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import { EmployeeWorkspace, ToolsPage } from "./_components/EmployeeWorkspace";
 import type { FileFolder } from "./_components/fileStore";
 import { photoRef } from "../modules/employees/photo";
-import { parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
+import { canOpenView, firstOpenView, parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
 import SkillsClient from "./skills/SkillsClient";
 
 /** Chọn màn hình theo trạng thái: đang tải, đăng nhập (chế độ thật) hoặc vào app. */
@@ -52,7 +52,7 @@ export default function HrmClient() {
   // Kho Skill xem công khai được, không bắt đăng nhập
   if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
   if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
-  if (backend.status === "employee") return <EmployeeWorkspace role={backend.role} mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
+  if (backend.status === "employee") return <EmployeeWorkspace role={backend.role} canUseTools={backend.canUseTools} mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
   return <HrmWorkspace backend={backend} />;
 }
 
@@ -60,7 +60,9 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const { app, actor, setActor, fileStore } = backend;
   // Màn hình đang mở lấy từ URL: mỗi mục có đường dẫn riêng, tải lại trang hay mở link vẫn đúng chỗ
   const route = parseRoute(usePathname()) ?? { view: "employees" as const, employeeId: null };
-  const view = route.view;
+  // Mở trang không có quyền (gõ URL, link cũ, vừa bị thu quyền) thì về trang đầu tiên được vào
+  const viewAllowed = canOpenView(actor, route.view);
+  const view: PageView = viewAllowed ? route.view : firstOpenView(actor);
   // Bộ lọc danh sách đọc từ URL (/nhan-su?page=3&q=…) để Back, F5, chia sẻ link về đúng chỗ
   const [filters, setFilters] = useState<EmployeeFilters>(() => typeof window === "undefined" ? DEFAULT_EMPLOYEE_FILTERS : filtersFromSearch(window.location.search));
   const filtersRef = useRef(filters);
@@ -244,7 +246,11 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     else navigate("employees", employee.id);
   };
 
-  const routeEmployeeId = route.employeeId;
+  useEffect(() => {
+    if (!viewAllowed) window.history.replaceState(window.history.state, "", routePath(view));
+  }, [viewAllowed, view, route.view]);
+
+  const routeEmployeeId = viewAllowed ? route.employeeId : null;
   const selectedId = selected?.id ?? null;
   useEffect(() => {
     if (!routeEmployeeId || routeEmployeeId === selectedId) return;
@@ -431,7 +437,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "skills" && <SkillsClient embedded />}
         {view === "tools" && <ToolsPage />}
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
-        {view === "accounts" && actor.role === "admin" && <AccountsView actor={actor} mode={backend.mode} setNotice={setNotice} />}
+        {view === "accounts" && actor.role === "admin" && <AccountsView actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}
         {(view === "settings" || view === "certTypes") && <SettingsPanel key={view} section={view === "certTypes" ? "types" : "emails"} app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal

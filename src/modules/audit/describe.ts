@@ -1,3 +1,4 @@
+import { ACCESS_ITEMS } from "../auth/permissions";
 import type { AuditEvent } from "./types";
 
 /** Tên thao tác dễ đọc; thao tác chưa có tên thì hiện mã gốc. */
@@ -27,6 +28,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   "reminder.test": "Gửi thử email nhắc hạn",
   "account.create": "Thêm tài khoản",
   "account.role": "Đổi vai trò tài khoản",
+  "account.permissions": "Đổi quyền tài khoản",
   "account.update": "Sửa tài khoản",
   "account.password": "Đặt lại mật khẩu",
   "account.lock": "Khóa tài khoản",
@@ -46,7 +48,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   type: "Loại", title: "Tên chứng chỉ", number: "Số", issueDate: "Ngày cấp", expiryDate: "Ngày hết hạn",
   document: "Tệp chính", supplementaryFiles: "Tệp bổ sung", state: "Tình trạng", safetyGroup: "Nhóm an toàn",
   label: "Nhãn", file: "Tệp", reminderEmails: "Email nhận nhắc hạn", sendExpiredNotice: "Nhắc cả chứng chỉ đã hết hạn",
-  role: "Vai trò", email: "Email", fullName: "Họ tên", locked: "Đã khóa",
+  role: "Vai trò", email: "Email", fullName: "Họ tên", locked: "Đã khóa", permissions: "Quyền",
 };
 
 /** Trường kỹ thuật, không cần hiện khi so sánh (expectedVersion lọt vào bản ghi cũ từ dữ liệu nhập). */
@@ -54,6 +56,7 @@ const HIDDEN_FIELDS = new Set(["id", "version", "expectedVersion", "excludeId", 
 /** Trống theo nghĩa người đọc: không có, null hay chuỗi rỗng đều như nhau. */
 const comparable = (value: unknown): string => JSON.stringify(value === undefined || value === "" ? null : value);
 const VALUE_LABELS: Readonly<Record<string, string>> = {
+  ...Object.fromEntries(ACCESS_ITEMS.map((item) => [item.key, item.label])),
   active: "Đang làm việc", on_leave: "Tạm nghỉ", resigned: "Đã nghỉ việc", current: "Hiện hành", replaced: "Đã thay thế", archived: "Đã ẩn",
 };
 

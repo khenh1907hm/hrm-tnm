@@ -180,9 +180,9 @@ export function EmployeeListView(props: {
   return <>
     <div className="page-head">
       <div><h1>Nhân sự</h1><p>Quản lý hồ sơ và tình trạng nhân sự</p></div>
-      {(can(actor, "employeeWrite") || props.onImportClaude) && <div className="button-row">
-        {props.onImportClaude && <button className="button" onClick={props.onImportClaude}><Sparkles className="ico" size={16} aria-hidden="true" /> Nhập từ Claude</button>}
-        {can(actor, "employeeWrite") && <button className="button" onClick={props.onImport}><FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel</button>}
+      {(can(actor, "employeeWrite") || can(actor, "employeeImport")) && <div className="button-row">
+        {props.onImportClaude && can(actor, "employeeImport") && <button className="button" onClick={props.onImportClaude}><Sparkles className="ico" size={16} aria-hidden="true" /> Nhập từ Claude</button>}
+        {can(actor, "employeeImport") && <button className="button" onClick={props.onImport}><FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel</button>}
         {can(actor, "employeeWrite") && <button className="button primary" onClick={props.onCreate}><Plus className="ico" size={16} aria-hidden="true" /> Thêm nhân sự</button>}
       </div>}
     </div>
@@ -223,9 +223,9 @@ export function EmployeeListView(props: {
           <span className="selection-count"><b>{selectedIds.length}</b> đã chọn</span>
           {allVisibleSelected && pageInfo.total > selectedIds.length && <button type="button" className="link-button" onClick={props.onSelectAllMatching}>Chọn tất cả {pageInfo.total} kết quả</button>}
           <span className="selection-actions">
-            <button type="button" className="button success" disabled={props.rosterBusy} onClick={props.onExportRoster}><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> {props.rosterBusy ? "Đang tạo Excel…" : "Xuất Excel thông tin"}</button>
+            {can(actor, "export") && <><button type="button" className="button success" disabled={props.rosterBusy} onClick={props.onExportRoster}><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> {props.rosterBusy ? "Đang tạo Excel…" : "Xuất Excel thông tin"}</button>
             <button type="button" className="button" onClick={props.onExportSelected}><FileDown className="ico" size={16} aria-hidden="true" /> Xuất hồ sơ theo mẫu</button>
-            <button type="button" className="button" onClick={props.onExportCertificates}><FileArchive className="ico" size={16} aria-hidden="true" /> Tải thư mục chứng chỉ</button>
+            <button type="button" className="button" onClick={props.onExportCertificates}><FileArchive className="ico" size={16} aria-hidden="true" /> Tải thư mục chứng chỉ</button></>}
             <button type="button" className="button ghost" onClick={() => onSelectedIdsChange([])}>Bỏ chọn</button>
           </span>
         </div>

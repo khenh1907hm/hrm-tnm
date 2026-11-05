@@ -13,7 +13,7 @@ const TIME_FORMAT = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Mi
 /** Người thực hiện: "Bạn" nếu là chính mình, còn lại vai trò + đuôi mã tài khoản. */
 function actorLabel(event: AuditEvent, me: Actor): string {
   if (event.actorId === me.id) return "Bạn";
-  const role = event.role === "admin" ? "Admin" : event.role === "hr" ? "HR" : "Hệ thống";
+  const role = ({ admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên" } as Record<string, string>)[event.role] ?? "Hệ thống";
   return `${role} · …${event.actorId.slice(-6)}`;
 }
 

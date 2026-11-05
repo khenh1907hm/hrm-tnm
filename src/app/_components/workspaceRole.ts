@@ -1,7 +1,7 @@
 import type { Role } from "../../modules/auth/permissions";
 import type { PageView } from "./shared";
 
-/** Vai trò chỉ dùng khung giới hạn (Công cụ, Kho Skill AI), không dựng app nhân sự. */
+/** Vai trò mặc định chỉ dùng khung giới hạn (Công cụ, Kho Skill AI); Admin tick thêm quyền nhân sự thì vào app nhân sự. */
 export type LimitedRole = "engineer" | "employee";
 /** Vai trò đọc từ bảng profiles; giá trị lạ hoặc thiếu → "pending" (chờ cấp quyền). */
 export type ProfileRole = Role | LimitedRole | "pending";

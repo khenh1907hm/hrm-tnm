@@ -8,6 +8,7 @@ import { ChangePasswordModal } from "./ChangePasswordModal";
 import { EMPLOYEE_VIEWS, parseRoute, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
 import { LIMITED_ROLE_INFO, type LimitedRole } from "./workspaceRole";
+import type { ActorRole } from "../../modules/auth/permissions";
 
 const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
   skills: ["Kho Skill AI", Sparkles],
@@ -26,21 +27,25 @@ export function ToolsPage() {
 }
 
 /**
- * Khung app giới hạn cho vai trò Kỹ sư và Nhân viên: chỉ có Công cụ và Kho Skill AI.
+ * Khung app giới hạn cho người không có mục nhân sự nào: chỉ có Công cụ (nếu được cấp) và Kho Skill AI.
  * Kỹ sư mở thẳng trang Công cụ; Nhân viên mở Kho Skill AI.
- * Không dựng app nhân sự, không tải dữ liệu nhân sự (RLS ở Supabase cũng chặn các vai trò này).
+ * Không dựng app nhân sự, không tải dữ liệu nhân sự (RLS ở Supabase cũng chặn những người này).
  */
-export function EmployeeWorkspace(props: { role?: LimitedRole; email: string | null; onSignOut: () => void; mode: "demo" | "live"; onExitPreview?: (() => void) | undefined }) {
-  const info = LIMITED_ROLE_INFO[props.role ?? "employee"];
+export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; canUseTools?: boolean; email: string | null; onSignOut: () => void; mode: "demo" | "live"; onExitPreview?: (() => void) | undefined }) {
+  const roleInfo = LIMITED_ROLE_INFO[(props.role === "hr" ? "employee" : props.role ?? "employee") satisfies LimitedRole];
+  const label = props.role === "hr" ? "HR" : roleInfo.label;
+  const canUseTools = props.canUseTools ?? true;
+  const nav = roleInfo.nav.filter((key) => canUseTools || key !== "tools");
+  const home: PageView = canUseTools ? roleInfo.home : "skills";
   const route = parseRoute(usePathname());
-  const allowed = route && EMPLOYEE_VIEWS.includes(route.view) && !route.employeeId;
-  const view: PageView = allowed ? route.view : info.home;
+  const allowed = route && EMPLOYEE_VIEWS.includes(route.view) && nav.includes(route.view) && !route.employeeId;
+  const view: PageView = allowed ? route.view : home;
   const [changingPassword, setChangingPassword] = useState(false);
 
   // Trang gốc hoặc đường dẫn của trang nhân sự (vd /nhan-su) → chuyển về trang mở đầu của vai trò
   useEffect(() => {
-    if (!allowed) window.history.replaceState(window.history.state, "", routePath(info.home));
-  }, [allowed, info.home]);
+    if (!allowed) window.history.replaceState(window.history.state, "", routePath(home));
+  }, [allowed, home]);
   useEffect(() => { document.title = `${VIEW_TITLES[view]} · Thiên Nhật Minh`; }, [view]);
 
   const navigate = useCallback((next: PageView) => {
@@ -51,9 +56,9 @@ export function EmployeeWorkspace(props: { role?: LimitedRole; email: string | n
   return (
     <div className="app-shell">
       <aside className="side-nav">
-        <div className="brand"><div className="brand-mark">TNM</div><div><b>Thiên Nhật Minh</b><span>{info.label}</span></div></div>
+        <div className="brand"><div className="brand-mark">TNM</div><div><b>Thiên Nhật Minh</b><span>{label}</span></div></div>
         <nav aria-label="Chức năng">
-          {info.nav.map((key) => [key, ...NAV_META[key]!] as const).map(([key, label, Icon]) => (
+          {nav.map((key) => [key, ...NAV_META[key]!] as const).map(([key, label, Icon]) => (
             <a className={view === key ? "nav-item active" : "nav-item"} key={key} href={routePath(key)} aria-current={view === key ? "page" : undefined} onClick={(event) => {
               if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
               event.preventDefault();
@@ -66,8 +71,8 @@ export function EmployeeWorkspace(props: { role?: LimitedRole; email: string | n
         </nav>
         <div className="side-foot">
           {props.mode === "demo"
-            ? <><span>Đang xem thử vai trò {info.label}</span>{props.onExitPreview && <button type="button" className="button" onClick={props.onExitPreview}>Quay lại Admin</button>}</>
-            : <><span className="side-user" title={props.email ?? ""}>{props.email}</span><span className="pill">{info.label}</span></>}
+            ? <><span>Đang xem thử vai trò {label}</span>{props.onExitPreview && <button type="button" className="button" onClick={props.onExitPreview}>Quay lại Admin</button>}</>
+            : <><span className="side-user" title={props.email ?? ""}>{props.email}</span><span className="pill">{label}</span></>}
           {props.mode === "live" && props.email && <button type="button" className="button" onClick={() => setChangingPassword(true)}><KeyRound className="ico" size={16} aria-hidden="true" /> Đổi mật khẩu</button>}
           {props.mode === "live" && <button type="button" className="button" onClick={props.onSignOut}><LogOut className="ico" size={16} aria-hidden="true" /> Đăng xuất</button>}
           {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}

@@ -1,3 +1,4 @@
+import { hasAccess, type AccessKey, type Actor } from "../../modules/auth/permissions";
 import type { PageView } from "./shared";
 
 /** Đường dẫn riêng của từng màn hình (không dấu, dễ gõ và chia sẻ). */
@@ -16,6 +17,31 @@ export const VIEW_PATHS: Record<PageView, string> = {
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
 export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools"];
+
+/** Mục quyền cần có để mở từng màn hình; null là ai cũng mở được, "admin" là chỉ Admin. */
+const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
+  employees: "employees.view",
+  alerts: "employees.view",
+  signatures: "signatures.manage",
+  reports: "reports.manage",
+  settings: "reminders.manage",
+  skills: null,
+  tools: "tools",
+  audit: "admin",
+  accounts: "admin",
+  certTypes: "certificateTypes.manage",
+};
+
+export function canOpenView(actor: Actor, view: PageView): boolean {
+  const needed = VIEW_ACCESS[view];
+  if (needed === null) return true;
+  return needed === "admin" ? actor.role === "admin" : hasAccess(actor, needed);
+}
+
+/** Trang mở đầu của người này: màn hình đầu tiên họ được vào (Kho Skill AI luôn mở được). */
+export function firstOpenView(actor: Actor): PageView {
+  return (["employees", "signatures", "tools"] as const).find((view) => canOpenView(actor, view)) ?? "skills";
+}
 
 /** Tiêu đề tab trình duyệt theo màn hình. */
 export const VIEW_TITLES: Record<PageView, string> = {

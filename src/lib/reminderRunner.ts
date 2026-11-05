@@ -2,7 +2,7 @@ import type { ReminderRunResult } from "../app-core/createHrApp";
 import type { ReminderTestResult } from "../app-core/use-cases/reminders";
 import { messagesVi } from "../messages.vi";
 import type { Result } from "./result";
-import type { Actor } from "../modules/auth/permissions";
+import { actorFromProfile, can, type Actor } from "../modules/auth/permissions";
 
 type Fetch = typeof fetch;
 
@@ -10,6 +10,8 @@ export type ReminderEnv = { cronSecret?: string | undefined; supabaseUrl?: strin
 export type ReminderDeps = {
   /** Vai trò trong bảng profiles của người dùng; null nếu không có. */
   lookupRole: (userId: string) => Promise<string | null>;
+  /** Các mục quyền Admin đã tick riêng; không truyền hoặc null thì theo mặc định của vai trò. */
+  lookupPermissions?: (userId: string) => Promise<unknown>;
   /** null khi máy chủ chưa cấu hình đủ (khóa Supabase bí mật hoặc SMTP). */
   runReminders: ((actor: Actor) => Promise<Result<ReminderRunResult>>) | null;
   /** Gửi một email mẫu; null khi máy chủ chưa cấu hình đủ. */
@@ -33,8 +35,9 @@ async function resolveActor(request: Request, env: ReminderEnv, deps: ReminderDe
   const user = await response.json() as { id?: string };
   if (!user.id) return null;
   const role = await deps.lookupRole(user.id);
-  // Admin và HR được gửi nhắc hạn; quyền cụ thể kiểm tra tiếp trong use case
-  return role === "admin" || role === "hr" ? { id: user.id, role } : null;
+  const actor = actorFromProfile(user.id, role, await deps.lookupPermissions?.(user.id));
+  // Chỉ người có quyền "Cài đặt email và gửi nhắc hạn"
+  return actor && can(actor, "reminderRun") ? actor : null;
 }
 
 /** Chạy nhắc hạn: lịch Vercel Cron (CRON_SECRET) hoặc Admin bấm nút trong app (token đăng nhập). */
