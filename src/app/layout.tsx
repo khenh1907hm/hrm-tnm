@@ -15,7 +15,7 @@ const beVietnamPro = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Quản lý nhân sự Thiên Nhật Minh",
+  title: "Quản trị Online TNM",
   description: "Hệ thống quản lý hồ sơ nhân sự và chứng chỉ Thiên Nhật Minh.",
 };
 

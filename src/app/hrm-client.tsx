@@ -267,7 +267,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   }, [routeEmployeeId]);
   /** Hồ sơ đang hiển thị: chỉ khi URL trỏ đúng người đã tải xong. */
   const detail = view === "employees" && routeEmployeeId && selected?.id === routeEmployeeId ? selected : null;
-  const pageTitle = `${detail ? detail.name : VIEW_TITLES[view]} · Thiên Nhật Minh`;
+  const pageTitle = `${detail ? detail.name : VIEW_TITLES[view]} · Quản trị Online TNM`;
   useEffect(() => { document.title = pageTitle; }, [pageTitle]);
 
   const openEdit = async () => {

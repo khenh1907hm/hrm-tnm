@@ -11,7 +11,7 @@ export async function generateMetadata({ params }: PageProps<"/[[...slug]]">): P
   const { slug = [] } = await params;
   const route = parseRoute(pathOf(slug));
   if (!route || !slug.length) return {};
-  return { title: `${route.employeeId ? "Hồ sơ nhân sự" : VIEW_TITLES[route.view]} · Thiên Nhật Minh` };
+  return { title: `${route.employeeId ? "Hồ sơ nhân sự" : VIEW_TITLES[route.view]} · Quản trị Online TNM` };
 }
 
 /** Mọi màn hình của app (/nhan-su, /canh-bao, /nhan-su/<id>…) dùng chung một khung có sidebar. */

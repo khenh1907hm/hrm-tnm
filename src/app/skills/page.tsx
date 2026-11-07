@@ -3,7 +3,7 @@ import HrmClient from "../hrm-client";
 import { ToastProvider } from "../_components/Toast";
 
 export const metadata: Metadata = {
-  title: "Kho Skill AI · Thiên Nhật Minh",
+  title: "Kho Skill AI · Quản trị Online TNM",
   description: "Thư viện gói skill .zip cho Claude, kèm mô tả, ảnh minh họa và hướng dẫn cài đặt.",
 };
 
