@@ -93,6 +93,8 @@ tbody tr:hover{background:var(--soft)}
 .login-card h1{font-size:22px;margin:4px 0 0}
 .login-card .button{width:100%;min-height:42px}
 .login-hint{font-size:13px;margin:0}
+.login-brand{padding:0;gap:12px}.login-logo{width:56px;height:auto;flex-shrink:0}
+.login-site{justify-self:center;font-size:12px;color:var(--muted);text-decoration:none;padding-top:10px;border-top:1px solid var(--line);width:100%;text-align:center}.login-site:hover,.login-site:focus-visible{color:var(--brand);text-decoration:underline}
 .side-user{font-size:13px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
 .filter-grid{flex-wrap:wrap;align-items:center}
 .filter-grid input[aria-label="Tìm nhân sự"]{flex:1 1 240px}
