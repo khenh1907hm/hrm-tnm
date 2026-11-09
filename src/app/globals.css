@@ -573,6 +573,7 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .app-shell{transition:grid-template-columns .2s ease}.app-shell:has(.side-nav.is-collapsed){grid-template-columns:68px minmax(0,1fr)}
 .side-nav{background:var(--nav-bg);border-right:0;color:var(--nav-ink);padding:16px 10px;gap:8px;overflow-y:auto;overflow-x:hidden}
 .side-nav .brand{padding:0 4px 10px;gap:10px}.side-nav .brand-mark{width:34px;height:34px;border-radius:9px;font-size:12px;flex-shrink:0;box-shadow:none}
+.side-nav .brand-logo{width:44px;height:auto;flex-shrink:0}
 .side-nav .brand-text{min-width:0;flex:1}.side-nav .brand b{color:var(--nav-ink-strong);font-size:14px;font-weight:600;white-space:nowrap}.side-nav .brand span{color:var(--nav-ink);font-size:12px;white-space:nowrap}
 .side-collapse{border:0;background:none;color:var(--nav-ink);padding:6px;border-radius:7px;display:grid;place-items:center;flex-shrink:0}.side-collapse:hover{background:rgba(255,255,255,.08);color:var(--nav-ink-strong)}
 .side-nav nav{gap:0}.nav-group{display:flex;flex-direction:column;gap:2px;margin-bottom:6px}

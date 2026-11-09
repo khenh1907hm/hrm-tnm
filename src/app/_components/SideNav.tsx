@@ -1,5 +1,6 @@
 "use client";
 import { BadgeCheck, BellRing, FileSpreadsheet, History, KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
 import { ChangePasswordModal } from "./ChangePasswordModal";
@@ -33,8 +34,8 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
   return (
     <aside className={collapsed ? "side-nav is-collapsed" : "side-nav"}>
       <div className="brand">
-        <div className="brand-mark">TNM</div>
-        <div className="brand-text"><b>Thiên Nhật Minh</b><span>Quản lý nhân sự</span></div>
+        <Image className="brand-logo" src="/tnm-emblem.png" alt="Logo Thiên Nhật Minh" width={240} height={150} priority />
+        <div className="brand-text"><b>Thiên Nhật Minh</b><span>Quản trị Online TNM</span></div>
         <button type="button" className="side-collapse" onClick={toggle} aria-label={collapsed ? "Mở rộng thanh bên" : "Thu gọn thanh bên"} title={collapsed ? "Mở rộng" : "Thu gọn"}>
           {collapsed ? <PanelLeftOpen size={18} aria-hidden="true" /> : <PanelLeftClose size={18} aria-hidden="true" />}
         </button>
