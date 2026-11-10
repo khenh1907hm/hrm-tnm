@@ -31,6 +31,8 @@ export const ACCESS_ITEMS = [
   { key: "tools", group: "Tài liệu", label: "Công cụ", hint: "Ảnh Trước / Sau và tách nền ảnh.", requires: [], grants: [] },
   { key: "projects.view", group: "Dự án", label: "Xem mọi dự án và giờ công", hint: "Không gồm số tiền: tiền chỉ Admin và PM của dự án xem được. Người trong dự án luôn xem được dự án của mình.", requires: [], grants: [] },
   { key: "projects.manage", group: "Dự án", label: "Tạo, sửa dự án", hint: "Tạo dự án mới, gán PM, sửa thông tin và ngân sách của mọi dự án.", requires: ["projects.view"], grants: [] },
+  { key: "purchases.view", group: "Mua hàng", label: "Xem mọi đơn hàng", hint: "Xem đơn hàng của mọi người, cả dự án và văn phòng. Ai cũng tự lập và xem đơn của mình; duyệt đơn chỉ người phê duyệt.", requires: [], grants: [] },
+  { key: "purchases.pay", group: "Mua hàng", label: "Thực hiện chi (kế toán)", hint: "Chi tạm ứng và thanh toán cho các khoản đã được sếp duyệt.", requires: ["purchases.view"], grants: [] },
 ] as const satisfies readonly { key: string; group: string; label: string; hint: string; requires: readonly string[]; grants: readonly Permission[] }[];
 export type AccessKey = typeof ACCESS_ITEMS[number]["key"];
 
@@ -68,8 +70,8 @@ export function effectiveAccess(role: string, stored: unknown): readonly AccessK
   return Array.isArray(stored) ? normalizeAccess(stored) : defaultAccess(role);
 }
 
-/** Có mục nào ngoài Công cụ và Dự án thì mới cần dựng app nhân sự; chỉ có Dự án thì dùng khung giới hạn kèm trang Dự án. */
-export const needsHrWorkspace = (access: readonly AccessKey[]) => access.some((key) => key !== "tools" && !key.startsWith("projects."));
+/** Có mục nào ngoài Công cụ, Dự án, Mua hàng thì mới cần dựng app nhân sự; còn lại dùng khung giới hạn kèm các trang đó. */
+export const needsHrWorkspace = (access: readonly AccessKey[]) => access.some((key) => key !== "tools" && !key.startsWith("projects.") && !key.startsWith("purchases."));
 
 /** Dựng tác nhân từ dòng profiles; null nếu chưa được cấp quyền. Dùng cho các API ở máy chủ. */
 export function actorFromProfile(id: string, role: unknown, stored: unknown): Actor | null {

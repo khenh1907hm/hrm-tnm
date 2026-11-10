@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, FolderKanban, KeyRound, LogOut, Sparkles, Wrench, type LucideIcon } from "lucide-react";
+import { ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles, Wrench, type LucideIcon } from "lucide-react";
+import { PurchasesPage } from "./purchases/PurchasesPage";
+import { getPurchaseStore } from "./purchases/usePurchaseStore";
 import SkillsClient from "../skills/SkillsClient";
 import { BackgroundRemoverTool } from "./BackgroundRemoverTool";
 import { BeforeAfterTool } from "./BeforeAfterTool";
 import { ChangePasswordModal } from "./ChangePasswordModal";
-import { EMPLOYEE_VIEWS, parseRoute, projectPath, routePath, VIEW_TITLES } from "./routes";
+import { EMPLOYEE_VIEWS, parseRoute, projectPath, purchasePath, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
 import { LIMITED_ROLE_INFO, type LimitedRole } from "./workspaceRole";
 import { hasAccess, type Actor, type ActorRole } from "../../modules/auth/permissions";
@@ -19,6 +21,7 @@ const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
   tools: ["Công cụ", Wrench],
   projects: ["Dự án", FolderKanban],
   timesheet: ["Chấm công", ClipboardCheck],
+  purchases: ["Đặt hàng", ShoppingCart],
 };
 
 /**
@@ -117,6 +120,8 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
         {view === "tools" && <ToolsPage />}
         {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
           onOpen={(projectId) => { const path = projectId ? projectPath(projectId) : routePath("projects"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />)}
+        {view === "purchases" && props.actor && <PurchasesPage store={getPurchaseStore(props.mode)} projectStore={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} orderId={route?.purchaseId ?? null} setNotice={setNotice}
+          onOpen={(orderId) => { const path = orderId ? purchasePath(orderId) : routePath("purchases"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />}
         {view === "timesheet" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} setNotice={setNotice} onOpenProject={(projectId) => window.history.pushState(null, "", projectPath(projectId))} />)}
       </main>
     </div>

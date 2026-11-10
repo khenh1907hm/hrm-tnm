@@ -13,6 +13,7 @@ import {
 import type { Notify } from "../Toast";
 import { CostsTab } from "./CostsTab";
 import { ChecksTab } from "./ChecksTab";
+import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { MembersTab } from "./MembersTab";
 import { OverviewTab } from "./OverviewTab";
 import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from "./projectShared";
@@ -63,8 +64,8 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "members" | "timesheets" | "checks" | "costs" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["members", "Sơ đồ & thành viên"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "members" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["members", "Sơ đồ & thành viên"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["purchases", "Đặt hàng"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
 
 export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employees: EmployeeSource; project: Project; setNotice: Notify; onBack: () => void; onEdit: () => void; onChanged: () => void; children?: ReactNode }) {
   const { store, project, actor, setNotice } = props;
@@ -113,6 +114,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "costs") return <CostsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
+        if (tab === "purchases") return <ProjectPurchasesTab {...tabProps} />;
         return <ReportsTab {...tabProps} />;
       })()}
       {props.children}

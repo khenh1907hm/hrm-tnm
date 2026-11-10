@@ -31,7 +31,7 @@ describe("routes", () => {
   it("trang Công cụ có URL riêng; Nhân viên chỉ vào Kho Skill AI và Công cụ", () => {
     expect(routePath("tools")).toBe("/cong-cu");
     expect(parseRoute("/cong-cu")).toEqual({ view: "tools", employeeId: null });
-    expect(EMPLOYEE_VIEWS).toEqual(["skills", "tools", "projects", "timesheet"]);
+    expect(EMPLOYEE_VIEWS).toEqual(["skills", "tools", "projects", "timesheet", "purchases"]);
   });
 
   it("đường dẫn lạ thì trả null", () => {

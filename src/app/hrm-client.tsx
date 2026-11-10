@@ -41,7 +41,9 @@ import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import { EmployeeWorkspace, ToolsPage } from "./_components/EmployeeWorkspace";
 import type { FileFolder } from "./_components/fileStore";
 import { photoRef } from "../modules/employees/photo";
-import { canOpenView, firstOpenView, parseRoute, projectPath, routePath, VIEW_TITLES } from "./_components/routes";
+import { canOpenView, firstOpenView, parseRoute, projectPath, purchasePath, routePath, VIEW_TITLES } from "./_components/routes";
+import { PurchasesPage } from "./_components/purchases/PurchasesPage";
+import { getPurchaseStore } from "./_components/purchases/usePurchaseStore";
 import SkillsClient from "./skills/SkillsClient";
 import { ProjectsPage } from "./_components/projects/ProjectsPage";
 import { TimesheetPage } from "./_components/projects/TimesheetPage";
@@ -126,6 +128,11 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     },
   } : null, [app, actor]);
   const projectStore = useProjectStore(backend.mode, employeeSource);
+  const purchaseStore = getPurchaseStore(backend.mode);
+  const openPurchase = useCallback((orderId: string | null) => {
+    const path = orderId ? purchasePath(orderId) : routePath("purchases");
+    if (path !== window.location.pathname) window.history.pushState(null, "", path);
+  }, []);
   const openProject = useCallback((projectId: string | null) => {
     const path = projectId ? projectPath(projectId) : routePath("projects");
     if (path !== window.location.pathname) window.history.pushState(null, "", path);
@@ -456,6 +463,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
+        {view === "purchases" && <PurchasesPage store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
         {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}
         {view === "accounts" && actor.role === "admin" && <AccountsView employees={employeeSource} actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}
         {(view === "settings" || view === "certTypes") && <SettingsPanel key={view} section={view === "certTypes" ? "types" : "emails"} app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
