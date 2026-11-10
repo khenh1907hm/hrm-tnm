@@ -61,10 +61,10 @@ describe("Supabase repositories", () => {
     expect((await audit.list()).map((event) => event.id)).toEqual(["a1", "a2"]);
 
     const settings = new SupabaseSettingsRepository(client);
-    expect(await settings.get()).toEqual({ reminderEmails: [], sendExpiredNotice: false, reminderDays: 30, version: 0 });
-    expect(await settings.replace({ reminderEmails: ["hr@example.com"], sendExpiredNotice: true, reminderDays: 30, version: 1 }, 3)).toBe(false);
-    expect(await settings.replace({ reminderEmails: ["hr@example.com"], sendExpiredNotice: true, reminderDays: 30, version: 1 }, 0)).toBe(true);
-    expect(await settings.get()).toEqual({ reminderEmails: ["hr@example.com"], sendExpiredNotice: true, reminderDays: 30, version: 1 });
+    expect(await settings.get()).toEqual({ reminderEmails: [], sendExpiredNotice: false, dailyDigestEmail: true, reminderDays: 30, version: 0 });
+    expect(await settings.replace({ reminderEmails: ["hr@example.com"], sendExpiredNotice: true, dailyDigestEmail: true, reminderDays: 30, version: 1 }, 3)).toBe(false);
+    expect(await settings.replace({ reminderEmails: ["hr@example.com"], sendExpiredNotice: true, dailyDigestEmail: true, reminderDays: 30, version: 1 }, 0)).toBe(true);
+    expect(await settings.get()).toEqual({ reminderEmails: ["hr@example.com"], sendExpiredNotice: true, dailyDigestEmail: true, reminderDays: 30, version: 1 });
 
     const reminders = new SupabaseReminderLogRepository(client);
     await reminders.add({ identity: "c1|30|2027-01-01", certificateId: "c1", sentOn: "2026-12-02" });
@@ -73,7 +73,7 @@ describe("Supabase repositories", () => {
 
   it("fills missing settings fields with safe defaults", async () => {
     const { client } = createFakeSupabase({ settings: [{ id: "global", version: 2, doc: {} }] });
-    expect(await new SupabaseSettingsRepository(client).get()).toEqual({ reminderEmails: [], sendExpiredNotice: false, reminderDays: 30, version: 2 });
+    expect(await new SupabaseSettingsRepository(client).get()).toEqual({ reminderEmails: [], sendExpiredNotice: false, dailyDigestEmail: true, reminderDays: 30, version: 2 });
   });
 
   it("turns database errors into exceptions", async () => {

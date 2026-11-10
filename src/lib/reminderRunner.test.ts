@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { success } from "./result";
-import { CRON_ACTOR, handleReminderRequest, type ReminderDeps } from "./reminderRunner";
+import { CRON_ACTOR, handleReminderRequest, handleTelegramTestRequest, type ReminderDeps } from "./reminderRunner";
 
 const env = { cronSecret: "cron-secret", supabaseUrl: "https://example.supabase.co", supabaseKey: "publishable" };
 const request = (authorization?: string) => new Request("http://localhost/api/reminders/run", { method: "POST", headers: authorization ? { authorization } : {} });
@@ -67,5 +67,35 @@ describe("handleReminderRequest", () => {
     const response = await handleReminderRequest(request("Bearer cron-secret"), env, deps({ runReminders: null }));
     expect(response.status).toBe(503);
     expect((await response.json()).code).toBe("REMINDER_NOT_CONFIGURED");
+  });
+
+  it("NOTI_05 chỉ lịch chạy (CRON_SECRET) gửi bản tin hằng ngày; Admin bấm nút chỉ gửi email nhắc hạn; thiếu SMTP vẫn chạy bản tin", async () => {
+    const digestValue = { date: "2026-11-10", total: 2, expired: 1, expiring: 1, deliveries: [] };
+    const digest = success(digestValue);
+    const d = deps({ runDigest: vi.fn(async () => digest) });
+    const cron = await handleReminderRequest(request("Bearer cron-secret"), env, d);
+    expect(await cron.json()).toEqual({ ok: true, sent: ["c1"], failed: [], skipped: [], digest: digestValue });
+    expect(d.runDigest).toHaveBeenCalledWith(CRON_ACTOR);
+    const byAdmin = deps({ runDigest: vi.fn(async () => digest) });
+    expect(await (await handleReminderRequest(request("Bearer user-jwt"), env, byAdmin)).json()).toEqual({ ok: true, sent: ["c1"], failed: [], skipped: [] });
+    expect(byAdmin.runDigest).not.toHaveBeenCalled();
+    const noSmtp = await handleReminderRequest(request("Bearer cron-secret"), env, deps({ runReminders: null, runDigest: async () => digest }));
+    expect(noSmtp.status).toBe(200);
+    expect(await noSmtp.json()).toMatchObject({ ok: true, sent: [], reminderEmail: "REMINDER_NOT_CONFIGURED", digest: { total: 2 } });
+  });
+
+  it("NOTI_05 gửi thử Telegram: chỉ Admin đăng nhập, không nhận CRON_SECRET, báo mô tả lỗi của Telegram", async () => {
+    const post = (authorization: string, body: unknown) => new Request("http://localhost/api/notifications/telegram/test", { method: "POST", headers: { authorization }, body: JSON.stringify(body) });
+    const sendTelegramTest = vi.fn(async () => success({ name: "Nhóm A", count: 3 }));
+    expect((await handleTelegramTestRequest(post("Bearer cron-secret", { targetId: "t1" }), env, deps({ sendTelegramTest, fetcher: userFetch(null) }))).status).toBe(401);
+    expect((await handleTelegramTestRequest(post("Bearer user-jwt", { targetId: "t1" }), env, deps({ sendTelegramTest, lookupRole: async () => "hr" }))).status).toBe(401);
+    const ok = await handleTelegramTestRequest(post("Bearer user-jwt", { targetId: "t1" }), env, deps({ sendTelegramTest }));
+    expect(await ok.json()).toEqual({ ok: true, name: "Nhóm A", count: 3 });
+    expect(sendTelegramTest).toHaveBeenCalledWith({ id: "u1", role: "admin" }, "t1");
+    expect((await handleTelegramTestRequest(post("Bearer user-jwt", {}), env, deps({ sendTelegramTest }))).status).toBe(400);
+    const failing = deps({ sendTelegramTest: async () => ({ ok: false as const, errors: [{ code: "TELEGRAM_TEST_FAILED", severity: "error" as const, params: { detail: "Bad Request: chat not found" } }], warnings: [] }) });
+    const failed = await handleTelegramTestRequest(post("Bearer user-jwt", { targetId: "t1" }), env, failing);
+    expect(failed.status).toBe(400);
+    expect((await failed.json()).message).toContain("(Telegram: Bad Request: chat not found)");
   });
 });

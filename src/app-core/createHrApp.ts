@@ -12,11 +12,13 @@ import { createCertificateUseCases } from "./use-cases/certificates";
 import { createCommanderUseCases } from "./use-cases/commanders";
 import { createEmployeeUseCases } from "./use-cases/employees";
 import { createExportUseCases } from "./use-cases/exports";
+import { createNotificationUseCases } from "./use-cases/notifications";
 import { createReminderUseCases } from "./use-cases/reminders";
 import { createSettingsUseCases } from "./use-cases/settings";
 import { createSignatureUseCases } from "./use-cases/signatures";
 
-export type { HrAppDeps, HrRepositories, Mailer } from "./context";
+export type { HrAppDeps, HrRepositories, Mailer, TelegramSender } from "./context";
+export type { DigestRunResult, TelegramTestResult } from "./use-cases/notifications";
 export type { CertificateHealth, EmployeeFacets, EmployeeListInput, EmployeeListResult, EmployeeSort } from "./use-cases/employees";
 export type { ReminderRunResult } from "./use-cases/reminders";
 
@@ -37,6 +39,7 @@ export function createHrApp(deps: HrAppDeps) {
     settings: createSettingsUseCases(ctx),
     exports: createExportUseCases(ctx),
     reminders: createReminderUseCases(ctx),
+    notifications: createNotificationUseCases(ctx),
     ocr: { parseIdText: async (actor: Actor, text: string): Promise<Result<ParsedId>> => has(actor, "ocr") ? success(parseIdText(text)) : err("FORBIDDEN"), mergeParsed },
     audit: {
       list: async (actor: Actor): Promise<Result<AuditEvent[]>> => has(actor, "auditRead") ? success(await repositories.audit.list()) : err("FORBIDDEN"),

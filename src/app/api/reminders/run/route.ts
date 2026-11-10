@@ -1,46 +1,27 @@
-import { createClient } from "@supabase/supabase-js";
-import { createHrApp } from "../../../../app-core/createHrApp";
-import { systemClock } from "../../../../lib/clock";
-import { randomIds } from "../../../../lib/ids";
-import { createSmtpMailer } from "../../../../lib/mailer/smtpMailer";
 import { handleReminderRequest, type ReminderDeps } from "../../../../lib/reminderRunner";
-import { createSupabaseRepositories } from "../../../../repositories/supabase/createSupabaseRepositories";
+import { reminderEnv, serverHrApp } from "../../../../lib/serverHrApp";
 
-// Gửi tuần tự từng email qua SMTP, vài chục email có thể mất một lúc
+// Gửi email qua SMTP và tin Telegram cho từng nơi nhận, có thể mất một lúc
 export const maxDuration = 60;
 
 function buildDeps(): ReminderDeps {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const secretKey = process.env.SUPABASE_SECRET_KEY;
-  // Khóa bí mật bỏ qua RLS: chỉ dùng ở máy chủ, sau khi đã xác thực người gọi
-  const admin = url && secretKey ? createClient(url, secretKey, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
-  const mailer = createSmtpMailer({ host: process.env.SMTP_HOST, port: process.env.SMTP_PORT, user: process.env.SMTP_USER, pass: process.env.SMTP_PASS, from: process.env.MAIL_FROM });
-  const appUrl = (process.env.APP_BASE_URL ?? "").replace(/\/$/, "");
+  const server = serverHrApp();
+  const app = server.app;
   return {
-    lookupRole: async (userId) => {
-      if (!admin) return null;
-      const { data } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
-      return data?.role ?? null;
-    },
-    lookupPermissions: async (userId) => {
-      if (!admin) return null;
-      const { data } = await admin.from("profiles").select("permissions").eq("id", userId).maybeSingle();
-      return data?.permissions ?? null;
-    },
-    runReminders: admin && mailer
-      ? (actor) => createHrApp({ clock: systemClock, ids: randomIds(), repositories: createSupabaseRepositories(admin), mailer, profileBaseUrl: `${appUrl}/nhan-su/` }).reminders.run(actor)
-      : null,
+    lookupRole: server.lookupRole,
+    lookupPermissions: server.lookupPermissions,
+    runReminders: app && server.hasMailer ? (actor) => app.reminders.run(actor) : null,
+    // Bản tin hằng ngày chạy được khi có ít nhất một kênh (SMTP hoặc bot Telegram)
+    runDigest: app && (server.hasMailer || server.hasTelegram) ? (actor) => app.notifications.runDailyDigest(actor) : null,
   };
 }
 
-const env = () => ({ cronSecret: process.env.CRON_SECRET, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL, supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY });
-
-/** Vercel Cron gọi bằng GET kèm `Authorization: Bearer CRON_SECRET`. */
+/** Lịch chạy (Vercel Cron, cron trên VPS) gọi bằng GET kèm `Authorization: Bearer CRON_SECRET`: nhắc hạn + bản tin hằng ngày. */
 export async function GET(request: Request) {
-  return handleReminderRequest(request, env(), buildDeps());
+  return handleReminderRequest(request, reminderEnv(), buildDeps());
 }
 
 /** Admin bấm "Gửi email nhắc hạn" trong app, kèm token đăng nhập. */
 export async function POST(request: Request) {
-  return handleReminderRequest(request, env(), buildDeps());
+  return handleReminderRequest(request, reminderEnv(), buildDeps());
 }

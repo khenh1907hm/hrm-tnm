@@ -1,4 +1,5 @@
-import { MemoryAuditRepository, MemoryReminderLogRepository, MemoryRepository, MemorySettingsRepository } from "./repository";
+import { MemoryAuditRepository, MemoryNotificationLogRepository, MemoryReminderLogRepository, MemoryRepository, MemorySettingsRepository } from "./repository";
+import type { NotificationTarget } from "../../modules/notifications/types";
 import type { Employee } from "../../modules/employees/types";
 import type { Certificate } from "../../modules/certificates/types";
 import type { CertificateTypeRecord } from "../../modules/certificate-types/types";
@@ -17,5 +18,7 @@ export function createMemoryRepositories() {
     signatures: new MemoryRepository<Signature>(),
     settings: new MemorySettingsRepository(),
     reminders: new MemoryReminderLogRepository(),
+    notificationTargets: new MemoryRepository<NotificationTarget>(),
+    notificationLog: new MemoryNotificationLogRepository(),
   };
 }

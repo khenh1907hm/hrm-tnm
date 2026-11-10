@@ -7,7 +7,8 @@ import type { Employee } from "../../modules/employees/types";
 import type { HrSettings } from "../../modules/settings/types";
 import type { Signature } from "../../modules/signatures/types";
 import { normalizePage, normalizePageSize, type Page, type PageInput } from "../../lib/paginate";
-import type { AuditQuery, AuditRepository, ReminderLogEntry, ReminderLogRepository, Repository, SettingsRepository } from "../interfaces";
+import type { AuditQuery, AuditRepository, NotificationLogRepository, ReminderLogEntry, ReminderLogRepository, Repository, SettingsRepository } from "../interfaces";
+import type { NotificationLogEntry, NotificationTarget } from "../../modules/notifications/types";
 
 type Versioned = { id: string; version: number };
 type Columns<T> = (value: T) => Record<string, unknown>;
@@ -140,7 +141,8 @@ export class SupabaseSettingsRepository implements SettingsRepository {
 
   async get(): Promise<HrSettings> {
     const data = check(await this.client.from("settings").select("version, doc").eq("id", "global").single()) as { version: number; doc: Omit<HrSettings, "version"> };
-    return { reminderEmails: data.doc.reminderEmails ?? [], sendExpiredNotice: Boolean(data.doc.sendExpiredNotice), reminderDays: 30, version: data.version };
+    // Bản tin email hằng ngày mặc định bật khi dòng cài đặt cũ chưa có khóa này
+    return { reminderEmails: data.doc.reminderEmails ?? [], sendExpiredNotice: Boolean(data.doc.sendExpiredNotice), dailyDigestEmail: data.doc.dailyDigestEmail !== false, reminderDays: 30, version: data.version };
   }
 
   async replace(value: HrSettings, expectedVersion: number): Promise<boolean> {
@@ -164,6 +166,22 @@ export class SupabaseReminderLogRepository implements ReminderLogRepository {
   }
 }
 
+export class SupabaseNotificationLogRepository implements NotificationLogRepository {
+  constructor(private readonly client: SupabaseClient) {}
+
+  async claim(entry: NotificationLogEntry): Promise<boolean> {
+    const { error } = await this.client.from("notification_log").insert({ identity: entry.identity, topic: entry.topic, channel: entry.channel, target_id: entry.targetId, sent_on: entry.sentOn });
+    if (!error) return true;
+    // 23505: trùng khóa chính → đã gửi hoặc lần chạy khác đang gửi
+    if ((error as { code?: string }).code === "23505" || /duplicate key/i.test(error.message)) return false;
+    throw new Error(`Lỗi cơ sở dữ liệu: ${error.message}`);
+  }
+
+  async release(identity: string): Promise<void> {
+    check(await this.client.from("notification_log").delete().eq("identity", identity).select("identity"));
+  }
+}
+
 export function createSupabaseRepositories(client: SupabaseClient) {
   return {
     employees: new SupabaseDocRepository<Employee>(client, "employees", (value) => ({ code: value.code, cccd: value.cccd })),
@@ -174,5 +192,7 @@ export function createSupabaseRepositories(client: SupabaseClient) {
     signatures: new SupabaseDocRepository<Signature>(client, "signatures"),
     settings: new SupabaseSettingsRepository(client),
     reminders: new SupabaseReminderLogRepository(client),
+    notificationTargets: new SupabaseDocRepository<NotificationTarget>(client, "notification_targets", (value) => ({ channel: value.channel })),
+    notificationLog: new SupabaseNotificationLogRepository(client),
   };
 }

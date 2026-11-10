@@ -1,4 +1,5 @@
-import type { Repository, AuditQuery, AuditRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
+import type { Repository, AuditQuery, AuditRepository, NotificationLogRepository, ReminderLogEntry, ReminderLogRepository, SettingsRepository } from "../interfaces";
+import type { NotificationLogEntry } from "../../modules/notifications/types";
 import type { AuditEvent } from "../../modules/audit/types";
 import type { HrSettings } from "../../modules/settings/types";
 import { paginate, type Page, type PageInput } from "../../lib/paginate";
@@ -41,7 +42,7 @@ export class MemoryAuditRepository implements AuditRepository {
   }
 }
 
-export const DEFAULT_SETTINGS: HrSettings = { reminderEmails: [], sendExpiredNotice: false, reminderDays: 30, version: 0 };
+export const DEFAULT_SETTINGS: HrSettings = { reminderEmails: [], sendExpiredNotice: false, dailyDigestEmail: true, reminderDays: 30, version: 0 };
 
 export class MemorySettingsRepository implements SettingsRepository {
   private value: HrSettings = structuredClone(DEFAULT_SETTINGS);
@@ -57,4 +58,11 @@ export class MemoryReminderLogRepository implements ReminderLogRepository {
   async list(): Promise<ReminderLogEntry[]> { return this.entries.map((entry) => ({ ...entry })); }
   async add(entry: ReminderLogEntry): Promise<void> { this.entries.push({ ...entry }); }
 }
-
+export class MemoryNotificationLogRepository implements NotificationLogRepository {
+  private readonly entries = new Map<string, NotificationLogEntry>();
+  async claim(entry: NotificationLogEntry): Promise<boolean> {
+    if (this.entries.has(entry.identity)) return false;
+    this.entries.set(entry.identity, { ...entry }); return true;
+  }
+  async release(identity: string): Promise<void> { this.entries.delete(identity); }
+}

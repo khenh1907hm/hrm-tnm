@@ -6,17 +6,21 @@ import { maskCccd } from "../lib/vietnam/cccd";
 import { stripDataUrls } from "../modules/audit/describe";
 import type { Actor, Permission } from "../modules/auth/permissions";
 import { can } from "../modules/auth/permissions";
-import type { AuditRepository, CertificateRepository, CertificateTypeRepository, CommanderRepository, EmployeeRepository, ReminderLogRepository, SettingsRepository, SignatureRepository } from "../repositories/interfaces";
-import { MemoryReminderLogRepository, MemoryRepository, MemorySettingsRepository } from "../repositories/memory/repository";
+import type { AuditRepository, CertificateRepository, CertificateTypeRepository, CommanderRepository, EmployeeRepository, NotificationLogRepository, NotificationTargetRepository, ReminderLogRepository, SettingsRepository, SignatureRepository } from "../repositories/interfaces";
+import { MemoryNotificationLogRepository, MemoryReminderLogRepository, MemoryRepository, MemorySettingsRepository } from "../repositories/memory/repository";
+import type { NotificationTarget } from "../modules/notifications/types";
 import type { Signature } from "../modules/signatures/types";
 
 export interface Mailer { send(message: { to: string[]; subject: string; text: string; html?: string }): Promise<void> }
+/** Gửi tin Telegram (parse_mode HTML) bằng bot cấu hình ở máy chủ; lỗi thì ném Error kèm mô tả của Telegram. */
+export interface TelegramSender { send(chatId: string, text: string): Promise<void> }
 export interface HrRepositories {
   employees: EmployeeRepository; certificates: CertificateRepository; certificateTypes: CertificateTypeRepository; commanders: CommanderRepository; audit: AuditRepository;
   /** Không truyền thì dùng bản lưu trong bộ nhớ. */
   signatures?: SignatureRepository; settings?: SettingsRepository; reminders?: ReminderLogRepository;
+  notificationTargets?: NotificationTargetRepository; notificationLog?: NotificationLogRepository;
 }
-export type HrAppDeps = { clock: Clock; ids: IdGenerator; repositories?: HrRepositories; mailer?: Mailer; profileBaseUrl?: string; commanderIds?: string[] };
+export type HrAppDeps = { clock: Clock; ids: IdGenerator; repositories?: HrRepositories; mailer?: Mailer; telegram?: TelegramSender; profileBaseUrl?: string; appBaseUrl?: string; commanderIds?: string[] };
 
 export type HrAppContext = ReturnType<typeof createHrAppContext>;
 
@@ -35,6 +39,8 @@ export function createHrAppContext(deps: HrAppDeps, given: HrRepositories) {
     signatures: given.signatures ?? new MemoryRepository<Signature>(),
     settings: given.settings ?? new MemorySettingsRepository(),
     reminders: given.reminders ?? new MemoryReminderLogRepository(),
+    notificationTargets: given.notificationTargets ?? new MemoryRepository<NotificationTarget>(),
+    notificationLog: given.notificationLog ?? new MemoryNotificationLogRepository(),
   };
   const nowDate = () => deps.clock.now();
   const today = () => todayVN(deps.clock);

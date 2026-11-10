@@ -56,6 +56,24 @@ Biến môi trường phía máy chủ (đặt trên Vercel, không dùng tiền
 | `SMTP_USER`, `SMTP_PASS` | Tài khoản gửi; với Gmail dùng mật khẩu ứng dụng (App Password) |
 | `MAIL_FROM` | Tùy chọn, ví dụ `TNM HRM <hr@congty.vn>`; mặc định là `SMTP_USER` |
 | `APP_BASE_URL` | Địa chỉ app, dùng cho liên kết trong email |
+| `TELEGRAM_BOT_TOKEN` | Tùy chọn. Token bot Telegram (lấy từ @BotFather) để gửi bản tin; chỉ đặt ở máy chủ, không đưa vào git |
+
+## Bản tin chứng chỉ hằng ngày (email + Telegram)
+
+Cùng lần chạy lịch 8:00 sáng, ngoài email nhắc hạn, hệ thống gửi một **bản tin**: tổng số chứng chỉ đã hết hạn và còn tối đa 30 ngày, kèm danh sách ngắn (tên người, loại chứng chỉ, ngày hết hạn, số ngày còn lại).
+
+- **Email**: tới các địa chỉ nhận nhắc hạn; tắt được bằng ô "Gửi thêm bản tin chứng chỉ mỗi sáng" trong Cài đặt email nhắc hạn.
+- **Telegram**: Admin thêm/sửa/xóa/tắt từng nơi nhận (tên + Chat ID) ở cùng trang Cài đặt, mỗi nơi nhận có nút "Gửi thử". Thêm bot vào nhóm (hoặc bấm Start với bot) trước khi gửi. Chat ID nhóm dạng `-100…`, lấy bằng cách gửi một tin trong nhóm rồi mở `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+- **Không gửi trùng**: mỗi nơi nhận nhận tối đa một bản tin mỗi ngày (bảng `notification_log`); nơi gửi lỗi được thử lại ở lần chạy sau trong ngày. Chỉ lịch chạy (`CRON_SECRET`) gửi bản tin, nút "Gửi email ngay" chỉ gửi email nhắc hạn.
+- Bảng `notification_targets` (chỉ Admin, RLS) thiết kế sẵn cho nhiều kênh và nhiều loại thông báo (`doc.topics`).
+
+Bản chạy trên VPS cần cron riêng (Vercel Cron chỉ gọi bản Vercel), ví dụ trong `crontab -e` của user `deploy`:
+
+```
+0 8 * * * curl -fsS -m 120 -H "Authorization: Bearer $CRON_SECRET" https://tnm.com.vn/api/reminders/run > /dev/null
+```
+
+(máy chủ đặt giờ Việt Nam; nếu đặt UTC thì dùng `0 1 * * *`). Nếu cả Vercel và VPS cùng chạy với chung database thì bản tin vẫn không bị gửi hai lần (giữ chỗ trong `notification_log` trước khi gửi); riêng email nhắc hạn từng chứng chỉ (`reminder_log`) chỉ ghi sau khi gửi nên nếu hai nơi chạy đúng cùng giây có thể trùng, vì vậy chỉ nên để MỘT nơi chạy lịch.
 
 ## Giới hạn bản thử
 

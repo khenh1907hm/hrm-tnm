@@ -8,6 +8,8 @@ export const PERMISSIONS = {
   employeeRead: ["admin", "hr"], employeeWrite: ["admin", "hr"], employeeImport: ["admin", "hr"], employeeArchive: ["admin", "hr"], employeeReveal: ["admin", "hr"],
   certificateRead: ["admin", "hr"], certificateWrite: ["admin", "hr"], certificateTypeRead: ["admin", "hr"], certificateTypeWrite: ["admin", "hr"], signatureRead: ["admin", "hr"], signatureWrite: ["admin", "hr"],
   settingsRead: ["admin", "hr"], settingsWrite: ["admin", "hr"], commanderRead: ["admin", "hr"], commanderWrite: ["admin", "hr"], export: ["admin", "hr"], reminderRun: ["admin", "hr"], auditRead: ["admin"], ocr: ["admin", "hr"],
+  // Nơi nhận thông báo (Telegram): chỉ Admin, khớp RLS private.is_admin() của bảng notification_targets
+  notificationManage: ["admin"],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 
@@ -94,6 +96,7 @@ export const FACADE_USE_CASE_PERMISSIONS = {
   commanders: { list: "commanderRead", create: "commanderWrite", update: "commanderWrite", archive: "commanderWrite" },
   exports: { checkReadiness: "export", buildWorkerProfile: "export", employeeRoster: "export" },
   reminders: { computeDue: "reminderRun", run: "reminderRun", sendTest: "reminderRun" },
+  notifications: { listTargets: "notificationManage", saveTarget: "notificationManage", removeTarget: "notificationManage", runDailyDigest: "reminderRun", sendTelegramTest: "notificationManage" },
   ocr: { parseIdText: "ocr", mergeParsed: null },
   audit: { list: "auditRead", listPage: "auditRead", page: "auditRead" },
 } as const satisfies Record<string, Record<string, Permission | null>>;

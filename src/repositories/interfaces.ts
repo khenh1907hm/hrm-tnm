@@ -6,6 +6,7 @@ import type { Commander } from "../modules/commanders/types";
 import type { HrSettings } from "../modules/settings/types";
 import type { Signature } from "../modules/signatures/types";
 import type { Page, PageInput } from "../lib/paginate";
+import type { NotificationLogEntry, NotificationTarget } from "../modules/notifications/types";
 
 export interface Repository<T extends { id: string; version: number }> {
   get(id: string): Promise<T | null>;
@@ -41,4 +42,13 @@ export interface ReminderLogRepository {
   list(): Promise<ReminderLogEntry[]>;
   add(entry: ReminderLogEntry): Promise<void>;
 }
-
+export type NotificationTargetRepository = Repository<NotificationTarget> & { remove(id: string): Promise<boolean> };
+export interface NotificationLogRepository {
+  /**
+   * Giữ chỗ trước khi gửi (thêm dòng, khóa chính là identity): false nếu khóa đã có, tức đã gửi hoặc
+   * một lần chạy khác (vd Vercel và VPS cùng gọi) đang gửi. Không đọc cả bảng: bảng tăng mỗi ngày.
+   */
+  claim(entry: NotificationLogEntry): Promise<boolean>;
+  /** Bỏ giữ chỗ khi gửi lỗi để lần chạy sau thử lại. */
+  release(identity: string): Promise<void>;
+}

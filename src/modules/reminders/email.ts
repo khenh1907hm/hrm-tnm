@@ -21,7 +21,7 @@ function expiryState(daysLeft: number): { label: string; bg: string; fg: string 
  * MỘT email tổng hợp mọi chứng chỉ cần nhắc: bảng ngang, mỗi chứng chỉ một dòng (hạn gần nhất lên trước), mỗi dòng có nút mở hồ sơ.
  * Kèm bản chữ thường cho trình đọc thư không hiện HTML. `note` (vd ghi chú gửi thử) hiện ở đầu thư.
  */
-export function reminderDigestEmail(items: readonly ReminderEmailItem[], options: { today: string; note?: string }): ReminderEmail {
+export function reminderDigestEmail(items: readonly ReminderEmailItem[], options: { today: string; note?: string; heading?: string; footer?: string }): ReminderEmail {
   const rows = [...items].sort((a, b) => a.daysLeft - b.daysLeft || a.employee.code.localeCompare(b.employee.code, "en", { numeric: true })).map((item) => ({
     ...item,
     name: certificateDisplayName(item.certificateType ?? item.certificate.type, item.certificate.title),
@@ -60,7 +60,7 @@ export function reminderDigestEmail(items: readonly ReminderEmailItem[], options
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:900px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;">
 <tr><td style="background:#0f2350;padding:18px 24px;color:#ffffff;">
   <div style="font-size:12px;letter-spacing:1px;color:#c7d4f0;">THIÊN NHẬT MINH · QUẢN LÝ NHÂN SỰ</div>
-  <div style="font-size:20px;font-weight:700;margin-top:4px;">Nhắc hạn chứng chỉ · ${formatDate(options.today)}</div>
+  <div style="font-size:20px;font-weight:700;margin-top:4px;">${escapeHtml(options.heading ?? "Nhắc hạn chứng chỉ")} · ${formatDate(options.today)}</div>
 </td></tr>
 ${options.note ? `<tr><td style="padding:12px 24px;background:#eff6ff;color:#1e40af;font-size:13px;line-height:19px;border-bottom:1px solid #dbeafe;">${escapeHtml(options.note)}</td></tr>` : ""}
 <tr><td style="padding:20px 24px 12px;">
@@ -74,7 +74,7 @@ ${options.note ? `<tr><td style="padding:12px 24px;background:#eff6ff;color:#1e4
   </table>
 </td></tr>
 <tr><td style="padding:16px 24px 20px;font-size:12px;line-height:18px;color:#94a3b8;">
-  Email tự động từ hệ thống quản lý nhân sự Thiên Nhật Minh. Mỗi chứng chỉ được nhắc khi còn 30 ngày (và khi đã hết hạn nếu bật trong Cài đặt email).
+  ${escapeHtml(options.footer ?? "Email tự động từ hệ thống quản lý nhân sự Thiên Nhật Minh. Mỗi chứng chỉ được nhắc khi còn 30 ngày (và khi đã hết hạn nếu bật trong Cài đặt email).")}
 </td></tr>
 </table></td></tr></table></body></html>`;
 

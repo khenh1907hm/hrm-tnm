@@ -44,7 +44,7 @@ const MAX_RETRIES = 2;
 /** Khoảng tối thiểu giữa hai lần làm mới do quay lại tab. */
 export const TAB_REFRESH_GAP_MS = 5_000;
 /** Không cache: bảng tăng mãi, luôn đọc ở máy chủ (theo lô hoặc theo trang). */
-const UNCACHED = new Set(["audit", "reminders"]);
+const UNCACHED = new Set(["audit", "reminders", "notificationTargets", "notificationLog"]);
 /** Ghi bảng bên trái thì bảng bên phải cũng phải đọc lại. */
 const RELATED: Record<string, readonly string[]> = { certificates: ["employees"], certificateTypes: ["certificates"] };
 
