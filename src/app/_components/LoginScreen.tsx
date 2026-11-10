@@ -32,7 +32,7 @@ export function LoginScreen(props: { onSignIn: (email: string, password: string)
       <form className="login-card panel" onSubmit={(event) => void submit(event)} noValidate>
         <LoginBrand />
         <h1>Đăng nhập</h1>
-        <label className="field"><span>Email</span><input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} aria-describedby={error ? "login-error" : undefined} /></label>
+        <label className="field"><span>Email hoặc mã nhân viên</span><input type="text" autoCapitalize="none" autoComplete="username" placeholder="vd: TNM001" value={email} onChange={(event) => setEmail(event.target.value)} aria-describedby={error ? "login-error" : undefined} /></label>
         <label className="field"><span>Mật khẩu</span><input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         {error && <p id="login-error" className="form-error" role="alert">{error}</p>}
         <button type="submit" className="button primary" disabled={busy}><LogIn className="ico" size={16} aria-hidden="true" /> {busy ? "Đang đăng nhập…" : "Đăng nhập"}</button>

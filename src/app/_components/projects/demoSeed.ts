@@ -1,6 +1,7 @@
 import { addDays } from "../../../lib/dates";
 import { dayKind, defaultLine } from "../../../modules/projects/calendar";
 import type { ProjectStore } from "../../../modules/projects/store";
+import { DEFAULT_SITE_SETTINGS } from "../../../modules/projects/types";
 import type { EmployeeOption } from "./projectShared";
 
 /**
@@ -12,11 +13,11 @@ export async function seedDemoProjects(store: ProjectStore, employees: readonly 
   const start = addDays(today, -20);
   const project = await store.saveProject({
     code: "DA-2026-001", name: "Lắp đặt hệ thống HVAC nhà máy Bình Dương", customerId: null, customerName: "Taikisha Việt Nam", site: "KCN VSIP II, Bình Dương",
-    pmEmployeeId: employees[0]!.id, plannedStart: start, plannedEnd: addDays(today, 40), actualStart: start, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "active", note: "",
+    pmEmployeeId: employees[0]!.id, plannedStart: start, plannedEnd: addDays(today, 40), actualStart: start, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "active", note: "", ...DEFAULT_SITE_SETTINGS, siteLat: 11.1047, siteLng: 106.6926,
   });
   await store.saveProject({
     code: "DA-2026-002", name: "Bảo trì đường ống khí nén", customerId: null, customerName: "Khách hàng mẫu", site: "Đồng Nai",
-    pmEmployeeId: employees[0]!.id, plannedStart: addDays(today, 10), plannedEnd: addDays(today, 70), actualStart: null, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "planning", note: "",
+    pmEmployeeId: employees[0]!.id, plannedStart: addDays(today, 10), plannedEnd: addDays(today, 70), actualStart: null, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "planning", note: "", ...DEFAULT_SITE_SETTINGS,
   });
   await store.saveBudgets(project.id, [
     { category: "labor", amount: 120_000_000, warnPct: 80, plannedHours: 3000 },

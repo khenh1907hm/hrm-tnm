@@ -1,7 +1,8 @@
 import type {
-  Holiday, LaborRate, LaborSettings, MemberRate, PeriodLock, Project, ProjectBudget, ProjectExpense, ProjectInput, ProjectMember,
+  Holiday, LaborRate, LaborSettings, MemberRate, PeriodLock, Project, ProjectBudget, ProjectExpense, ProjectFinance, ProjectInput, ProjectMember,
   Subcontract, SubcontractPayment, Timesheet, TimesheetCost,
 } from "./types";
+import type { AttendanceCheck, AttendanceContext, GpsFix } from "./attendance";
 import type { OtherHours } from "./timesheetRules";
 
 /**
@@ -59,6 +60,22 @@ export interface ProjectStore {
   listExpenses(projectId: string): Promise<ProjectExpense[] | null>;
   saveExpense(item: Omit<ProjectExpense, "id"> & { id?: string }): Promise<void>;
   deleteExpense(id: string): Promise<void>;
+
+  /** Vốn dự án; null khi người xem không được xem tiền hoặc chưa nhập. */
+  getFinance(projectId: string): Promise<ProjectFinance | null>;
+  saveFinance(projectId: string, finance: ProjectFinance): Promise<void>;
+
+  /** Dự án đang thi công mà người đăng nhập là thành viên (để tự chấm công). */
+  myAttendance(): Promise<AttendanceContext[]>;
+  /** Tự chấm Vào / Ra: tải ảnh lên rồi gọi máy chủ kiểm tra vị trí (ngoài bán kính ném CHECKIN_OUT_OF_RANGE:<mét>). */
+  checkIn(projectId: string, position: GpsFix, photo: Blob): Promise<void>;
+  checkOut(projectId: string, position: GpsFix, photo: Blob): Promise<void>;
+  /** Lượt chấm công GPS của dự án trong khoảng ngày (phạm vi người xem đọc được). */
+  listChecks(projectId: string, from: string, to: string): Promise<AttendanceCheck[]>;
+  /** Đường dẫn xem ảnh chấm công (link có hạn); null nếu không xem được. */
+  photoUrl(path: string): Promise<string | null>;
+  /** Chỉ bản demo: xem thử như một nhân viên (để thử tự chấm công). */
+  actAs?(employeeId: string | null): void;
 
   listLocks(projectId: string): Promise<PeriodLock[]>;
   lockMonth(projectId: string, month: string): Promise<void>;

@@ -3,17 +3,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { hasAccess, type Actor } from "../../../modules/auth/permissions";
 import type { ProjectStore } from "../../../modules/projects/store";
+import type { AttendanceCheck } from "../../../modules/projects/attendance";
 import { teamsOf } from "../../../modules/projects/tree";
 import type { Holiday, LaborSettings, PeriodLock, Project, ProjectMember, Timesheet } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
 import { errorMessage, viewerFor } from "./projectShared";
 import { teamLabel, TimesheetEntry } from "./TimesheetEntry";
 import { TimesheetOverview } from "./TimesheetOverview";
+import { SelfCheckIn } from "./SelfCheckIn";
 import "./projects.css";
 
 type Choice = { project: Project; team: string };
-type Loaded = { members: ProjectMember[]; timesheets: Timesheet[]; locks: PeriodLock[] };
-type Mode = "overview" | "entry";
+type Loaded = { members: ProjectMember[]; timesheets: Timesheet[]; locks: PeriodLock[]; checks: AttendanceCheck[] };
+type Mode = "overview" | "entry" | "self";
 
 /**
  * Các tổ mà chính người này nhập công, theo vai trò trong dự án (không theo vai trò hệ thống):
@@ -38,6 +40,10 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [overviewProjects, setOverviewProjects] = useState<Project[]>([]);
   const [mode, setMode] = useState<Mode | null>(null);
+  const [isMember, setIsMember] = useState(false);
+  const [demoPeople, setDemoPeople] = useState<ProjectMember[]>([]);
+  const [demoAs, setDemoAs] = useState("");
+  const [selfKey, setSelfKey] = useState(0);
   const [picked, setPicked] = useState(0);
   const [date, setDate] = useState(today);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
@@ -53,16 +59,23 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
         const running = projects.filter((project) => project.status === "active");
         const options: Choice[] = [];
         const supervised: Project[] = [];
+        const everyone: ProjectMember[] = [];
         for (const project of running) {
-          const own = ownTeams(project, await store.listMembers(project.id), me);
+          const members = await store.listMembers(project.id);
+          everyone.push(...members);
+          const own = ownTeams(project, members, me);
           for (const team of own.teams) options.push({ project, team });
           if (seesAll || own.leads) supervised.push(project);
         }
+        // Tổ viên không đọc được danh sách thành viên: hỏi máy chủ mình thuộc dự án nào
+        const member = me !== null && (everyone.some((item) => item.employeeId === me) || (await store.myAttendance()).length > 0);
         if (!active) return;
         setCommon({ settings, holidays, me });
         setChoices(options);
         setOverviewProjects(supervised);
-        setMode(seesAll || (!options.length && supervised.length) ? "overview" : "entry");
+        setIsMember(member);
+        setDemoPeople(store.actAs ? everyone : []);
+        setMode(seesAll ? "overview" : options.length ? "entry" : member || store.actAs ? "self" : supervised.length ? "overview" : "self");
       } catch (error) { if (active) { setNotice(errorMessage(error), "error"); setChoices([]); setMode("entry"); } }
     })();
     return () => { active = false; };
@@ -72,8 +85,8 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
   const year = date.slice(0, 4);
   const fetchSheets = useCallback(async (): Promise<Loaded | null> => {
     if (!choice) return null;
-    const [members, timesheets, locks] = await Promise.all([store.listMembers(choice.project.id), store.listTimesheets(choice.project.id, `${year}-01-01`, today), store.listLocks(choice.project.id)]);
-    return { members, timesheets, locks };
+    const [members, timesheets, locks, checks] = await Promise.all([store.listMembers(choice.project.id), store.listTimesheets(choice.project.id, `${year}-01-01`, today), store.listLocks(choice.project.id), store.listChecks(choice.project.id, `${year}-01-01`, today)]);
+    return { members, timesheets, locks, checks };
   }, [choice, store, year, today]);
   const reload = useCallback(async () => { try { setLoaded(await fetchSheets()); } catch (error) { setNotice(errorMessage(error), "error"); } }, [fetchSheets, setNotice]);
   useEffect(() => {
@@ -85,22 +98,34 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
   const viewer = useMemo(() => choice && loaded && common ? viewerFor(actor, common.me, choice.project, loaded.members) : null, [choice, loaded, common, actor]);
   const canOverview = overviewProjects.length > 0 || seesAll;
   const canEntry = (choices?.length ?? 0) > 0;
+  const canSelf = isMember || Boolean(store.actAs);
+  const modes = ([["overview", "Tổng hợp", canOverview], ["entry", "Chấm công tổ", canEntry], ["self", "Tự chấm công", canSelf]] as const).filter(([, , allowed]) => allowed);
 
   return (
     <section className="pj-page">
       <div className="page-head">
         <div>
           <h1>Chấm công</h1>
-          <p>{mode === "overview" ? "Tổng hợp theo ngày: dự án nào có những ai, ai có mặt, ai vắng, tổ nào chưa nộp phiếu." : "Chấm cho cả tổ: mặc định mọi người có mặt đủ giờ; chạm tên để đổi vắng, bấm +/− để chỉnh giờ."}</p>
+          <p>{mode === "overview" ? "Tổng hợp theo ngày: dự án nào có những ai, ai có mặt, ai vắng, tổ nào chưa nộp phiếu." : mode === "self" ? "Chấm Vào khi đến và Ra khi về: bật định vị, đứng tại công trường và chụp ảnh khuôn mặt." : "Chấm cho cả tổ: mặc định mọi người có mặt đủ giờ; chạm tên để đổi vắng, bấm +/− để chỉnh giờ."}</p>
         </div>
-        {canOverview && canEntry && (
+        {modes.length > 1 && (
           <div className="role-switch" role="group" aria-label="Chế độ">
-            <button type="button" aria-pressed={mode === "overview"} onClick={() => setMode("overview")}>Tổng hợp</button>
-            <button type="button" aria-pressed={mode === "entry"} onClick={() => setMode("entry")}>Chấm công tổ của tôi</button>
+            {modes.map(([key, label]) => <button key={key} type="button" aria-pressed={mode === key} onClick={() => setMode(key)}>{label}</button>)}
           </div>
         )}
       </div>
-      {!choices || !mode || !common ? <div className="loading">Đang tải…</div> : mode === "overview" ? (
+      {!choices || !mode || !common ? <div className="loading">Đang tải…</div> : mode === "self" ? (
+        <>
+          {store.actAs && <div className="pj-toolbar">
+            <label htmlFor="demo-as" className="muted">Bản demo · thử chấm như:</label>
+            <select id="demo-as" value={demoAs} onChange={(event) => { setDemoAs(event.target.value); store.actAs!(event.target.value || null); setSelfKey((value) => value + 1); }}>
+              <option value="">— Chọn một thành viên —</option>
+              {[...new Map(demoPeople.map((item) => [item.employeeId, item])).values()].map((item) => <option key={item.employeeId} value={item.employeeId}>{item.employeeCode} · {item.displayName}</option>)}
+            </select>
+          </div>}
+          <SelfCheckIn key={selfKey} store={store} holidays={common.holidays} setNotice={setNotice} />
+        </>
+      ) : mode === "overview" ? (
         <TimesheetOverview store={store} projects={overviewProjects} holidays={common.holidays} today={today} setNotice={setNotice} {...(props.onOpenProject ? { onOpenProject: props.onOpenProject } : {})} />
       ) : !choices.length ? (
         <div className="panel empty-state"><p>Bạn chưa phụ trách tổ nào ở dự án đang thi công.</p><small className="muted">Nhờ PM hoặc chỉ huy trưởng thêm bạn vào dự án với vai trò Tổ trưởng, và nhờ Admin liên kết tài khoản với hồ sơ nhân sự của bạn.</small></div>
@@ -114,7 +139,7 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
           </div>}
           {!loaded || !viewer || !choice ? <div className="loading">Đang tải phiếu công…</div> : (
             <TimesheetEntry store={store} project={choice.project} members={loaded.members} timesheets={loaded.timesheets} settings={common.settings} holidays={common.holidays} locks={loaded.locks}
-              today={today} team={choice.team} date={date} onDateChange={setDate} isLead={viewer.isLead} isAdmin={viewer.isAdmin} onChanged={reload} setNotice={setNotice} />
+              today={today} team={choice.team} date={date} onDateChange={setDate} isLead={viewer.isLead} isAdmin={viewer.isAdmin} onChanged={reload} setNotice={setNotice} checks={loaded.checks} />
           )}
         </>
       )}

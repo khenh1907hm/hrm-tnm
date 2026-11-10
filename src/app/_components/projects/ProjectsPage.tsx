@@ -7,7 +7,7 @@ import type { Actor } from "../../../modules/auth/permissions";
 import { budgetSummary, formatPct } from "../../../modules/projects/budget";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
-import { PROJECT_STATUS_LABELS, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
+import { DEFAULT_SITE_SETTINGS, PROJECT_STATUS_LABELS, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
 import { ProjectDetail } from "./ProjectDetail";
 import { canCreateProject, errorMessage, type EmployeeOption, type EmployeeSource } from "./projectShared";
@@ -131,7 +131,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   const today = todayVN(systemClock);
   const [draft, setDraft] = useState<ProjectInput>(() => props.initial ?? {
     code: "", name: "", customerId: null, customerName: "", site: "", pmEmployeeId: null, plannedStart: today, plannedEnd: today, actualStart: null, actualEnd: null,
-    stdHours: 8, weeklyOff: [0], status: "planning", note: "",
+    stdHours: 8, weeklyOff: [0], status: "planning", note: "", ...DEFAULT_SITE_SETTINGS,
   });
   const [pmName, setPmName] = useState("");
   const [error, setError] = useState("");
@@ -142,6 +142,8 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
     if (!draft.code.trim() || !draft.name.trim()) { setError("Nhập mã và tên dự án."); return; }
     if (draft.plannedEnd < draft.plannedStart) { setError("Ngày kết thúc dự kiến phải sau hoặc bằng ngày bắt đầu."); return; }
     if (draft.actualStart && draft.actualEnd && draft.actualEnd < draft.actualStart) { setError("Ngày kết thúc thực tế phải sau ngày bắt đầu thực tế."); return; }
+    if (!(draft.workEnd > draft.workStart) || draft.lunchEnd < draft.lunchStart) { setError("Giờ kết thúc phải sau giờ bắt đầu; giờ hết nghỉ trưa không trước giờ bắt đầu nghỉ."); return; }
+    if ((draft.siteLat === null) !== (draft.siteLng === null)) { setError("Nhập đủ cả vĩ độ và kinh độ của công trường, hoặc để trống cả hai."); return; }
     setBusy(true); setError("");
     try {
       const saved = await props.store.saveProject({ ...draft, ...(props.initial ? { id: props.initial.id } : {}) });
@@ -180,12 +182,48 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
               ))}
             </div>
           </fieldset>
+          <SiteFields draft={draft} set={set} />
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú</span><input value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>
         <footer><button type="button" className="button" onClick={props.onClose}>Hủy</button><button type="button" className="button primary" disabled={busy} onClick={() => void submit()}>{busy ? "Đang lưu…" : "Lưu dự án"}</button></footer>
       </section>
     </div>
+  );
+}
+
+/** Giờ làm và vị trí công trường để tự chấm công GPS (PRJ-14, PRJ-15). */
+function SiteFields(props: { draft: ProjectInput; set: <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => void }) {
+  const { draft, set } = props;
+  const [locating, setLocating] = useState("");
+  const coordinate = (value: string) => { const parsed = Number(value.replace(",", ".")); return value.trim() === "" || !Number.isFinite(parsed) ? null : parsed; };
+  const useHere = () => {
+    if (!navigator.geolocation) { setLocating("Trình duyệt không hỗ trợ định vị."); return; }
+    setLocating("Đang lấy vị trí…");
+    navigator.geolocation.getCurrentPosition(
+      (position) => { set("siteLat", Number(position.coords.latitude.toFixed(6))); set("siteLng", Number(position.coords.longitude.toFixed(6))); setLocating(`Đã lấy vị trí (sai số khoảng ${Math.round(position.coords.accuracy)} m).`); },
+      () => setLocating("Không lấy được vị trí: hãy cho phép trình duyệt truy cập vị trí."),
+      { enableHighAccuracy: true, timeout: 15000 },
+    );
+  };
+  return (
+    <fieldset className="field" style={{ gridColumn: "1 / -1", border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
+      <span>Giờ làm và vị trí công trường (để nhân viên tự chấm công)</span>
+      <div className="form-grid" style={{ padding: 0 }}>
+        <label className="field"><span>Giờ bắt đầu</span><input type="time" value={draft.workStart} onChange={(event) => set("workStart", event.target.value)} /></label>
+        <label className="field"><span>Giờ kết thúc (sau giờ này là tăng ca)</span><input type="time" value={draft.workEnd} onChange={(event) => set("workEnd", event.target.value)} /></label>
+        <label className="field"><span>Nghỉ trưa từ</span><input type="time" value={draft.lunchStart} onChange={(event) => set("lunchStart", event.target.value)} /></label>
+        <label className="field"><span>Nghỉ trưa đến</span><input type="time" value={draft.lunchEnd} onChange={(event) => set("lunchEnd", event.target.value)} /></label>
+        <label className="field"><span>Vĩ độ (latitude)</span><input inputMode="decimal" placeholder="vd: 11.104700" value={draft.siteLat ?? ""} onChange={(event) => set("siteLat", coordinate(event.target.value))} /></label>
+        <label className="field"><span>Kinh độ (longitude)</span><input inputMode="decimal" placeholder="vd: 106.692600" value={draft.siteLng ?? ""} onChange={(event) => set("siteLng", coordinate(event.target.value))} /></label>
+        <label className="field"><span>Bán kính cho phép (mét)</span><input type="number" min={50} max={5000} step={50} value={draft.siteRadiusM} onChange={(event) => set("siteRadiusM", Math.min(5000, Math.max(50, Number(event.target.value) || 300)))} /></label>
+        <div className="field"><span>&nbsp;</span><div className="button-row">
+          <button type="button" className="button" onClick={useHere}>Lấy vị trí hiện tại</button>
+          {draft.siteLat !== null && draft.siteLng !== null && <a className="button" href={`https://www.google.com/maps?q=${draft.siteLat},${draft.siteLng}`} target="_blank" rel="noreferrer">Xem trên bản đồ</a>}
+        </div></div>
+      </div>
+      <small className="field-hint">{locating || "Đứng tại công trường rồi bấm “Lấy vị trí hiện tại”, hoặc dán tọa độ từ Google Maps (nhấn giữ trên bản đồ để thấy tọa độ). Để trống thì nhân viên chưa tự chấm công được."}</small>
+    </fieldset>
   );
 }
 

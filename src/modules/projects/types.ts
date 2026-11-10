@@ -36,8 +36,24 @@ export type Project = {
   weeklyOff: number[];
   status: ProjectStatus;
   note: string;
+  /** Tọa độ công trường để tự chấm công GPS (null = chưa đặt, chưa tự chấm được). */
+  siteLat: number | null;
+  siteLng: number | null;
+  /** Bán kính (mét) được phép chấm công quanh công trường. */
+  siteRadiusM: number;
+  /** Giờ làm "HH:MM" (giờ Việt Nam): sau giờ kết thúc là tăng ca. */
+  workStart: string;
+  workEnd: string;
+  lunchStart: string;
+  lunchEnd: string;
   updatedAt: string;
 };
+
+/** Giá trị mặc định của phần giờ làm và vị trí công trường. */
+export const DEFAULT_SITE_SETTINGS = { siteLat: null, siteLng: null, siteRadiusM: 300, workStart: "08:00", workEnd: "17:00", lunchStart: "12:00", lunchEnd: "13:00" } as const satisfies Pick<Project, "siteLat" | "siteLng" | "siteRadiusM" | "workStart" | "workEnd" | "lunchStart" | "lunchEnd">;
+
+/** Vốn dự án (VNĐ); chỉ Admin, PM, CHT đọc được. */
+export type ProjectFinance = { capital: number; note: string };
 
 export type ProjectInput = Omit<Project, "id" | "updatedAt">;
 

@@ -3,8 +3,9 @@ import { computeTimesheetCosts } from "../../modules/projects/cost";
 import { monthOf } from "../../modules/projects/calendar";
 import type { ProjectStore } from "../../modules/projects/store";
 import { blocking, checkTimesheet } from "../../modules/projects/timesheetRules";
+import { distanceM, withinSite, type AttendanceCheck, type GpsFix } from "../../modules/projects/attendance";
 import {
-  DEFAULT_LABOR_SETTINGS, type Holiday, type LaborRate, type LaborSettings, type MemberRate, type PeriodLock, type Project, type ProjectBudget,
+  DEFAULT_LABOR_SETTINGS, DEFAULT_SITE_SETTINGS, type ProjectFinance, type Holiday, type LaborRate, type LaborSettings, type MemberRate, type PeriodLock, type Project, type ProjectBudget,
   type ProjectExpense, type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost,
 } from "../../modules/projects/types";
 
@@ -22,11 +23,13 @@ export type ProjectData = {
   payments: SubcontractPayment[];
   expenses: ProjectExpense[];
   locks: PeriodLock[];
+  finances: (ProjectFinance & { projectId: string })[];
+  checks: AttendanceCheck[];
 };
 
 export const emptyProjectData = (): ProjectData => ({
   projects: [], budgets: [], members: [], memberRates: [], rates: [], settings: { ...DEFAULT_LABOR_SETTINGS }, holidays: [],
-  timesheets: [], costs: [], subcontracts: [], payments: [], expenses: [], locks: [],
+  timesheets: [], costs: [], subcontracts: [], payments: [], expenses: [], locks: [], finances: [], checks: [],
 });
 
 const fail = (code: string, detail = ""): never => { throw new Error(detail ? `${code}:${detail}` : code); };
@@ -43,6 +46,11 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
   if (options.persistKey && !options.initial) {
     try { const raw = window.localStorage.getItem(options.persistKey); if (raw) data = { ...emptyProjectData(), ...JSON.parse(raw) as ProjectData }; } catch { /* không đọc được: dùng dữ liệu rỗng */ }
   }
+  // Dữ liệu demo cũ chưa có giờ làm, tọa độ công trường
+  data.projects = data.projects.map((project) => ({ ...DEFAULT_SITE_SETTINGS, ...project }));
+  // Ảnh chấm công demo chỉ giữ trong phiên (không ghi localStorage)
+  const photos = new Map<string, string>();
+  let actingAs: string | null = null;
   const persist = () => {
     if (!options.persistKey) return;
     try { window.localStorage.setItem(options.persistKey, JSON.stringify(data)); } catch { /* trình duyệt chặn lưu: vẫn dùng được trong phiên */ }
@@ -50,12 +58,58 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
   const today = () => todayVN(clock);
   const now = () => clock.now();
   const sheetOf = (id: string) => data.timesheets.find((sheet) => sheet.id === id) ?? fail("TS_NOT_FOUND");
+  /** Giống private.validate_position: thành viên còn trong dự án, dự án có tọa độ, trong bán kính. */
+  const validatePosition = (projectId: string, position: GpsFix): number => {
+    if (!actingAs) fail("CHECKIN_NO_EMPLOYEE");
+    const project = data.projects.find((item) => item.id === projectId && item.status === "active") ?? fail("TS_PROJECT_NOT_ACTIVE");
+    if (!data.members.some((member) => member.projectId === projectId && member.employeeId === actingAs && member.joinedOn <= today() && (member.leftOn === null || member.leftOn >= today()))) fail("TS_OUTSIDE_MEMBERSHIP");
+    if (project.siteLat === null || project.siteLng === null) fail("CHECKIN_NO_SITE");
+    const distance = distanceM(project.siteLat!, project.siteLng!, position.lat, position.lng);
+    if (!withinSite(distance, project.siteRadiusM)) fail("CHECKIN_OUT_OF_RANGE", String(distance));
+    return distance;
+  };
   const isLocked = (projectId: string, date: string) => data.locks.some((lock) => lock.projectId === projectId && lock.month === monthOf(date));
 
   return {
     mode: "demo",
     snapshot: () => clone(data),
-    async myEmployeeId() { return null; },
+    async myEmployeeId() { return actingAs; },
+    actAs(employeeId) { actingAs = employeeId; },
+
+    async getFinance(projectId) { const found = data.finances.find((item) => item.projectId === projectId); return found ? { capital: found.capital, note: found.note } : null; },
+    async saveFinance(projectId, finance) { data.finances = [...data.finances.filter((item) => item.projectId !== projectId), { ...finance, projectId }]; persist(); },
+
+    async myAttendance() {
+      if (!actingAs) return [];
+      return data.members.filter((member) => member.employeeId === actingAs && member.joinedOn <= today() && (member.leftOn === null || member.leftOn >= today())).flatMap((member) => {
+        const project = data.projects.find((item) => item.id === member.projectId && item.status === "active");
+        if (!project) return [];
+        const check = data.checks.find((item) => item.projectId === project.id && item.employeeId === actingAs && item.workDate === today());
+        return [{
+          projectId: project.id, code: project.code, name: project.name, team: member.team, siteLat: project.siteLat, siteLng: project.siteLng, siteRadiusM: project.siteRadiusM, weeklyOff: project.weeklyOff,
+          schedule: { workStart: project.workStart, workEnd: project.workEnd, lunchStart: project.lunchStart, lunchEnd: project.lunchEnd, stdHours: project.stdHours },
+          today: check ? { id: check.id, checkInAt: check.checkInAt, checkOutAt: check.checkOutAt, inDistanceM: check.inDistanceM, outDistanceM: check.outDistanceM } : null,
+        }];
+      });
+    },
+    async checkIn(projectId, position, photo) {
+      const distance = validatePosition(projectId, position);
+      if (data.checks.some((item) => item.projectId === projectId && item.employeeId === actingAs && item.workDate === today())) fail("CHECKIN_ALREADY");
+      const path = `${projectId}/demo/${today()}-${actingAs}-in.jpg`;
+      photos.set(path, URL.createObjectURL(photo));
+      data.checks.push({ id: newId(), projectId, employeeId: actingAs!, workDate: today(), checkInAt: now(), inLat: position.lat, inLng: position.lng, inAccuracyM: position.accuracy, inDistanceM: distance, inPhoto: path, checkOutAt: null, outLat: null, outLng: null, outAccuracyM: null, outDistanceM: null, outPhoto: null });
+      persist();
+    },
+    async checkOut(projectId, position, photo) {
+      const distance = validatePosition(projectId, position);
+      const check = data.checks.find((item) => item.projectId === projectId && item.employeeId === actingAs && item.workDate === today() && item.checkOutAt === null) ?? fail("CHECKOUT_WITHOUT_CHECKIN");
+      const path = `${projectId}/demo/${today()}-${actingAs}-out.jpg`;
+      photos.set(path, URL.createObjectURL(photo));
+      Object.assign(check, { checkOutAt: now(), outLat: position.lat, outLng: position.lng, outAccuracyM: position.accuracy, outDistanceM: distance, outPhoto: path });
+      persist();
+    },
+    async listChecks(projectId, from, to) { return clone(data.checks.filter((item) => item.projectId === projectId && item.workDate >= from && item.workDate <= to)); },
+    async photoUrl(path) { return photos.get(path) ?? null; },
 
     async listProjects() { return clone(data.projects).sort((a, b) => b.plannedStart.localeCompare(a.plannedStart) || a.code.localeCompare(b.code)); },
     async saveProject(input) {

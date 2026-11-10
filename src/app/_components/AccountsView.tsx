@@ -1,5 +1,6 @@
 "use client";
-import { Eye, IdCard, KeyRound, ListChecks, Lock, LockOpen, UserPlus, X } from "lucide-react";
+import { Download, Eye, IdCard, KeyRound, ListChecks, Lock, LockOpen, UserPlus, Users, X } from "lucide-react";
+import type { BulkWorkerResult } from "../../lib/accountAdmin";
 import { useEffect, useState } from "react";
 import { ACCOUNT_ROLES, ACCOUNT_ROLE_LABELS, MIN_PASSWORD_LENGTH, type Account, type AccountRole } from "../../lib/accountAdmin";
 import { getSupabaseClient } from "../../lib/supabase/client";
@@ -59,6 +60,7 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
   const [resetting, setResetting] = useState<Account | null>(null);
   const [granting, setGranting] = useState<Account | null>(null);
   const [linking, setLinking] = useState<Account | null>(null);
+  const [bulk, setBulk] = useState(false);
 
   const [attempt, setAttempt] = useState(0);
 
@@ -97,7 +99,10 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
   return <>
     <div className="page-head">
       <div><h1>Tài khoản &amp; phân quyền</h1><p>{demo ? "Bản demo: tài khoản mẫu, thay đổi chỉ lưu trong phiên này. Dùng nút Xem thử để xem người đó thấy gì." : "Thêm tài khoản, cấp vai trò, chọn quyền từng người, đặt lại mật khẩu hoặc khóa người đã nghỉ. Mọi thay đổi ghi vào Nhật ký."}</p></div>
-      <button type="button" className="button primary" disabled={demo} onClick={() => setCreating(true)}><UserPlus className="ico" size={16} aria-hidden="true" /> Thêm tài khoản</button>
+      <div className="button-row">
+        <button type="button" className="button" disabled={demo || !props.employees} title={demo ? "Bản demo không tạo tài khoản thật" : "Tạo tài khoản đăng nhập bằng mã nhân viên cho công nhân, để tự chấm công GPS"} onClick={() => setBulk(true)}><Users className="ico" size={16} aria-hidden="true" /> Tạo tài khoản chấm công</button>
+        <button type="button" className="button primary" disabled={demo} onClick={() => setCreating(true)}><UserPlus className="ico" size={16} aria-hidden="true" /> Thêm tài khoản</button>
+      </div>
     </div>
     {pending > 0 && <p className="list-notice is-warn">{pending} tài khoản đang chờ cấp quyền: chọn vai trò ở cột Vai trò.</p>}
     <section className="panel">
@@ -150,6 +155,7 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
     </section>
     {creating && <CreateAccountModal onClose={() => setCreating(false)} onCreated={(account) => { setAccounts((current) => [...(current ?? []), account].sort((a, b) => a.email.localeCompare(b.email))); setCreating(false); setNotice(`Đã tạo tài khoản ${account.email}. Gửi email và mật khẩu cho người dùng.`); }} />}
     {granting && <AccessModal account={granting} onClose={() => setGranting(null)} onSave={async (permissions) => { if (await change(granting, { permissions }, `Đã cập nhật quyền của ${granting.email}. Người này tải lại trang hoặc quay lại tab là có hiệu lực.`)) setGranting(null); }} />}
+    {bulk && <BulkWorkersModal employees={props.employees ?? null} linkedIds={new Set((accounts ?? []).map((item) => item.employeeId).filter((id): id is string => Boolean(id)))} onClose={() => setBulk(false)} onDone={() => setAttempt((value) => value + 1)} />}
     {linking && <LinkEmployeeModal account={linking} employees={props.employees ?? null} onClose={() => setLinking(null)} onSave={async (option) => {
       if (await change(linking, { employeeId: option?.id ?? null, employeeLabel: option ? `${option.code} · ${option.name}` : null }, option ? `Đã liên kết ${linking.email} với ${option.code} · ${option.name}.` : `Đã gỡ liên kết hồ sơ của ${linking.email}.`)) setLinking(null);
     }} />}
@@ -219,6 +225,74 @@ function AccessModal(props: { account: Account; onClose: () => void; onSave: (pe
         <span><b>{item.label}</b><small>{item.hint}</small></span>
       </label>)}
     </fieldset>)}
+  </ModalShell>;
+}
+
+const BULK_STATUS: Record<BulkWorkerResult["status"], string> = { created: "Đã tạo", created_unlinked: "Đã tạo, chưa liên kết (hồ sơ đã có tài khoản khác)", exists: "Mã này đã có tài khoản" };
+
+/** In / tải danh sách tài khoản vừa tạo (mật khẩu chỉ hiện một lần). */
+async function downloadWorkerSheet(results: readonly BulkWorkerResult[]) {
+  const ExcelJS = (await import("exceljs")).default;
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet("Tai khoan cham cong");
+  sheet.addRow(["Mã NV (tên đăng nhập)", "Họ tên", "Mật khẩu ban đầu", "Trạng thái"]).font = { bold: true };
+  for (const item of results) sheet.addRow([item.login, item.name, item.password ?? "", BULK_STATUS[item.status]]);
+  sheet.addRow([]);
+  sheet.addRow(["Đăng nhập tại tnm.com.vn bằng mã NV và mật khẩu trên, rồi đổi mật khẩu."]);
+  [18, 28, 18, 40].forEach((width, index) => { sheet.getColumn(index + 1).width = width; });
+  const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const link = document.createElement("a");
+  link.href = url; link.download = `TaiKhoanChamCong_${new Date().toISOString().slice(0, 10)}.xlsx`; link.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Tạo hàng loạt tài khoản chấm công (ACC-06): chọn nhân sự, máy chủ tạo tài khoản đăng nhập bằng mã NV, liên kết hồ sơ. */
+function BulkWorkersModal(props: { employees: EmployeeSource; linkedIds: ReadonlySet<string>; onClose: () => void; onDone: () => void }) {
+  const [query, setQuery] = useState("");
+  const [options, setOptions] = useState<EmployeeOption[]>([]);
+  const [picked, setPicked] = useState<Map<string, EmployeeOption>>(new Map());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [results, setResults] = useState<BulkWorkerResult[] | null>(null);
+  useEffect(() => {
+    if (!props.employees) return;
+    let active = true;
+    const timer = window.setTimeout(() => void props.employees!.search(query).then((list) => { if (active) setOptions(list.filter((item) => !props.linkedIds.has(item.id))); }), 200);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [query, props.employees, props.linkedIds]);
+  const toggle = (option: EmployeeOption, on: boolean) => setPicked((current) => { const next = new Map(current); if (on) next.set(option.id, option); else next.delete(option.id); return next; });
+  const submit = async () => {
+    setBusy(true); setError(null);
+    try {
+      const body = await callApi("POST", { action: "bulkWorkers", employees: [...picked.values()].map((item) => ({ employeeId: item.id, code: item.code, name: item.name })) }) as { results?: BulkWorkerResult[] };
+      setResults(body.results ?? []);
+      props.onDone();
+    } catch (failure) { setError(failure instanceof Error ? failure.message : "Không tạo được tài khoản."); }
+    finally { setBusy(false); }
+  };
+  if (results) return <ModalShell title={`Đã xử lý ${results.length} người`} wide onClose={props.onClose} footer={<>
+    <button type="button" className="button" onClick={() => void downloadWorkerSheet(results)}><Download className="ico" size={16} aria-hidden="true" /> Tải danh sách (Excel)</button>
+    <button type="button" className="button primary" onClick={props.onClose}>Xong</button>
+  </>}>
+    <p className="list-notice is-warn">Mật khẩu ban đầu chỉ hiện lần này. Hãy tải danh sách hoặc ghi lại để phát cho từng người; quên thì dùng “Đặt lại mật khẩu”.</p>
+    <div className="table-scroll"><table className="accounts-table">
+      <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Mật khẩu ban đầu</th><th>Trạng thái</th></tr></thead>
+      <tbody>{results.map((item) => <tr key={item.employeeId}><td><b>{item.login}</b></td><td>{item.name}</td><td><code>{item.password ?? "—"}</code></td><td>{BULK_STATUS[item.status]}</td></tr>)}</tbody>
+    </table></div>
+  </ModalShell>;
+  return <ModalShell title="Tạo tài khoản chấm công" wide onClose={props.onClose} footer={<>
+    <button type="button" className="button" onClick={props.onClose}>Hủy</button>
+    <button type="button" className="button primary" disabled={busy || !picked.size} onClick={() => void submit()}>{busy ? "Đang tạo…" : `Tạo ${picked.size} tài khoản`}</button>
+  </>}>
+    <p className="muted">Mỗi người đăng nhập bằng <b>mã nhân viên</b> (vd TNM001) và một mật khẩu ban đầu do hệ thống tạo. Tài khoản có vai trò Nhân viên, tự liên kết với hồ sơ: khi được thêm vào dự án, người đó thấy mục Chấm công để tự chấm bằng GPS và ảnh. Chỉ hiện những người chưa có tài khoản liên kết.</p>
+    <label className="field"><span>Tìm nhân sự</span><input type="search" value={query} placeholder="Gõ mã hoặc tên" onChange={(event) => setQuery(event.target.value)} /></label>
+    <div className="button-row"><button type="button" className="button" onClick={() => setPicked((current) => new Map([...current, ...options.map((item) => [item.id, item] as const)]))}>Chọn tất cả {options.length} người đang hiện</button>{picked.size > 0 && <button type="button" className="button" onClick={() => setPicked(new Map())}>Bỏ chọn hết ({picked.size})</button>}</div>
+    <div style={{ maxHeight: 320, overflow: "auto", border: "1px solid var(--line)", borderRadius: 6 }}>
+      {options.map((option) => <label key={option.id} className="access-item" style={{ padding: "6px 10px" }}><input type="checkbox" checked={picked.has(option.id)} onChange={(event) => toggle(option, event.target.checked)} /><span><b>{option.code} · {option.name}</b><small>{option.position}</small></span></label>)}
+      {!options.length && <p className="muted" style={{ padding: 10 }}>Không có ai (hoặc mọi người đã có tài khoản).</p>}
+    </div>
+    {error && <p className="form-error" role="alert">{error}</p>}
   </ModalShell>;
 }
 

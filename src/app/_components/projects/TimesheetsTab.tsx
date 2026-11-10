@@ -73,7 +73,7 @@ export function TimesheetsTab({ store, data, viewer, reload, setNotice }: TabPro
         </div>
         {!teams.length ? <p className="muted">Bạn chưa phụ trách tổ nào trong dự án này.</p> : (
           <TimesheetEntry store={store} project={data.project} members={data.members} timesheets={data.timesheets} settings={data.settings} holidays={data.holidays} locks={data.locks}
-            today={data.today} team={team} date={date} onDateChange={setDate} isLead={viewer.isLead} isAdmin={viewer.isAdmin} onChanged={reload} setNotice={setNotice} />
+            today={data.today} team={team} date={date} onDateChange={setDate} isLead={viewer.isLead} isAdmin={viewer.isAdmin} onChanged={reload} setNotice={setNotice} checks={data.checks} />
         )}
         <small className="muted">Trạng thái phiếu: {TIMESHEET_STATUS_LABELS.draft} → {TIMESHEET_STATUS_LABELS.submitted} → {TIMESHEET_STATUS_LABELS.approved} (hoặc {TIMESHEET_STATUS_LABELS.rejected.toLowerCase()}: tổ trưởng sửa rồi gửi lại). Chỉ phiếu đã duyệt mới được tính tiền.</small>
       </section>

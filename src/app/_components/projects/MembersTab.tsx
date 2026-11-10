@@ -107,7 +107,7 @@ function MemberFormModal(props: { tab: Pick<TabProps, "store" | "data" | "viewer
         ...(editing ? { id: editing.id } : {}), projectId: data.project.id, employeeId: editing?.employeeId ?? person!.id, displayName: editing?.displayName ?? person!.name, employeeCode: editing?.employeeCode ?? person!.code,
         role, parentId, team: team.trim(), subcontractId, joinedOn, leftOn,
       });
-      if (viewer.isPm && rate !== ownRate) await store.setMemberRate(saved.id, rate);
+      if (viewer.canSeeMoney && rate !== ownRate) await store.setMemberRate(saved.id, rate);
       setNotice(editing ? "Đã lưu thành viên." : `Đã thêm ${saved.displayName} vào dự án.`, "success");
       props.onClose();
       await reload();
@@ -129,10 +129,10 @@ function MemberFormModal(props: { tab: Pick<TabProps, "store" | "data" | "viewer
           <label className="field"><span>Thuộc thầu phụ</span><select value={subcontractId ?? ""} onChange={(event) => setSubcontractId(event.target.value || null)}>
             <option value="">Nhân viên công ty</option>
             {data.subcontracts.filter((item) => item.mode === "timesheet").map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </select>{viewer.isPm && !data.subcontracts.some((item) => item.mode === "timesheet") && <small className="field-hint">Thêm thầu phụ “chấm công theo người” ở tab Chi phí.</small>}</label>
+          </select>{viewer.canSeeMoney && !data.subcontracts.some((item) => item.mode === "timesheet") && <small className="field-hint">Thêm thầu phụ “chấm công theo người” ở tab Chi phí.</small>}</label>
           <label className="field"><span>Ngày vào dự án</span><input type="date" value={joinedOn} onChange={(event) => setJoinedOn(event.target.value)} /></label>
           <label className="field"><span>Ngày rời dự án</span><input type="date" value={leftOn ?? ""} onChange={(event) => setLeftOn(event.target.value || null)} /></label>
-          {viewer.isPm && <label className="field" style={{ gridColumn: "1 / -1" }}><span>Đơn giá riêng trong dự án (VNĐ/giờ)</span><input inputMode="numeric" placeholder="Để trống: dùng đơn giá chung của người này" value={rate === null ? "" : moneyInput(rate)} onChange={(event) => setRate(event.target.value.trim() ? parseMoney(event.target.value) : null)} />{rate !== null && <small className="field-hint">{formatVnd(rate)}/giờ</small>}</label>}
+          {viewer.canSeeMoney && <label className="field" style={{ gridColumn: "1 / -1" }}><span>Đơn giá riêng trong dự án (VNĐ/giờ)</span><input inputMode="numeric" placeholder="Để trống: dùng đơn giá chung của người này" value={rate === null ? "" : moneyInput(rate)} onChange={(event) => setRate(event.target.value.trim() ? parseMoney(event.target.value) : null)} />{rate !== null && <small className="field-hint">{formatVnd(rate)}/giờ</small>}</label>}
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>
         <footer><button type="button" className="button" onClick={props.onClose}>Hủy</button><button type="button" className="button primary" disabled={busy} onClick={() => void submit()}>{busy ? "Đang lưu…" : "Lưu"}</button></footer>

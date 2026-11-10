@@ -2,9 +2,9 @@ import ExcelJS from "exceljs";
 import { describe, expect, it } from "vitest";
 import { flattenTimesheets } from "./reports";
 import { buildMonthlyTimesheetWorkbook } from "./timesheetWorkbook";
-import { DEFAULT_LABOR_SETTINGS, type Project, type ProjectMember, type Timesheet } from "./types";
+import { DEFAULT_LABOR_SETTINGS, DEFAULT_SITE_SETTINGS, type Project, type ProjectMember, type Timesheet } from "./types";
 
-const project: Project = { id: "p1", code: "DA-1", name: "Dự án mẫu", customerId: null, customerName: "", site: "", pmEmployeeId: null, plannedStart: "2026-11-01", plannedEnd: "2026-11-30", actualStart: null, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "active", note: "", updatedAt: "" };
+const project: Project = { id: "p1", code: "DA-1", name: "Dự án mẫu", customerId: null, customerName: "", site: "", pmEmployeeId: null, plannedStart: "2026-11-01", plannedEnd: "2026-11-30", actualStart: null, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "active", note: "", ...DEFAULT_SITE_SETTINGS, updatedAt: "" };
 const member: ProjectMember = { id: "m1", projectId: "p1", employeeId: "e1", displayName: "Nguyễn Văn A", employeeCode: "TNM001", role: "worker", parentId: null, team: "Tổ 1", subcontractId: null, joinedOn: "2026-11-01", leftOn: null };
 const sheet = (workDate: string, otHours: number, id: string): Timesheet => ({ id, projectId: "p1", workDate, team: "Tổ 1", status: "approved", submittedAt: null, approvedAt: null, rejectReason: "", lines: [{ id: `l${id}`, employeeId: "e1", attendance: "present", regularHours: 8, otHours, otType: "weekday", nightHours: 0, note: "" }] });
 

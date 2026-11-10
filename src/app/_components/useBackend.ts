@@ -4,6 +4,7 @@ import { createHrApp } from "../../app-core/createHrApp";
 import { fixedClock, systemClock } from "../../lib/clock";
 import { randomIds, sequentialIds } from "../../lib/ids";
 import { getSupabaseClient } from "../../lib/supabase/client";
+import { loginEmail } from "../../lib/workerLogin";
 import { effectiveAccess, needsHrWorkspace, type AccessKey, type Actor, type ActorRole } from "../../modules/auth/permissions";
 import { cacheRepositories, TAB_REFRESH_GAP_MS, type CacheStatus, type RepositoryCache } from "../../repositories/cached";
 import { createDemoRepositories } from "../../repositories/memory/seedDemo";
@@ -131,8 +132,8 @@ export function useBackend(): Backend {
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (!client) return "Chưa cấu hình Supabase.";
-    const { error } = await client.auth.signInWithPassword({ email, password });
-    return error ? "Email hoặc mật khẩu không đúng." : null;
+    const { error } = await client.auth.signInWithPassword({ email: loginEmail(email), password });
+    return error ? "Email (mã nhân viên) hoặc mật khẩu không đúng." : null;
   }, [client]);
 
   const signOut = useCallback(async () => {

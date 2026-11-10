@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { fixedClock } from "../../lib/clock";
 import { createMemoryProjectStore } from "./memoryProjectStore";
-import type { ProjectInput, Timesheet } from "../../modules/projects/types";
+import { DEFAULT_SITE_SETTINGS, type ProjectInput, type Timesheet } from "../../modules/projects/types";
 
 const projectInput: ProjectInput = {
   code: "DA-2026-001", name: "Nhà máy A", customerId: null, customerName: "Khách A", site: "Bình Dương", pmEmployeeId: "e-pm",
-  plannedStart: "2026-10-01", plannedEnd: "2026-12-31", actualStart: null, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "active", note: "",
+  plannedStart: "2026-10-01", plannedEnd: "2026-12-31", actualStart: null, actualEnd: null, stdHours: 8, weeklyOff: [0], status: "active", note: "", ...DEFAULT_SITE_SETTINGS,
 };
 
 async function setup() {

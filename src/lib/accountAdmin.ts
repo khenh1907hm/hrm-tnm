@@ -1,3 +1,4 @@
+import { initialPassword, workerEmail } from "./workerLogin";
 import type { AuditEvent } from "../modules/audit/types";
 import { ACCESS_KEYS, normalizeAccess, type AccessKey } from "../modules/auth/permissions";
 
@@ -34,6 +35,8 @@ export type AccountDeps = {
   fetcher?: Fetch;
   now?: () => string;
   newId?: () => string;
+  /** Sinh mật khẩu ban đầu cho tài khoản chấm công (test truyền hàm cố định). */
+  newPassword?: () => string;
 };
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -95,6 +98,27 @@ function validateChange(body: unknown): { ok: true; value: AccountChange } | { o
   return { ok: true, value: change };
 }
 
+
+export type BulkWorker = { employeeId: string; code: string; name: string };
+/** created: tạo và liên kết hồ sơ; created_unlinked: tạo được nhưng hồ sơ đã gắn tài khoản khác; exists: mã này đã có tài khoản. */
+export type BulkWorkerResult = BulkWorker & { login: string; password: string | null; status: "created" | "created_unlinked" | "exists" };
+export const BULK_WORKERS_MAX = 200;
+
+/** ACC-06: tạo hàng loạt tài khoản chấm công từ hồ sơ nhân sự (tối đa 200 người một lần, mã nhân viên không trùng). */
+export function validateBulkWorkers(body: Record<string, unknown>): { ok: true; value: BulkWorker[] } | { ok: false; code: string; message: string } {
+  const list = Array.isArray(body.employees) ? body.employees : [];
+  if (!list.length || list.length > BULK_WORKERS_MAX) return { ok: false, code: "ACCOUNT_INVALID", message: `Chọn từ 1 đến ${BULK_WORKERS_MAX} nhân sự.` };
+  const value: BulkWorker[] = [];
+  for (const item of list) {
+    if (!isRecord(item) || typeof item.employeeId !== "string" || typeof item.code !== "string" || typeof item.name !== "string" || !/^[A-Za-z]{2,10}\d{1,6}$/.test(item.code.trim()) || !item.employeeId.trim()) {
+      return { ok: false, code: "ACCOUNT_INVALID", message: "Danh sách nhân sự không hợp lệ (mã nhân viên phải dạng TNM001)." };
+    }
+    value.push({ employeeId: item.employeeId.trim(), code: item.code.trim(), name: item.name.trim().slice(0, 100) });
+  }
+  if (new Set(value.map((item) => item.code.toLowerCase())).size !== value.length) return { ok: false, code: "ACCOUNT_INVALID", message: "Có mã nhân viên bị trùng trong danh sách." };
+  return { ok: true, value };
+}
+
 /** Quản trị tài khoản: GET danh sách, POST thêm, PATCH sửa vai trò / quyền / họ tên / mật khẩu / khóa. Chỉ Admin. */
 export async function handleAccountRequest(request: Request, env: AccountEnv, deps: AccountDeps): Promise<Response> {
   const adminId = await resolveAdmin(request, env, deps);
@@ -107,6 +131,23 @@ export async function handleAccountRequest(request: Request, env: AccountEnv, de
 
   if (request.method === "GET") return json(200, { ok: true, accounts: await store.list() });
   const body = await request.json().catch(() => null) as unknown;
+
+  if (request.method === "POST" && isRecord(body) && body.action === "bulkWorkers") {
+    const parsed = validateBulkWorkers(body);
+    if (!parsed.ok) return fail(400, parsed.code, parsed.message);
+    const results: BulkWorkerResult[] = [];
+    for (const worker of parsed.value) {
+      const password = (deps.newPassword ?? initialPassword)();
+      const created = await store.create({ email: workerEmail(worker.code), password, fullName: worker.name, role: "employee" });
+      if (!created.ok) { results.push({ ...worker, login: worker.code.toUpperCase(), password: null, status: "exists" }); continue; }
+      let status: BulkWorkerResult["status"] = "created";
+      try { await store.update({ id: created.account.id, employeeId: worker.employeeId }); }
+      catch (error) { if (error instanceof Error && error.message === "ACCOUNT_EMPLOYEE_TAKEN") status = "created_unlinked"; else throw error; }
+      await audit("account.create", created.account.id, null, { ...auditDoc(created.account), employeeId: status === "created" ? worker.employeeId : null, bulkWorker: true });
+      results.push({ ...worker, login: worker.code.toUpperCase(), password, status });
+    }
+    return json(200, { ok: true, results });
+  }
 
   if (request.method === "POST") {
     const parsed = validateNewAccount(body);

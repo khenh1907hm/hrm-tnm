@@ -14,6 +14,8 @@ import {
 } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
 import { errorMessage, issueMessage } from "./projectShared";
+import type { AttendanceCheck } from "../../../modules/projects/attendance";
+import { lineFromCheck, scheduleOf } from "./ChecksTab";
 
 export type TimesheetEntryProps = {
   store: ProjectStore;
@@ -32,6 +34,8 @@ export type TimesheetEntryProps = {
   isAdmin: boolean;
   onChanged: () => Promise<void>;
   setNotice: Notify;
+  /** Lượt tự chấm công GPS (nếu có) để điền sẵn giờ vào phiếu. */
+  checks?: readonly AttendanceCheck[];
 };
 
 export const teamLabel = (team: string) => team || "Ban chỉ huy (không thuộc tổ)";
@@ -47,7 +51,15 @@ export function TimesheetEntry(props: TimesheetEntryProps) {
   const kind = dayKind(date, project.weeklyOff, props.holidays);
   const existing = props.timesheets.find((sheet) => sheet.workDate === date && sheet.team === team) ?? null;
   const people = useMemo(() => props.members.filter((member) => member.team === team && activeOn(member, date)).sort((a, b) => (a.role === "leader" ? -1 : 0) - (b.role === "leader" ? -1 : 0) || a.displayName.localeCompare(b.displayName, "vi")), [props.members, team, date]);
-  const freshLines = (): TimesheetLine[] => people.map((member) => existing?.lines.find((line) => line.employeeId === member.employeeId) ?? defaultLine(member.employeeId, kind, project.stdHours, crypto.randomUUID()));
+  const dayChecks = (props.checks ?? []).filter((check) => check.workDate === date && check.projectId === project.id);
+  // Có người trong tổ đã chấm GPS hôm đó: ai không chấm thì mặc định vắng không phép (tổ trưởng sửa được)
+  const gpsDay = project.siteLat !== null && people.some((member) => dayChecks.some((check) => check.employeeId === member.employeeId));
+  const fromGps = (employeeId: string, id: string): TimesheetLine => {
+    const suggested = lineFromCheck(dayChecks.find((check) => check.employeeId === employeeId), scheduleOf(project), kind);
+    if (suggested && suggested.regularHours + suggested.otHours > 0) return { id, employeeId, nightHours: 0, ...suggested };
+    return gpsDay ? { id, employeeId, attendance: "absent", regularHours: 0, otHours: 0, otType: "weekday", nightHours: 0, note: "Không chấm GPS" } : defaultLine(employeeId, kind, project.stdHours, id);
+  };
+  const freshLines = (): TimesheetLine[] => people.map((member) => existing?.lines.find((line) => line.employeeId === member.employeeId) ?? fromGps(member.employeeId, crypto.randomUUID()));
   const [lines, setLines] = useState<TimesheetLine[]>(freshLines);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -82,6 +94,7 @@ export function TimesheetEntry(props: TimesheetEntryProps) {
     const next = Math.min(24, Math.max(0, line[field] + delta));
     update(line.employeeId, { [field]: next, ...(field === "otHours" && next > 0 && line.otType === "weekday" && kind !== "workday" ? { otType: otTypeOf(kind) } : {}) });
   };
+  const applyGps = () => { setDirty(true); setLines((current) => current.map((line) => dayChecks.some((check) => check.employeeId === line.employeeId) ? fromGps(line.employeeId, line.id) : line)); };
   const bulkOt = (hours: number) => { setDirty(true); setLines((current) => current.map((line) => line.attendance === "present" ? { ...line, otHours: hours } : line)); };
 
   const run = async (action: () => Promise<unknown>, done: string) => {
@@ -118,6 +131,7 @@ export function TimesheetEntry(props: TimesheetEntryProps) {
       <div className="panel">
         {editable && lines.length > 0 && (
           <div className="ts-bulk">
+            {dayChecks.length > 0 && <button type="button" className="button" onClick={applyGps}>Lấy giờ từ chấm công GPS ({dayChecks.length})</button>}
             <span className="muted">Cả tổ tăng ca:</span>
             {[0, 1, 2, 3, 4].map((hours) => <button key={hours} type="button" className="button" onClick={() => bulkOt(hours)}>{hours === 0 ? "Không" : `${hours} giờ`}</button>)}
           </div>

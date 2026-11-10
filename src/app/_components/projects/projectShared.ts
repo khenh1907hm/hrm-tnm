@@ -26,7 +26,7 @@ export function errorMessage(error: unknown): string {
 /** Người đang xem là ai đối với dự án này (spec mục 2.2). */
 export type ProjectViewer = {
   isAdmin: boolean;
-  /** Admin hoặc PM: xem tiền, sửa ngân sách, chi phí. */
+  /** Admin hoặc PM: sửa thông tin dự án. */
   isPm: boolean;
   /** PM hoặc Chỉ huy trưởng: duyệt chấm công, xếp thành viên. */
   isLead: boolean;
@@ -42,7 +42,8 @@ export function viewerFor(actor: Actor, myEmployeeId: string | null, project: Pr
   const isPm = isAdmin || (myEmployeeId !== null && project.pmEmployeeId === myEmployeeId) || mine.some((member) => member.role === "pm");
   const isLead = isPm || mine.some((member) => member.role === "commander");
   const leaderTeams = mine.filter((member) => member.role === "leader" && member.team).map((member) => member.team);
-  return { isAdmin, isPm, isLead, leaderTeams, canSeeMoney: isPm, canEditProject: isPm || hasAccess(actor, "projects.manage") };
+  // Tiền (vốn, ngân sách, đơn giá, chi phí): Admin, PM và Chỉ huy trưởng của dự án
+  return { isAdmin, isPm, isLead, leaderTeams, canSeeMoney: isLead, canEditProject: isPm || hasAccess(actor, "projects.manage") };
 }
 
 export const canCreateProject = (actor: Actor) => actor.role === "admin" || hasAccess(actor, "projects.manage");

@@ -5,12 +5,14 @@ import { systemClock, todayVN } from "../../../lib/clock";
 import type { Actor } from "../../../modules/auth/permissions";
 import { projectDuration } from "../../../modules/projects/calendar";
 import type { ProjectStore } from "../../../modules/projects/store";
+import type { AttendanceCheck } from "../../../modules/projects/attendance";
 import {
-  PROJECT_STATUS_LABELS, type Holiday, type LaborSettings, type MemberRate, type PeriodLock, type Project, type ProjectBudget, type ProjectExpense,
+  PROJECT_STATUS_LABELS, type ProjectFinance, type Holiday, type LaborSettings, type MemberRate, type PeriodLock, type Project, type ProjectBudget, type ProjectExpense,
   type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost,
 } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
 import { CostsTab } from "./CostsTab";
+import { ChecksTab } from "./ChecksTab";
 import { MembersTab } from "./MembersTab";
 import { OverviewTab } from "./OverviewTab";
 import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from "./projectShared";
@@ -30,6 +32,10 @@ export type ProjectData = {
   payments: SubcontractPayment[];
   expenses: ProjectExpense[];
   locks: PeriodLock[];
+  /** Vốn dự án; null khi chưa nhập hoặc không được xem tiền. */
+  finance: ProjectFinance | null;
+  /** Lượt tự chấm công GPS của dự án (phạm vi người xem đọc được). */
+  checks: AttendanceCheck[];
   holidays: Holiday[];
   settings: LaborSettings;
   myEmployeeId: string | null;
@@ -49,16 +55,16 @@ export type TabProps = {
 async function fetchProjectData(store: ProjectStore, project: Project): Promise<ProjectData> {
   const today = todayVN(systemClock);
   const to = project.actualEnd ?? (project.plannedEnd > today ? project.plannedEnd : today);
-  const [members, memberRates, budgets, timesheets, costs, subcontracts, payments, expenses, locks, holidays, settings, myEmployeeId] = await Promise.all([
+  const [members, memberRates, budgets, timesheets, costs, subcontracts, payments, expenses, locks, holidays, settings, myEmployeeId, finance, checks] = await Promise.all([
     store.listMembers(project.id), store.listMemberRates(project.id), store.getBudgets(project.id), store.listTimesheets(project.id, project.plannedStart, to),
     store.listCosts(project.id, "0001-01-01", "9999-12-31"), store.listSubcontracts(project.id), store.listPayments(project.id), store.listExpenses(project.id),
-    store.listLocks(project.id), store.listHolidays(), store.getSettings(), store.myEmployeeId(),
+    store.listLocks(project.id), store.listHolidays(), store.getSettings(), store.myEmployeeId(), store.getFinance(project.id), store.listChecks(project.id, project.plannedStart, to),
   ]);
-  return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, today };
+  return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "members" | "timesheets" | "costs" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["members", "Sơ đồ & thành viên"], ["timesheets", "Chấm công"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "members" | "timesheets" | "checks" | "costs" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["members", "Sơ đồ & thành viên"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
 
 export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employees: EmployeeSource; project: Project; setNotice: Notify; onBack: () => void; onEdit: () => void; onChanged: () => void; children?: ReactNode }) {
   const { store, project, actor, setNotice } = props;
@@ -106,6 +112,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "members") return <MembersTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "costs") return <CostsTab {...tabProps} />;
+        if (tab === "checks") return <ChecksTab {...tabProps} />;
         return <ReportsTab {...tabProps} />;
       })()}
       {props.children}

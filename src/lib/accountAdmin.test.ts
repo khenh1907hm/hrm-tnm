@@ -126,3 +126,30 @@ describe("liên kết tài khoản với hồ sơ nhân sự", () => {
     expect(accounts.get("u3")?.employeeId).toBeNull();
   });
 });
+
+describe("tài khoản chấm công cho công nhân", () => {
+  it("ACC_06 đăng nhập bằng mã nhân viên đổi thành email nội bộ; email thật giữ nguyên", async () => {
+    const { loginEmail, workerEmail, isWorkerEmail, initialPassword } = await import("./workerLogin");
+    expect(loginEmail(" TNM001 ")).toBe("tnm001@nhanvien.tnm.com.vn");
+    expect(loginEmail("hr@tnm.vn")).toBe("hr@tnm.vn");
+    expect(isWorkerEmail(workerEmail("TNM9"))).toBe(true);
+    expect(initialPassword(() => 0)).toBe("aaaaaaaa");
+    expect(initialPassword()).toMatch(/^[a-z2-9]{8}$/);
+  });
+
+  it("ACC_06 Admin tạo hàng loạt: tạo, liên kết hồ sơ, trả mật khẩu một lần; mã đã có tài khoản thì báo exists", async () => {
+    const { store, accounts, audit } = memoryStore();
+    const body = { action: "bulkWorkers", employees: [{ employeeId: "emp-1", code: "TNM001", name: "An" }, { employeeId: "emp-2", code: "TNM002", name: "Bình" }] };
+    const first = await handleAccountRequest(request("POST", body), env, deps(store, { newPassword: () => "pass1234" }));
+    expect(first.status).toBe(200);
+    const results = ((await first.json()) as { results: { code: string; login: string; password: string | null; status: string }[] }).results;
+    expect(results.map((item) => [item.login, item.password, item.status])).toEqual([["TNM001", "pass1234", "created"], ["TNM002", "pass1234", "created"]]);
+    const created = [...accounts.values()].find((item) => item.email === "tnm001@nhanvien.tnm.com.vn");
+    expect(created).toMatchObject({ role: "employee", employeeId: "emp-1" });
+    expect(audit.filter((event) => event.action === "account.create")).toHaveLength(2);
+    const again = await handleAccountRequest(request("POST", { ...body, employees: body.employees.slice(0, 1) }), env, deps(store));
+    expect(((await again.json()) as { results: { status: string; password: string | null }[] }).results).toEqual([expect.objectContaining({ status: "exists", password: null })]);
+    expect((await handleAccountRequest(request("POST", { action: "bulkWorkers", employees: [{ employeeId: "x", code: "bad code", name: "" }] }), env, deps(store))).status).toBe(400);
+    expect((await handleAccountRequest(request("POST", { action: "bulkWorkers", employees: [] }), env, deps(store))).status).toBe(400);
+  });
+});

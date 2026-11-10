@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectStore } from "../../modules/projects/store";
+import type { AttendanceCheck, AttendanceContext, GpsFix } from "../../modules/projects/attendance";
 import {
   DEFAULT_LABOR_SETTINGS, type Holiday, type LaborRate, type LaborSettings, type PeriodLock, type Project, type ProjectBudget, type ProjectExpense,
   type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost, type TimesheetLine,
@@ -9,6 +10,8 @@ type Row = Record<string, unknown>;
 const num = (value: unknown) => value === null || value === undefined ? 0 : Number(value);
 const str = (value: unknown) => value === null || value === undefined ? "" : String(value);
 const strOrNull = (value: unknown) => value === null || value === undefined ? null : String(value);
+/** Cột time của Postgres trả "08:00:00" → "08:00". */
+const hhmm = (value: unknown, fallback: string) => typeof value === "string" && /^\d{2}:\d{2}/.test(value) ? value.slice(0, 5) : fallback;
 
 /** Đổi lỗi Supabase thành lỗi mang mã nghiệp vụ (hàm RPC ném "MÃ" hoặc "MÃ:chi tiết"). */
 function raise(error: PostgrestError, duplicate = "PROJECT_SAVE_FAILED", foreignKey = "PROJECT_SAVE_FAILED"): never {
@@ -32,7 +35,16 @@ const projectFromRow = (row: Row): Project => ({
   id: str(row.id), code: str(row.code), name: str(row.name), customerId: strOrNull(row.customer_id), customerName: str(row.customer_name), site: str(row.site),
   pmEmployeeId: strOrNull(row.pm_employee_id), plannedStart: str(row.planned_start), plannedEnd: str(row.planned_end), actualStart: strOrNull(row.actual_start), actualEnd: strOrNull(row.actual_end),
   stdHours: num(row.std_hours), weeklyOff: ((row.weekly_off ?? [0]) as number[]).map(Number), status: row.status as Project["status"], note: str(row.note), updatedAt: str(row.updated_at),
+  siteLat: row.site_lat === null || row.site_lat === undefined ? null : Number(row.site_lat), siteLng: row.site_lng === null || row.site_lng === undefined ? null : Number(row.site_lng),
+  siteRadiusM: num(row.site_radius_m ?? 300), workStart: hhmm(row.work_start, "08:00"), workEnd: hhmm(row.work_end, "17:00"), lunchStart: hhmm(row.lunch_start, "12:00"), lunchEnd: hhmm(row.lunch_end, "13:00"),
 });
+const checkFromRow = (row: Row): AttendanceCheck => ({
+  id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), workDate: str(row.work_date), checkInAt: str(row.check_in_at),
+  inLat: num(row.in_lat), inLng: num(row.in_lng), inAccuracyM: row.in_accuracy_m === null ? null : num(row.in_accuracy_m), inDistanceM: num(row.in_distance_m), inPhoto: str(row.in_photo),
+  checkOutAt: strOrNull(row.check_out_at), outLat: row.out_lat === null ? null : num(row.out_lat), outLng: row.out_lng === null ? null : num(row.out_lng),
+  outAccuracyM: row.out_accuracy_m === null ? null : num(row.out_accuracy_m), outDistanceM: row.out_distance_m === null ? null : num(row.out_distance_m), outPhoto: strOrNull(row.out_photo),
+});
+const PHOTO_BUCKET = "attendance-photos";
 const memberFromRow = (row: Row): ProjectMember => ({
   id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), displayName: str(row.display_name), employeeCode: str(row.employee_code),
   role: row.role as ProjectMember["role"], parentId: strOrNull(row.parent_id), team: str(row.team), subcontractId: strOrNull(row.subcontract_id), joinedOn: str(row.joined_on), leftOn: strOrNull(row.left_on),
@@ -60,8 +72,44 @@ const SHEET_COLUMNS = "id, project_id, work_date, team, status, submitted_at, ap
 export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore {
   const rpc = async (name: string, args: Record<string, unknown>) => { const { data, error } = await client.rpc(name, args); if (error) raise(error); return data as unknown; };
 
+  /** Tải ảnh rồi gọi check_in / check_out; máy chủ ghi giờ và kiểm tra khoảng cách. */
+  const punch = async (fn: "check_in" | "check_out", projectId: string, position: GpsFix, photo: Blob) => {
+    const { data: auth } = await client.auth.getUser();
+    if (!auth.user) throw new Error("FORBIDDEN");
+    const path = `${projectId}/${auth.user.id}/${new Date().toISOString().replace(/[:.]/g, "-")}-${fn === "check_in" ? "in" : "out"}.jpg`;
+    const uploaded = await client.storage.from(PHOTO_BUCKET).upload(path, photo, { contentType: "image/jpeg", upsert: false });
+    if (uploaded.error) throw new Error(`PROJECT_SAVE_FAILED:${uploaded.error.message}`);
+    await rpc(fn, { p_project: projectId, p_lat: position.lat, p_lng: position.lng, p_accuracy: position.accuracy, p_photo: path });
+  };
+
   return {
     mode: "live",
+    async getFinance(projectId) {
+      const { data, error } = await client.from("project_finance").select("capital, note").eq("project_id", projectId).maybeSingle();
+      if (error) raise(error);
+      const row = data as Row | null;
+      return row ? { capital: num(row.capital), note: str(row.note) } : null;
+    },
+    async saveFinance(projectId, finance) { await run(client.from("project_finance").upsert({ project_id: projectId, capital: finance.capital, note: finance.note })); },
+    async myAttendance() {
+      const found = (await rpc("my_attendance_context", {}) ?? []) as Row[];
+      return found.map((row): AttendanceContext => ({
+        projectId: str(row.project_id), code: str(row.code), name: str(row.name), team: str(row.team),
+        siteLat: row.site_lat === null ? null : num(row.site_lat), siteLng: row.site_lng === null ? null : num(row.site_lng), siteRadiusM: num(row.site_radius_m),
+        weeklyOff: ((row.weekly_off ?? [0]) as number[]).map(Number),
+        schedule: { workStart: hhmm(row.work_start, "08:00"), workEnd: hhmm(row.work_end, "17:00"), lunchStart: hhmm(row.lunch_start, "12:00"), lunchEnd: hhmm(row.lunch_end, "13:00"), stdHours: num(row.std_hours) },
+        today: row.check_id ? { id: str(row.check_id), checkInAt: str(row.check_in_at), checkOutAt: strOrNull(row.check_out_at), inDistanceM: num(row.in_distance_m), outDistanceM: row.out_distance_m === null ? null : num(row.out_distance_m) } : null,
+      }));
+    },
+    checkIn: (projectId, position, photo) => punch("check_in", projectId, position, photo),
+    checkOut: (projectId, position, photo) => punch("check_out", projectId, position, photo),
+    async listChecks(projectId, from, to) {
+      return (await rows(client.from("attendance_checks").select("*").eq("project_id", projectId).gte("work_date", from).lte("work_date", to).order("check_in_at"))).map(checkFromRow);
+    },
+    async photoUrl(path) {
+      const { data } = await client.storage.from(PHOTO_BUCKET).createSignedUrl(path, 600);
+      return data?.signedUrl ?? null;
+    },
     async myEmployeeId() {
       const { data: auth } = await client.auth.getUser();
       if (!auth.user) return null;
@@ -77,6 +125,8 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
         code: input.code.trim(), name: input.name.trim(), customer_id: input.customerId, customer_name: input.customerName.trim(), site: input.site.trim(), pm_employee_id: input.pmEmployeeId,
         planned_start: input.plannedStart, planned_end: input.plannedEnd, actual_start: input.actualStart, actual_end: input.actualEnd, std_hours: input.stdHours, weekly_off: input.weeklyOff,
         status: input.status, note: input.note,
+        site_lat: input.siteLat, site_lng: input.siteLng, site_radius_m: input.siteRadiusM,
+        work_start: input.workStart, work_end: input.workEnd, lunch_start: input.lunchStart, lunch_end: input.lunchEnd,
       };
       const request = input.id ? client.from("projects").update(payload).eq("id", input.id).select("*").single() : client.from("projects").insert(payload).select("*").single();
       const { data, error } = await request;

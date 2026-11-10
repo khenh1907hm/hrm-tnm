@@ -9,6 +9,7 @@ import { cumulativeCost, flattenTimesheets } from "../../../modules/projects/rep
 import { BUDGET_CATEGORIES, BUDGET_CATEGORY_LABELS, type ProjectBudget } from "../../../modules/projects/types";
 import type { TabProps } from "./ProjectDetail";
 import { errorMessage, moneyInput, parseMoney } from "./projectShared";
+import { CapitalPanel } from "./CapitalPanel";
 
 const LEVEL_TEXT = { ok: "Trong ngân sách", warn: "Sắp chạm ngân sách", over: "Đã vượt ngân sách" } as const;
 
@@ -36,11 +37,13 @@ export function OverviewTab({ store, data, viewer, reload, setNotice }: TabProps
         <Kpi label="Thành viên" value={String(data.members.filter((member) => member.leftOn === null || member.leftOn >= today).length)} hint={pendingSheets ? `${pendingSheets} phiếu công chờ duyệt` : "Không có phiếu chờ duyệt"} level={pendingSheets ? "warn" : "ok"} />
       </div>
 
+      {viewer.canSeeMoney && <CapitalPanel store={store} data={data} reload={reload} setNotice={setNotice} />}
+
       {viewer.canSeeMoney && (
         <section className="panel pj-section" aria-labelledby="pj-budget-title">
           <div className="pj-section-head">
             <h2 id="pj-budget-title">Ngân sách theo khoản</h2>
-            {viewer.isPm && !editing && <button type="button" className="button" onClick={() => setEditing(true)}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa ngân sách</button>}
+            {viewer.canSeeMoney && !editing && <button type="button" className="button" onClick={() => setEditing(true)}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa ngân sách</button>}
           </div>
           {editing ? <BudgetForm budgets={data.budgets} onCancel={() => setEditing(false)} onSave={async (budgets, reason) => {
             try { await store.saveBudgets(project.id, budgets, reason); setEditing(false); setNotice("Đã lưu ngân sách.", "success"); await reload(); }

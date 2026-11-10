@@ -21,20 +21,25 @@ const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
   timesheet: ["Chấm công", ClipboardCheck],
 };
 
-/** Có mục Dự án trong khung giới hạn khi: được tick quyền xem dự án, hoặc là thành viên (không phải tổ viên) của một dự án. */
-function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], ready: boolean, actor: Actor | undefined): { has: boolean; known: boolean } {
+/**
+ * Mục Dự án: được tick quyền xem dự án, hoặc là thành viên (không phải tổ viên) của một dự án.
+ * Mục Chấm công: thêm cả tổ viên đang thuộc dự án đang thi công (để tự chấm công GPS).
+ */
+function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], ready: boolean, actor: Actor | undefined): { has: boolean; attends: boolean; known: boolean } {
   const byAccess = actor ? hasAccess(actor, "projects.view") : false;
-  const [member, setMember] = useState<boolean | null>(null);
+  const [found, setFound] = useState<{ member: boolean; attends: boolean } | null>(null);
   useEffect(() => {
-    if (!ready || byAccess) return;
+    if (!ready) return;
     let active = true;
     void store.myEmployeeId().then(async (employeeId) => {
-      const memberships = employeeId ? await store.listMembershipsOf(employeeId) : [];
-      if (active) setMember(memberships.some((item) => item.role !== "worker"));
-    }).catch(() => { if (active) setMember(false); });
+      // Tổ viên không đọc được bảng thành viên: dự án mình đang làm lấy qua hàm my_attendance_context
+      const [memberships, attending] = employeeId ? await Promise.all([store.listMembershipsOf(employeeId), store.myAttendance()]) : [[], []];
+      if (active) setFound({ member: memberships.some((item) => item.role !== "worker"), attends: attending.length > 0 });
+    }).catch(() => { if (active) setFound({ member: false, attends: false }); });
     return () => { active = false; };
-  }, [store, ready, byAccess]);
-  return { has: byAccess || member === true, known: byAccess || member !== null };
+  }, [store, ready]);
+  const has = byAccess || found?.member === true;
+  return { has, attends: has || found?.attends === true, known: found !== null };
 }
 
 /** Trang Công cụ: các công cụ làm việc dùng chung. */
@@ -60,8 +65,9 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
   const projectStore = useProjectStore(props.mode, null);
   const projects = useHasProjects(projectStore.store, projectStore.ready, props.actor);
   const setNotice = useToast();
-  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (projects.has || (key !== "projects" && key !== "timesheet")));
-  const home: PageView = canUseTools ? roleInfo.home : "skills";
+  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "timesheet" || projects.attends));
+  // Công nhân có dự án đang thi công: mở thẳng trang Chấm công
+  const home: PageView = projects.attends && !projects.has ? "timesheet" : canUseTools ? roleInfo.home : "skills";
   const route = parseRoute(usePathname());
   // Mở thẳng trang dự án/chấm công: chờ biết người này có dự án hay không rồi mới chuyển hướng
   const waitingProjects = route !== null && (route.view === "projects" || route.view === "timesheet") && !projects.known;
@@ -71,8 +77,9 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
 
   // Trang gốc hoặc đường dẫn của trang nhân sự (vd /nhan-su) → chuyển về trang mở đầu của vai trò
   useEffect(() => {
-    if (!allowed) window.history.replaceState(window.history.state, "", routePath(home));
-  }, [allowed, home]);
+    // Chờ biết có dự án hay không (trang mở đầu của công nhân là Chấm công)
+    if (!allowed && projects.known) window.history.replaceState(window.history.state, "", routePath(home));
+  }, [allowed, home, projects.known]);
   useEffect(() => { document.title = `${VIEW_TITLES[view]} · Thiên Nhật Minh`; }, [view]);
 
   const navigate = useCallback((next: PageView) => {
