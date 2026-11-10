@@ -24,7 +24,7 @@ export type Backend =
   /** Đã đăng nhập nhưng chưa được admin cấp quyền (vai trò pending / không có hồ sơ). */
   | { status: "pending"; email: string | null; signOut: () => Promise<void> }
   /** Không có mục nhân sự nào: chỉ Kho Skill AI (và Công cụ nếu được cấp), không dựng app nhân sự. */
-  | { status: "employee"; role: Exclude<ActorRole, "admin">; canUseTools: boolean; mode: "demo" | "live"; email: string | null; signOut: () => Promise<void>; exitPreview?: () => void }
+  | { status: "employee"; role: Exclude<ActorRole, "admin">; canUseTools: boolean; actor: Actor; mode: "demo" | "live"; email: string | null; signOut: () => Promise<void>; exitPreview?: () => void }
   | {
     status: "ready"; mode: "demo" | "live"; app: App; actor: Actor; setActor: (actor: Actor) => void; email: string | null; fileStore: FileStore | null; signOut: () => Promise<void>;
     /** stale: dữ liệu có thể chưa mới nhất (tải ngầm lỗi); revision tăng mỗi khi dữ liệu nền thật sự được thay. */
@@ -144,12 +144,12 @@ export function useBackend(): Backend {
     await client?.auth.signOut();
   }, [client]);
 
-  if (!client && demoEmployee) return { status: "employee", role: "employee", canUseTools: true, mode: "demo", email: null, signOut: async () => undefined, exitPreview: () => setDemoEmployee(false) };
+  if (!client && demoEmployee) return { status: "employee", role: "employee", canUseTools: true, actor: { id: "demo-employee", role: "employee", access: ["tools"] }, mode: "demo", email: null, signOut: async () => undefined, exitPreview: () => setDemoEmployee(false) };
   if (!client) return demoApp ? { status: "ready", mode: "demo", app: demoApp, actor: demoActor, setActor: setDemoActor, email: null, fileStore: null, signOut: async () => undefined, dataStatus: NO_STATUS, previewEmployee: () => setDemoEmployee(true) } : { status: "loading" };
   if (session === undefined) return { status: "loading" };
   if (session === null) return { status: "signedOut", signIn };
   if (profile?.userId === session.user.id && profile.role === "pending") return { status: "pending", email: session.user.email ?? null, signOut };
-  if (ownProfile && ownProfile.role !== "pending" && ownProfile.role !== "admin" && !needsHrWorkspace(access)) return { status: "employee", role: ownProfile.role, canUseTools: access.includes("tools"), mode: "live", email: session.user.email ?? null, signOut };
+  if (ownProfile && ownProfile.role !== "pending" && ownProfile.role !== "admin" && !needsHrWorkspace(access)) return { status: "employee", role: ownProfile.role, canUseTools: access.includes("tools"), actor: { id: session.user.id, role: ownProfile.role, access }, mode: "live", email: session.user.email ?? null, signOut };
   // Chỉ trả app dựng cho đúng người và đúng vai trò hiện tại; trong lúc dựng lại thì hiện "đang tải"
   const ready = readyLive(live, { userId: session.user.id, role: currentRole });
   if (!ready || !currentRole || !ownProfile || ownProfile.role === "pending") return { status: "loading" };

@@ -10,15 +10,17 @@ export const ACCOUNT_ROLE_LABELS: Record<AccountRole, string> = { admin: "Admin"
 
 export type Account = { id: string; email: string; fullName: string; role: AccountRole; createdAt: string; lastSignInAt: string | null; locked: boolean;
   /** Các mục quyền Admin đã tick riêng; null là dùng mặc định của vai trò. */
-  permissions: AccessKey[] | null };
+  permissions: AccessKey[] | null;
+  /** Hồ sơ nhân sự gắn với tài khoản (quyết định vai trò trong từng dự án); employeeLabel = "mã · họ tên" để hiển thị. */
+  employeeId: string | null; employeeLabel: string | null };
 export type NewAccount = { email: string; password: string; fullName: string; role: AccountRole };
-export type AccountChange = { id: string; role?: AccountRole; fullName?: string; password?: string; locked?: boolean; permissions?: AccessKey[] | null };
+export type AccountChange = { id: string; role?: AccountRole; fullName?: string; password?: string; locked?: boolean; permissions?: AccessKey[] | null; employeeId?: string | null };
 
 /** Thao tác trên Supabase Auth + profiles bằng khóa bí mật (chỉ ở máy chủ). */
 export type AccountStore = {
   list: () => Promise<Account[]>;
   get: (id: string) => Promise<Account | null>;
-  /** Trả lỗi EMAIL_TAKEN khi email đã có tài khoản. */
+  /** Trả lỗi EMAIL_TAKEN khi email đã có tài khoản. update ném Error("ACCOUNT_EMPLOYEE_TAKEN") khi hồ sơ nhân sự đã gắn với tài khoản khác. */
   create: (input: NewAccount) => Promise<{ ok: true; account: Account } | { ok: false; code: "ACCOUNT_EMAIL_TAKEN" }>;
   update: (change: AccountChange) => Promise<void>;
   appendAudit: (event: AuditEvent) => Promise<void>;
@@ -43,7 +45,7 @@ const isRole = (value: unknown): value is AccountRole => ACCOUNT_ROLES.includes(
 const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 /** Bản ghi nhật ký của tài khoản: không bao giờ chứa mật khẩu. */
-const auditDoc = (account: Pick<Account, "email" | "fullName" | "role" | "locked" | "permissions">) => ({ email: account.email, fullName: account.fullName, role: account.role, locked: account.locked, permissions: account.permissions ?? "Theo vai trò" });
+const auditDoc = (account: Pick<Account, "email" | "fullName" | "role" | "locked" | "permissions"> & Partial<Pick<Account, "employeeId">>) => ({ email: account.email, fullName: account.fullName, role: account.role, locked: account.locked, permissions: account.permissions ?? "Theo vai trò", employeeId: account.employeeId ?? null });
 
 async function resolveAdmin(request: Request, env: AccountEnv, deps: AccountDeps): Promise<string | null> {
   const header = request.headers.get("authorization") ?? "";
@@ -86,6 +88,10 @@ function validateChange(body: unknown): { ok: true; value: AccountChange } | { o
     if (body.permissions !== null && !(Array.isArray(body.permissions) && body.permissions.every((key) => ACCESS_KEYS.includes(key as AccessKey)))) return { ok: false, code: "ACCOUNT_PERMISSIONS_INVALID", message: "Danh sách quyền không hợp lệ." };
     change.permissions = body.permissions === null ? null : normalizeAccess(body.permissions);
   }
+  if (body.employeeId !== undefined) {
+    if (body.employeeId !== null && !(typeof body.employeeId === "string" && body.employeeId.trim() && body.employeeId.length <= 100)) return { ok: false, code: "ACCOUNT_INVALID", message: "Hồ sơ nhân sự không hợp lệ." };
+    change.employeeId = body.employeeId === null ? null : body.employeeId.trim();
+  }
   return { ok: true, value: change };
 }
 
@@ -120,13 +126,19 @@ export async function handleAccountRequest(request: Request, env: AccountEnv, de
     const before = await store.get(change.id);
     if (!before) return fail(404, "ACCOUNT_NOT_FOUND", "Không tìm thấy tài khoản.");
     if (change.permissions !== undefined && (change.role ?? before.role) === "admin") return fail(400, "ACCOUNT_ADMIN_FULL_ACCESS", "Admin luôn có toàn quyền, không cần chọn từng mục.");
-    await store.update(change);
-    const after: Account = { ...before, ...(change.permissions !== undefined ? { permissions: change.permissions } : {}), ...(change.role !== undefined ? { role: change.role } : {}), ...(change.fullName !== undefined ? { fullName: change.fullName } : {}), ...(change.locked !== undefined ? { locked: change.locked } : {}) };
+    try { await store.update(change); }
+    catch (error) {
+      if (error instanceof Error && error.message === "ACCOUNT_EMPLOYEE_TAKEN") return fail(409, "ACCOUNT_EMPLOYEE_TAKEN", "Hồ sơ nhân sự này đã gắn với một tài khoản khác.");
+      throw error;
+    }
+    const linked = change.employeeId !== undefined ? (await store.get(change.id))?.employeeLabel ?? null : before.employeeLabel;
+    const after: Account = { ...before, ...(change.employeeId !== undefined ? { employeeId: change.employeeId, employeeLabel: linked } : {}), ...(change.permissions !== undefined ? { permissions: change.permissions } : {}), ...(change.role !== undefined ? { role: change.role } : {}), ...(change.fullName !== undefined ? { fullName: change.fullName } : {}), ...(change.locked !== undefined ? { locked: change.locked } : {}) };
     if (change.role !== undefined && change.role !== before.role) await audit("account.role", change.id, auditDoc(before), auditDoc(after));
     if (change.permissions !== undefined && JSON.stringify(change.permissions) !== JSON.stringify(before.permissions)) await audit("account.permissions", change.id, auditDoc(before), auditDoc(after));
     if (change.fullName !== undefined && change.fullName !== before.fullName) await audit("account.update", change.id, auditDoc(before), auditDoc(after));
     if (change.locked !== undefined && change.locked !== before.locked) await audit(change.locked ? "account.lock" : "account.unlock", change.id, auditDoc(before), auditDoc(after));
     if (change.password !== undefined) await audit("account.password", change.id, null, { email: before.email });
+    if (change.employeeId !== undefined && change.employeeId !== before.employeeId) await audit("account.employee", change.id, auditDoc(before), auditDoc(after));
     return json(200, { ok: true, account: after });
   }
 

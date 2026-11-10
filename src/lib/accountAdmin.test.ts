@@ -6,7 +6,7 @@ const env = { supabaseUrl: "https://example.supabase.co", supabaseKey: "publisha
 const userFetch = (id: string | null) => vi.fn(async () => id ? new Response(JSON.stringify({ id }), { status: 200 }) : new Response("{}", { status: 401 })) as unknown as typeof fetch;
 const request = (method: string, body?: unknown, authorization = "Bearer user-jwt") => new Request("http://localhost/api/admin/accounts", { method, headers: { authorization, "content-type": "application/json" }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
-const account = (overrides: Partial<Account> = {}): Account => ({ id: "u2", email: "hr@tnm.vn", fullName: "Lan", role: "hr", createdAt: "2026-10-01T00:00:00Z", lastSignInAt: null, locked: false, permissions: null, ...overrides });
+const account = (overrides: Partial<Account> = {}): Account => ({ id: "u2", email: "hr@tnm.vn", fullName: "Lan", role: "hr", createdAt: "2026-10-01T00:00:00Z", lastSignInAt: null, locked: false, permissions: null, employeeId: null, employeeLabel: null, ...overrides });
 
 function memoryStore(initial: Account[] = [account({ id: "admin1", email: "admin@tnm.vn", role: "admin" }), account()]) {
   const accounts = new Map(initial.map((item) => [item.id, item]));
@@ -24,7 +24,9 @@ function memoryStore(initial: Account[] = [account({ id: "admin1", email: "admin
     },
     update: async (change) => {
       const current = accounts.get(change.id)!;
-      accounts.set(change.id, { ...current, ...(change.role ? { role: change.role } : {}), ...(change.fullName !== undefined ? { fullName: change.fullName } : {}), ...(change.locked !== undefined ? { locked: change.locked } : {}) });
+      if (change.employeeId && [...accounts.values()].some((item) => item.id !== change.id && item.employeeId === change.employeeId)) throw new Error("ACCOUNT_EMPLOYEE_TAKEN");
+      if (change.employeeId !== undefined) accounts.set(change.id, { ...current, employeeId: change.employeeId, employeeLabel: change.employeeId ? `TNM · ${change.employeeId}` : null });
+      accounts.set(change.id, { ...accounts.get(change.id)!, ...(change.role ? { role: change.role } : {}), ...(change.fullName !== undefined ? { fullName: change.fullName } : {}), ...(change.locked !== undefined ? { locked: change.locked } : {}) });
       if (change.password) passwords.set(change.id, change.password);
     },
     appendAudit: async (event) => { audit.push(event); },
@@ -103,5 +105,24 @@ describe("handleAccountRequest", () => {
     expect(audit.every((event) => event.entityType === "account" && event.actorId === "admin1" && event.role === "admin")).toBe(true);
     expect(audit[1]).toMatchObject({ before: { role: "hr" }, after: { role: "employee" } });
     expect(JSON.stringify(audit)).not.toMatch(/bimat/);
+  });
+});
+
+describe("liên kết tài khoản với hồ sơ nhân sự", () => {
+  it("Admin gắn hồ sơ nhân sự cho tài khoản, có ghi nhật ký; một hồ sơ không gắn cho hai tài khoản", async () => {
+    const { store, accounts, audit } = memoryStore([account({ id: "admin1", email: "admin@tnm.vn", role: "admin" }), account(), account({ id: "u3", email: "tt@tnm.vn", role: "employee" })]);
+    const linked = await handleAccountRequest(request("PATCH", { id: "u3", employeeId: "emp-7" }), env, deps(store));
+    expect(linked.status).toBe(200);
+    expect(accounts.get("u3")?.employeeId).toBe("emp-7");
+    expect(((await linked.json()) as { account: Account }).account.employeeLabel).toBe("TNM · emp-7");
+    expect(audit.map((event) => event.action)).toContain("account.employee");
+    const taken = await handleAccountRequest(request("PATCH", { id: "u2", employeeId: "emp-7" }), env, deps(store));
+    expect(taken.status).toBe(409);
+    expect(((await taken.json()) as { code: string }).code).toBe("ACCOUNT_EMPLOYEE_TAKEN");
+    const invalid = await handleAccountRequest(request("PATCH", { id: "u2", employeeId: 5 }), env, deps(store));
+    expect(invalid.status).toBe(400);
+    const unlinked = await handleAccountRequest(request("PATCH", { id: "u3", employeeId: null }), env, deps(store));
+    expect(unlinked.status).toBe(200);
+    expect(accounts.get("u3")?.employeeId).toBeNull();
   });
 });

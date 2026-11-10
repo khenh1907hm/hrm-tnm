@@ -1,10 +1,12 @@
 "use client";
-import { Eye, KeyRound, ListChecks, Lock, LockOpen, UserPlus, X } from "lucide-react";
+import { Eye, IdCard, KeyRound, ListChecks, Lock, LockOpen, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ACCOUNT_ROLES, ACCOUNT_ROLE_LABELS, MIN_PASSWORD_LENGTH, type Account, type AccountRole } from "../../lib/accountAdmin";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import { ACCESS_ITEMS, ACCESS_KEYS, defaultAccess, effectiveAccess, toggleAccess, type AccessKey, type Actor, type ActorRole } from "../../modules/auth/permissions";
 import type { SetNotice } from "./shared";
+import { EmployeePicker } from "./projects/ProjectsPage";
+import type { EmployeeOption, EmployeeSource } from "./projects/projectShared";
 
 const ROLE_HINTS: Record<AccountRole, string> = {
   admin: "Toàn quyền, kể cả quản trị tài khoản và xem nhật ký.",
@@ -26,7 +28,7 @@ function accessSummary(account: Account): string {
   return `Tùy chỉnh · ${effectiveAccess(account.role, account.permissions).length}/${ACCESS_KEYS.length} mục`;
 }
 
-const DEMO_ACCOUNT_BASE = { createdAt: "2026-10-01T02:00:00Z", lastSignInAt: null, locked: false };
+const DEMO_ACCOUNT_BASE = { createdAt: "2026-10-01T02:00:00Z", lastSignInAt: null, locked: false, employeeId: null, employeeLabel: null };
 /** Tài khoản mẫu của bản demo: chỉ sống trong phiên, để xem thử cách phân quyền. */
 const DEMO_ACCOUNTS: Account[] = [
   { ...DEMO_ACCOUNT_BASE, id: "demo-admin", email: "admin@demo.local", fullName: "Admin mẫu", role: "admin", permissions: null },
@@ -47,7 +49,7 @@ async function callApi(method: "GET" | "POST" | "PATCH", body?: unknown): Promis
 }
 
 /** Quản trị tài khoản (chỉ admin): thêm tài khoản, đổi vai trò, đặt lại mật khẩu, khóa / mở khóa. */
-export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNotice: SetNotice; onPreviewActor?: (actor: Actor) => void }) {
+export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNotice: SetNotice; onPreviewActor?: (actor: Actor) => void; employees?: EmployeeSource }) {
   const { actor, setNotice } = props;
   const demo = props.mode === "demo";
   const [accounts, setAccounts] = useState<Account[] | null>(demo ? DEMO_ACCOUNTS : null);
@@ -56,6 +58,7 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState<Account | null>(null);
   const [granting, setGranting] = useState<Account | null>(null);
+  const [linking, setLinking] = useState<Account | null>(null);
 
   const [attempt, setAttempt] = useState(0);
 
@@ -67,7 +70,12 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
     return () => { current = false; };
   }, [props.mode, attempt]);
 
-  const change = async (account: Account, patch: { role?: AccountRole; locked?: boolean; password?: string; permissions?: AccessKey[] | null }, done: string) => {
+  const change = async (account: Account, patch: { role?: AccountRole; locked?: boolean; password?: string; permissions?: AccessKey[] | null; employeeId?: string | null; employeeLabel?: string | null }, done: string) => {
+    if (demo && patch.employeeId !== undefined) {
+      setAccounts((current) => current?.map((item) => item.id === account.id ? { ...item, employeeId: patch.employeeId ?? null, employeeLabel: patch.employeeLabel ?? null } : item) ?? null);
+      setNotice(done);
+      return true;
+    }
     if (demo) {
       setAccounts((current) => current?.map((item) => item.id === account.id ? { ...item, ...(patch.role ? { role: patch.role } : {}), ...(patch.locked === undefined ? {} : { locked: patch.locked }), ...(patch.permissions === undefined ? {} : { permissions: patch.permissions }) } : item) ?? null);
       setNotice(done);
@@ -75,7 +83,9 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
     }
     setBusyId(account.id);
     try {
-      const updated = (await callApi("PATCH", { id: account.id, ...patch })).account;
+      const { employeeLabel: _label, ...body } = patch;
+      void _label;
+      const updated = (await callApi("PATCH", { id: account.id, ...body })).account;
       if (updated) setAccounts((current) => current?.map((item) => item.id === updated.id ? updated : item) ?? null);
       setNotice(done);
       return true;
@@ -94,9 +104,9 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
       {error && <p className="empty">{error} <button type="button" className="button" onClick={() => setAttempt((value) => value + 1)}>Thử lại</button></p>}
       {!error && <div className="table-scroll">
         <table className="accounts-table" aria-busy={accounts === null}>
-          <thead><tr><th>Email</th><th>Họ tên</th><th>Vai trò</th><th>Quyền</th><th>Đăng nhập gần nhất</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr></thead>
+          <thead><tr><th>Email</th><th>Họ tên</th><th>Vai trò</th><th>Quyền</th><th>Hồ sơ nhân sự</th><th>Đăng nhập gần nhất</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr></thead>
           <tbody>
-            {accounts === null && <tr><td colSpan={7} className="empty">Đang tải tài khoản…</td></tr>}
+            {accounts === null && <tr><td colSpan={8} className="empty">Đang tải tài khoản…</td></tr>}
             {accounts?.map((account) => {
               const self = account.id === actor.id;
               const busy = busyId === account.id;
@@ -113,6 +123,11 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
                   {account.role === "admin" || account.role === "pending"
                     ? <span className="muted">{accessSummary(account)}</span>
                     : <button type="button" className="button account-access" disabled={busy} aria-label={`Chọn quyền cho ${account.email}`} onClick={() => setGranting(account)}><ListChecks className="ico" size={15} aria-hidden="true" /> {accessSummary(account)}</button>}
+                </td>
+                <td className="nowrap">
+                  <button type="button" className="button account-access" disabled={busy} aria-label={`Liên kết hồ sơ nhân sự cho ${account.email}`} title="Tài khoản dùng hồ sơ này để biết vai trò trong từng dự án (tổ trưởng, chỉ huy trưởng, PM)" onClick={() => setLinking(account)}>
+                    <IdCard className="ico" size={15} aria-hidden="true" /> {account.employeeLabel ?? (account.employeeId ? "Đã liên kết" : "Chưa liên kết")}
+                  </button>
                 </td>
                 <td className="nowrap">{account.lastSignInAt ? TIME_FORMAT.format(new Date(account.lastSignInAt)) : <span className="muted">Chưa đăng nhập</span>}</td>
                 <td>{account.locked ? <span className="pill bad">Đã khóa</span> : <span className="pill ok">Hoạt động</span>}</td>
@@ -135,6 +150,9 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
     </section>
     {creating && <CreateAccountModal onClose={() => setCreating(false)} onCreated={(account) => { setAccounts((current) => [...(current ?? []), account].sort((a, b) => a.email.localeCompare(b.email))); setCreating(false); setNotice(`Đã tạo tài khoản ${account.email}. Gửi email và mật khẩu cho người dùng.`); }} />}
     {granting && <AccessModal account={granting} onClose={() => setGranting(null)} onSave={async (permissions) => { if (await change(granting, { permissions }, `Đã cập nhật quyền của ${granting.email}. Người này tải lại trang hoặc quay lại tab là có hiệu lực.`)) setGranting(null); }} />}
+    {linking && <LinkEmployeeModal account={linking} employees={props.employees ?? null} onClose={() => setLinking(null)} onSave={async (option) => {
+      if (await change(linking, { employeeId: option?.id ?? null, employeeLabel: option ? `${option.code} · ${option.name}` : null }, option ? `Đã liên kết ${linking.email} với ${option.code} · ${option.name}.` : `Đã gỡ liên kết hồ sơ của ${linking.email}.`)) setLinking(null);
+    }} />}
     {resetting && <ResetPasswordModal account={resetting} onClose={() => setResetting(null)} onSave={async (password) => { if (await change(resetting, { password }, `Đã đặt mật khẩu mới cho ${resetting.email}.`)) setResetting(null); }} />}
   </>;
 }
@@ -201,6 +219,21 @@ function AccessModal(props: { account: Account; onClose: () => void; onSave: (pe
         <span><b>{item.label}</b><small>{item.hint}</small></span>
       </label>)}
     </fieldset>)}
+  </ModalShell>;
+}
+
+/** Gắn tài khoản với một hồ sơ nhân sự (một hồ sơ chỉ gắn một tài khoản). */
+function LinkEmployeeModal(props: { account: Account; employees: EmployeeSource; onClose: () => void; onSave: (option: EmployeeOption | null) => Promise<void> }) {
+  const [picked, setPicked] = useState<EmployeeOption | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = (option: EmployeeOption | null) => { setBusy(true); void props.onSave(option).finally(() => setBusy(false)); };
+  return <ModalShell title={`Hồ sơ nhân sự · ${props.account.email}`} onClose={props.onClose} footer={<>
+    {props.account.employeeId && <button type="button" className="button danger" disabled={busy} onClick={() => save(null)}>Gỡ liên kết</button>}
+    <button type="button" className="button" onClick={props.onClose}>Hủy</button>
+    <button type="button" className="button primary" disabled={busy || !picked} onClick={() => save(picked)}>{busy ? "Đang lưu…" : "Lưu liên kết"}</button>
+  </>}>
+    <p className="muted">Hiện tại: <b>{props.account.employeeLabel ?? (props.account.employeeId ? "Đã liên kết" : "Chưa liên kết")}</b>. Khi được thêm vào dự án với vai trò Tổ trưởng, Chỉ huy trưởng hoặc PM, người này sẽ thấy mục Dự án và Chấm công của mình.</p>
+    <EmployeePicker label="Chọn hồ sơ nhân sự" source={props.employees} onPick={setPicked} />
   </ModalShell>;
 }
 

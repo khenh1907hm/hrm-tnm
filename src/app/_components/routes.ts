@@ -13,10 +13,13 @@ export const VIEW_PATHS: Record<PageView, string> = {
   audit: "/nhat-ky",
   accounts: "/tai-khoan",
   certTypes: "/loai-chung-chi",
+  projects: "/du-an",
+  timesheet: "/cham-cong",
+  laborRates: "/don-gia",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
-export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools"];
+export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet"];
 
 /** Mục quyền cần có để mở từng màn hình; null là ai cũng mở được, "admin" là chỉ Admin. */
 const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
@@ -30,6 +33,10 @@ const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
   audit: "admin",
   accounts: "admin",
   certTypes: "certificateTypes.manage",
+  // Ai cũng mở được: RLS chỉ trả dự án người đó được xem (theo quyền hoặc theo vai trò trong dự án)
+  projects: null,
+  timesheet: null,
+  laborRates: "admin",
 };
 
 export function canOpenView(actor: Actor, view: PageView): boolean {
@@ -55,9 +62,13 @@ export const VIEW_TITLES: Record<PageView, string> = {
   audit: "Nhật ký thay đổi",
   accounts: "Tài khoản & phân quyền",
   certTypes: "Loại chứng chỉ",
+  projects: "Dự án",
+  timesheet: "Chấm công",
+  laborRates: "Đơn giá & lịch làm việc",
 };
 
-export type AppRoute = { view: PageView; employeeId: string | null };
+/** projectId chỉ có khi mở một dự án (/du-an/<id>). */
+export type AppRoute = { view: PageView; employeeId: string | null; projectId?: string };
 
 /** Đọc màn hình từ URL. Trả về null nếu đường dẫn không thuộc app (để báo 404). */
 export function parseRoute(pathname: string): AppRoute | null {
@@ -69,8 +80,12 @@ export function parseRoute(pathname: string): AppRoute | null {
   if (!view) return null;
   if (parts.length === 1) return { view, employeeId: null };
   if (view === "employees" && parts.length === 2) return { view, employeeId: parts[1]! };
+  if (view === "projects" && parts.length === 2) return { view, employeeId: null, projectId: parts[1]! };
   return null;
 }
+
+/** URL của một dự án. */
+export const projectPath = (projectId: string) => `${VIEW_PATHS.projects}/${encodeURIComponent(projectId)}`;
 
 /** URL của một màn hình; có employeeId thì mở thẳng hồ sơ nhân sự đó. */
 export function routePath(view: PageView, employeeId: string | null = null): string {

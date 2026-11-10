@@ -27,6 +27,8 @@ export const ACCESS_ITEMS = [
   { key: "signatures.manage", group: "Tài liệu", label: "Thư viện chữ ký", hint: "Xem, thêm, sửa, xóa chữ ký.", requires: [], grants: ["signatureRead", "signatureWrite"] },
   { key: "reports.manage", group: "Tài liệu", label: "FORM báo cáo (Excel)", hint: "Tạo, sửa mẫu báo cáo và danh sách đối tác.", requires: ["employees.view"], grants: ["signatureRead"] },
   { key: "tools", group: "Tài liệu", label: "Công cụ", hint: "Ảnh Trước / Sau và tách nền ảnh.", requires: [], grants: [] },
+  { key: "projects.view", group: "Dự án", label: "Xem mọi dự án và giờ công", hint: "Không gồm số tiền: tiền chỉ Admin và PM của dự án xem được. Người trong dự án luôn xem được dự án của mình.", requires: [], grants: [] },
+  { key: "projects.manage", group: "Dự án", label: "Tạo, sửa dự án", hint: "Tạo dự án mới, gán PM, sửa thông tin và ngân sách của mọi dự án.", requires: ["projects.view"], grants: [] },
 ] as const satisfies readonly { key: string; group: string; label: string; hint: string; requires: readonly string[]; grants: readonly Permission[] }[];
 export type AccessKey = typeof ACCESS_ITEMS[number]["key"];
 
@@ -51,7 +53,9 @@ export function toggleAccess(current: readonly AccessKey[], key: AccessKey, on: 
 
 /** Quyền mặc định khi Admin chưa tùy chỉnh. */
 export function defaultAccess(role: string): readonly AccessKey[] {
-  if (role === "admin" || role === "hr") return ACCESS_KEYS;
+  if (role === "admin") return ACCESS_KEYS;
+  // HR mặc định có mọi mục trừ Tạo, sửa dự án (chỉ Admin tạo dự án, spec quản lý dự án mục 2.2)
+  if (role === "hr") return ACCESS_KEYS.filter((key) => key !== "projects.manage");
   return role === "engineer" || role === "employee" ? TOOLS_ONLY : NO_ACCESS;
 }
 
@@ -62,8 +66,8 @@ export function effectiveAccess(role: string, stored: unknown): readonly AccessK
   return Array.isArray(stored) ? normalizeAccess(stored) : defaultAccess(role);
 }
 
-/** Có mục nào ngoài Công cụ thì mới cần dựng app nhân sự. */
-export const needsHrWorkspace = (access: readonly AccessKey[]) => access.some((key) => key !== "tools");
+/** Có mục nào ngoài Công cụ và Dự án thì mới cần dựng app nhân sự; chỉ có Dự án thì dùng khung giới hạn kèm trang Dự án. */
+export const needsHrWorkspace = (access: readonly AccessKey[]) => access.some((key) => key !== "tools" && !key.startsWith("projects."));
 
 /** Dựng tác nhân từ dòng profiles; null nếu chưa được cấp quyền. Dùng cho các API ở máy chủ. */
 export function actorFromProfile(id: string, role: unknown, stored: unknown): Actor | null {

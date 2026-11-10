@@ -1,0 +1,93 @@
+/* Phân hệ Dự án. Màu chỉ dùng token trong globals.css (docs/design-system.md). */
+.pj-page { display: grid; gap: 16px; }
+.pj-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pj-toolbar input[type="search"], .pj-toolbar select, .pj-toolbar input[type="date"], .pj-toolbar input[type="month"] { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; }
+.pj-toolbar input[type="search"] { flex: 1; min-width: 200px; }
+.pj-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.pj-card { padding: 16px; display: grid; gap: 10px; text-align: left; cursor: pointer; border: 1px solid var(--line); background: var(--surface); border-radius: var(--radius-card, 8px); }
+.pj-card:hover { border-color: var(--brand); }
+.pj-card h3 { margin: 0; font-size: 16px; line-height: 1.35; }
+.pj-card .pj-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--muted); font-size: 13px; }
+.pj-code { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 13px; }
+.pj-bar { height: 8px; background: var(--soft); border-radius: 999px; overflow: hidden; }
+.pj-bar > span { display: block; height: 100%; background: var(--ok); border-radius: 999px; max-width: 100%; }
+.pj-bar.warn > span { background: var(--warn); }
+.pj-bar.over > span { background: var(--bad); }
+.pj-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.pj-tabs button { border: 0; background: none; padding: 10px 14px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
+.pj-tabs button[aria-selected="true"] { color: var(--brand); border-bottom-color: var(--brand); }
+.pj-section { padding: 16px 18px; display: grid; gap: 12px; }
+.pj-section > h2, .pj-section-head h2 { font-size: 16px; margin: 0; }
+.pj-section-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+.pj-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+.pj-kpi { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-card, 8px); padding: 14px 16px; display: grid; gap: 4px; }
+.pj-kpi span { color: var(--muted); font-size: 13px; }
+.pj-kpi b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.pj-kpi small { color: var(--muted); }
+.pj-kpi.warn b { color: var(--warn); }
+.pj-kpi.over b { color: var(--bad); }
+.pj-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pj-table td, .pj-table th { padding: 8px 10px; }
+.pj-table tbody tr { cursor: default; }
+.pj-table tfoot td { font-weight: 600; border-top: 2px solid var(--line); }
+.pj-matrix td, .pj-matrix th { padding: 6px 6px; text-align: center; font-size: 13px; }
+.pj-matrix td:first-child, .pj-matrix th:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+.pj-matrix .off { background: var(--soft); }
+.pj-chart { width: 100%; height: 200px; }
+.pj-chart .axis { stroke: var(--line); }
+.pj-chart .budget { stroke: var(--bad); stroke-dasharray: 5 4; }
+.pj-chart .used { stroke: var(--brand); fill: none; stroke-width: 2.5; }
+.pj-chart .forecast { stroke: var(--warn); stroke-dasharray: 3 4; fill: none; stroke-width: 2; }
+.pj-chart text { fill: var(--muted); font-size: 11px; }
+.pj-legend { display: flex; flex-wrap: wrap; gap: 14px; color: var(--muted); font-size: 13px; }
+.pj-legend i { display: inline-block; width: 14px; height: 3px; vertical-align: middle; margin-right: 6px; background: var(--brand); }
+.pj-legend i.budget { background: var(--bad); }
+.pj-legend i.forecast { background: var(--warn); }
+
+/* Sơ đồ cây */
+.pj-tree, .pj-tree ul { list-style: none; margin: 0; padding: 0; }
+.pj-tree ul { margin-left: 22px; padding-left: 14px; border-left: 1px dashed var(--line); }
+.pj-node { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 4px 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); max-width: 560px; }
+.pj-node[data-drop="true"] { border-color: var(--brand); background: var(--brand-soft); }
+.pj-node .pj-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
+.pj-node .pj-who { flex: 1; min-width: 0; display: grid; }
+.pj-node .pj-who b { overflow-wrap: anywhere; }
+.pj-node .pj-who small { color: var(--muted); }
+.pj-node .pj-toggle { border: 0; background: none; color: var(--muted); width: 22px; padding: 0; }
+.pj-node .pj-actions { display: flex; gap: 4px; }
+
+/* Chấm công trên điện thoại */
+.ts-sheet { display: grid; gap: 12px; max-width: 640px; }
+.ts-head { display: grid; gap: 6px; padding: 14px; }
+.ts-date { display: flex; align-items: center; gap: 8px; }
+.ts-date input { flex: 1; font-size: 16px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.ts-date button { min-width: 44px; min-height: 44px; }
+.ts-row { display: grid; grid-template-columns: 1fr auto; gap: 8px 10px; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.ts-row:last-child { border-bottom: 0; }
+.ts-row .ts-name { display: flex; gap: 10px; align-items: center; min-width: 0; border: 0; background: none; text-align: left; padding: 0; min-height: 44px; }
+.ts-row .ts-name b { overflow-wrap: anywhere; }
+.ts-row.absent .ts-name b { color: var(--muted); text-decoration: line-through; }
+.ts-steppers { display: flex; gap: 14px; }
+.ts-stepper { display: grid; justify-items: center; gap: 2px; }
+.ts-stepper small { color: var(--muted); font-size: 12px; }
+.ts-stepper div { display: flex; align-items: center; gap: 4px; }
+.ts-stepper button { min-width: 44px; min-height: 44px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; font-size: 18px; font-weight: 700; }
+.ts-stepper output { min-width: 36px; text-align: center; font-weight: 700; font-variant-numeric: tabular-nums; font-size: 16px; }
+.ts-attendance { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.ts-attendance button { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; min-height: 36px; font-size: 13px; }
+.ts-attendance button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: #fff; }
+.ts-bulk { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.ts-footer { position: sticky; bottom: 0; padding: 12px 14px; background: var(--surface); border-top: 1px solid var(--line); display: flex; gap: 8px; flex-wrap: wrap; justify-content: space-between; align-items: center; z-index: 2; }
+.ts-footer .button { min-height: 44px; }
+.ts-issues { margin: 0; padding: 10px 14px 10px 32px; display: grid; gap: 4px; font-size: 14px; }
+.ts-issues li.error { color: var(--bad); }
+.ts-issues li.warning { color: var(--warn); }
+.ts-status { display: inline-flex; gap: 6px; align-items: center; }
+
+@media (max-width: 640px) {
+  .pj-section { padding: 12px; }
+  .ts-row { grid-template-columns: 1fr; }
+  .ts-steppers { justify-content: space-between; }
+  .pj-node { max-width: none; }
+  .pj-tree ul { margin-left: 8px; padding-left: 10px; }
+}

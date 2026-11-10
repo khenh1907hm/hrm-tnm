@@ -44,7 +44,7 @@ describe("quyền theo từng người", () => {
 
   it("danh sách rỗng là thu hết quyền, khác với chưa tùy chỉnh", () => {
     expect(effectiveAccess("hr", [])).toEqual([]);
-    expect(effectiveAccess("hr", null)).toEqual(ACCESS_KEYS);
+    expect(effectiveAccess("hr", null)).toEqual(ACCESS_KEYS.filter((key) => key !== "projects.manage"));
   });
 
   it("Chờ cấp quyền hay vai trò lạ không có gì, kể cả còn danh sách cũ", () => {

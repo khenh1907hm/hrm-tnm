@@ -41,8 +41,13 @@ import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import { EmployeeWorkspace, ToolsPage } from "./_components/EmployeeWorkspace";
 import type { FileFolder } from "./_components/fileStore";
 import { photoRef } from "../modules/employees/photo";
-import { canOpenView, firstOpenView, parseRoute, routePath, VIEW_TITLES } from "./_components/routes";
+import { canOpenView, firstOpenView, parseRoute, projectPath, routePath, VIEW_TITLES } from "./_components/routes";
 import SkillsClient from "./skills/SkillsClient";
+import { ProjectsPage } from "./_components/projects/ProjectsPage";
+import { TimesheetPage } from "./_components/projects/TimesheetPage";
+import { LaborRatesPage } from "./_components/projects/LaborRatesPage";
+import { useProjectStore } from "./_components/projects/useProjectStore";
+import type { EmployeeSource } from "./_components/projects/projectShared";
 
 /** Chọn màn hình theo trạng thái: đang tải, đăng nhập (chế độ thật) hoặc vào app. */
 export default function HrmClient() {
@@ -52,7 +57,7 @@ export default function HrmClient() {
   // Kho Skill xem công khai được, không bắt đăng nhập
   if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
   if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
-  if (backend.status === "employee") return <EmployeeWorkspace role={backend.role} canUseTools={backend.canUseTools} mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
+  if (backend.status === "employee") return <EmployeeWorkspace role={backend.role} canUseTools={backend.canUseTools} actor={backend.actor} mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} onExitPreview={backend.exitPreview} />;
   return <HrmWorkspace backend={backend} />;
 }
 
@@ -113,6 +118,18 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     : template));
   const partnerStore = usePartners(backend.mode === "live" ? getSupabaseClient() : null, templateError);
   const listInput = useMemo(() => toListInput(filters), [filters]);
+  // Nhân sự để chọn vào dự án (chỉ khi được xem nhân sự); dự án dùng store riêng (Supabase hoặc demo)
+  const employeeSource = useMemo<EmployeeSource>(() => app && can(actor, "employeeRead") ? {
+    search: async (query: string) => {
+      const result = await app.employees.list(actor, { query, page: 1, pageSize: 100 });
+      return result.ok ? result.value.items.filter((employee) => !employee.archivedAt && employee.status !== "resigned").map((employee) => ({ id: employee.id, code: employee.code, name: employee.name, position: employee.position })) : [];
+    },
+  } : null, [app, actor]);
+  const projectStore = useProjectStore(backend.mode, employeeSource);
+  const openProject = useCallback((projectId: string | null) => {
+    const path = projectId ? projectPath(projectId) : routePath("projects");
+    if (path !== window.location.pathname) window.history.pushState(null, "", path);
+  }, []);
 
   /** Chế độ thật: đẩy tệp vừa chọn lên kho lưu trữ (lỗi thì báo, tệp vẫn dùng được trong phiên). */
   const storeFiles = useCallback(async (folder: FileFolder, files: Record<string, File>) => {
@@ -437,7 +454,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "skills" && <SkillsClient embedded />}
         {view === "tools" && <ToolsPage />}
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
-        {view === "accounts" && actor.role === "admin" && <AccountsView actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}
+        {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
+        {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} />}
+        {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}
+        {view === "accounts" && actor.role === "admin" && <AccountsView employees={employeeSource} actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}
         {(view === "settings" || view === "certTypes") && <SettingsPanel key={view} section={view === "certTypes" ? "types" : "emails"} app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
       </main>
       {employeeForm && <EmployeeFormModal
