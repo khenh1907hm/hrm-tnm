@@ -110,7 +110,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
         {view === "tools" && <ToolsPage />}
         {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
           onOpen={(projectId) => { const path = projectId ? projectPath(projectId) : routePath("projects"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />)}
-        {view === "timesheet" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} setNotice={setNotice} />)}
+        {view === "timesheet" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} setNotice={setNotice} onOpenProject={(projectId) => window.history.pushState(null, "", projectPath(projectId))} />)}
       </main>
     </div>
   );

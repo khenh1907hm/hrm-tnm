@@ -455,7 +455,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "tools" && <ToolsPage />}
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
-        {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} />}
+        {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
         {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}
         {view === "accounts" && actor.role === "admin" && <AccountsView employees={employeeSource} actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}
         {(view === "settings" || view === "certTypes") && <SettingsPanel key={view} section={view === "certTypes" ? "types" : "emails"} app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}
