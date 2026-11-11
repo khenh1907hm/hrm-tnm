@@ -65,3 +65,13 @@
 .ap-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
 .dept-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; margin-bottom: 12px; }
 .dept-card { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; align-content: start; }
+
+/* Điều kiện thanh toán của NCC */
+.po-terms { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px 12px; display: grid; gap: 10px; margin: 0; }
+.po-terms legend { font-weight: 700; padding: 0 6px; font-size: 14px; }
+.po-term { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.po-term input { margin-top: 3px; width: 18px; height: 18px; flex: none; }
+.po-term span { display: grid; gap: 2px; }
+.po-term small { color: var(--muted); }
+.po-term-pct { max-width: 220px; margin: 0 0 0 28px; }
+.po-terms-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; }

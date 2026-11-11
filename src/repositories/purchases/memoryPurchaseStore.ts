@@ -1,6 +1,6 @@
 import { systemClock, todayVN, type Clock } from "../../lib/clock";
 import type { ProjectStore } from "../../modules/projects/store";
-import { actualTotal, estimateTotal } from "../../modules/purchases/flow";
+import { actualTotal, estimateTotal, orderBlock, paymentIssue } from "../../modules/purchases/flow";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseApprover, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseStatus } from "../../modules/purchases/types";
 import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type DepartmentMembers } from "../../modules/purchases/approval";
@@ -40,7 +40,10 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   const reason = (note: string) => { if (note.trim().length < 3) fail("PO_REASON_REQUIRED"); };
   const done = () => { persist(); return Promise.resolve(); };
   // Đơn cũ trong localStorage chưa có các trường của quy trình mới
-  data.orders = data.orders.map((order) => ({ ...order, budgetCode: order.budgetCode ?? null, budgetA: order.budgetA ?? null, budgetB: order.budgetB ?? null, usesChain: order.usesChain ?? false }));
+  data.orders = data.orders.map((order) => ({ ...order, budgetCode: order.budgetCode ?? null, budgetA: order.budgetA ?? null, budgetB: order.budgetB ?? null, usesChain: order.usesChain ?? false,
+    advanceRequired: order.advanceRequired ?? false, advancePct: order.advancePct ?? null, prepayRequired: order.prepayRequired ?? false }));
+  data.payments = data.payments.map((payment) => ({ ...payment, rfpNo: payment.rfpNo ?? "", invoiceNo: payment.invoiceNo ?? "", invoiceDate: payment.invoiceDate ?? null, vatAmount: payment.vatAmount ?? 0, usesChain: payment.usesChain ?? false }));
+  let rfpSeq = data.payments.filter((payment) => payment.rfpNo).length;
   const sheetOf = (id: string) => data.sheets.find((sheet) => sheet.id === id) ?? fail("BUDGET_NOT_FOUND");
   const projectSheets = (projectId: string) => data.sheets.filter((sheet) => sheet.projectId === projectId);
   const ordered = (projectId: string, code: string, exclude: string | null) => data.orders
@@ -115,6 +118,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
     },
     async markOrdered(id, supplier, contact, expected, note) {
       const order = orderOf(id); expect(order, "approved"); if (supplier.trim().length < 2) fail("PO_SUPPLIER_REQUIRED");
+      const blocked = orderBlock(order, data.payments.filter((payment) => payment.orderId === id)); if (blocked) fail(blocked);
       Object.assign(order, { status: "ordered", orderedAt: now(), supplier: supplier.trim(), supplierContact: contact.trim(), expectedDelivery: expected });
       log(id, "order", [supplier.trim(), expected ? `giao dự kiến ${expected.split("-").reverse().join("/")}` : "", note.trim()].filter(Boolean).join(" · ")); return done();
     },
@@ -122,14 +126,23 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const order = orderOf(id); expect(order, "approved", "ordered", "received"); if (note.trim().length < 2) fail("PO_NOTE_REQUIRED");
       if (expected) order.expectedDelivery = expected; log(id, "track", note); return done();
     },
-    async requestPayment(id, kind, amount, payee, note) {
-      const order = orderOf(id); expect(order, "approved", "ordered", "received"); if (kind === "final" && order.status === "approved") fail("PO_BAD_STATUS");
-      if (!(amount > 0)) fail("PO_BAD_AMOUNT");
-      data.payments.push({ id: newId(), orderId: id, kind, amount, payee: payee.trim(), note: note.trim(), status: "requested", requestedAt: now(), approvedAt: null, paidAt: null, paidMethod: "", decisionNote: "" });
-      log(id, `payment_request:${kind}`, `${amount} đ${note.trim() ? ` · ${note.trim()}` : ""}`); return done();
+    async requestPayment(id, input) {
+      const order = orderOf(id); expect(order, "approved", "ordered", "received"); if (input.kind === "final" && order.status === "approved") fail("PO_BAD_STATUS");
+      // PRC-30: đơn quy trình mới chỉ cho loại khoản NCC cần
+      if (order.usesChain && ((input.kind === "advance" && !order.advanceRequired) || (input.kind === "prepayment" && !order.prepayRequired))) fail("PO_PAYMENT_NOT_NEEDED");
+      const issue = paymentIssue(order, data.payments.filter((payment) => payment.orderId === id), input); if (issue) fail(issue);
+      const month = todayVN(clock).slice(2, 7).replace("-", "");
+      const payment: PurchasePayment = {
+        id: newId(), orderId: id, kind: input.kind, amount: input.amount, payee: input.payee.trim(), note: input.note.trim(), status: "requested", requestedAt: now(), approvedAt: null, paidAt: null, paidMethod: "", decisionNote: "",
+        rfpNo: `RFP-${month}-${String(++rfpSeq).padStart(4, "0")}`, invoiceNo: input.kind === "advance" ? "tạm ứng" : input.invoiceNo.trim(), invoiceDate: input.invoiceDate, vatAmount: input.vatAmount, usesChain: order.usesChain,
+      };
+      data.payments.push(payment);
+      if (payment.usesChain) startChain("payment", payment.id);
+      log(id, `payment_request:${input.kind}`, `${payment.rfpNo} · ${input.amount} đ${input.note.trim() ? ` · ${input.note.trim()}` : ""}`); return done();
     },
     async decidePayment(paymentId, approve, note) {
       const payment = data.payments.find((item) => item.id === paymentId) ?? fail("PO_NOT_FOUND");
+      if (payment.usesChain) fail("PO_USE_CHAIN");
       if (payment.status !== "requested") fail("PO_BAD_STATUS"); if (!approve) reason(note);
       Object.assign(payment, { status: approve ? "approved" : "rejected", approvedAt: now(), decisionNote: note.trim() });
       log(payment.orderId, `${approve ? "payment_approve" : "payment_reject"}:${payment.kind}`, `${payment.amount} đ`); return done();
@@ -212,7 +225,13 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const step = data.steps.find((item) => item.id === stepId) ?? fail("STEP_NOT_FOUND");
       if (currentStep(docSteps(step.docType, step.docId))?.id !== stepId) fail("STEP_NOT_CURRENT");
       if (!approve) reason(note);
-      if (step.docType === "purchase") {
+      if (step.docType === "payment") {
+        const payment = data.payments.find((item) => item.id === step.docId) ?? fail("PO_NOT_FOUND");
+        if (payment.status !== "requested") fail("PO_BAD_STATUS");
+        if (!approve) { Object.assign(payment, { status: "rejected", decisionNote: note.trim() }); log(payment.orderId, `payment_reject:${payment.kind}`, `${payment.rfpNo} · ${note.trim()}`); }
+        else if (step.role === "leader") { Object.assign(payment, { status: "approved", approvedAt: now(), decisionNote: note.trim() }); log(payment.orderId, `payment_approve:${payment.kind}`, `${payment.rfpNo} · ${payment.amount} đ`); }
+        else log(payment.orderId, `payment_sign:${step.role}`, payment.rfpNo);
+      } else if (step.docType === "purchase") {
         const order = orderOf(step.docId); expect(order, "submitted");
         if (approve && step.role === "leader") {
           const found = check(order.projectId!, order.budgetCode!, order.id) ?? fail("PO_NO_BUDGET");
@@ -238,13 +257,15 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       for (const steps of docs.values()) {
         const step = currentStep(steps);
         if (!step) continue;
-        const order = step.docType === "purchase" ? data.orders.find((item) => item.id === step.docId) : undefined;
+        const payment = step.docType === "payment" ? data.payments.find((item) => item.id === step.docId) : undefined;
+        const order = step.docType === "purchase" ? data.orders.find((item) => item.id === step.docId) : payment ? data.orders.find((item) => item.id === payment.orderId) : undefined;
         const sheet = step.docType === "budget" ? data.sheets.find((item) => item.id === step.docId) : undefined;
         const projectId = order?.projectId ?? sheet?.projectId ?? null;
         out.push({
           stepId: step.id, docType: step.docType, docId: step.docId, projectId, projectCode: projects.find((project) => project.id === projectId)?.code ?? "",
-          title: order ? `${order.code} · ${order.title}` : `Ngân sách ${sheet?.number ?? ""}`,
-          amount: order?.totalEstimate ?? sheet?.lines.reduce((sum, line) => sum + line.budget, 0) ?? 0, role: step.role, targetDate: step.targetDate,
+          title: payment && order ? `${payment.rfpNo} · ${order.code} · ${order.title}` : order ? `${order.code} · ${order.title}` : `Ngân sách ${sheet?.number ?? ""}`,
+          amount: payment ? payment.amount + payment.vatAmount : order?.totalEstimate ?? sheet?.lines.reduce((sum, line) => sum + line.budget, 0) ?? 0, role: step.role, targetDate: step.targetDate,
+          ...(payment ? { orderId: payment.orderId } : {}),
         });
       }
       return out.sort((a, b) => a.targetDate.localeCompare(b.targetDate));

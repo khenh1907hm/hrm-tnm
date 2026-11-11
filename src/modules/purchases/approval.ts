@@ -8,11 +8,13 @@ export const DEPARTMENTS: readonly Department[] = ["leader", "technical", "mater
 export const ROLE_LABELS: Record<ApprovalRole, string> = {
   pic: "Phụ trách", technical: "P. Kỹ thuật", material: "P. Vật tư", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
 };
-export type ApprovalDocType = "budget" | "purchase";
+export type ApprovalDocType = "budget" | "purchase" | "payment";
 /** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 6 người (Lãnh đạo duyệt, Hành chánh nhận để phát hành PO). */
 export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {
   budget: ["pic", "technical", "leader"],
   purchase: ["pic", "technical", "material", "accounting", "leader", "admin_office"],
+  /** Đề nghị tạm ứng / thanh toán (P-CF-03): Lãnh đạo ký xong thì Kế toán chi. */
+  payment: ["pic", "technical", "material", "leader"],
 };
 /** Bước quyết định: ký xong bước này thì phiếu được duyệt. */
 export const DECIDING_ROLE: ApprovalRole = "leader";

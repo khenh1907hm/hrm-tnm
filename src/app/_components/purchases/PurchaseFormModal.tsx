@@ -17,8 +17,9 @@ const blankItem = (): ItemDraft => ({ id: "", name: "", spec: "", unit: "", quan
 export function PurchaseFormModal(props: { store: PurchaseStore; projects: readonly Project[]; initial: PurchaseOrder | null; defaultProjectId?: string | null; onClose: () => void; onSaved: (order: PurchaseOrder, submitted: boolean) => void }) {
   const start = props.initial;
   const [draft, setDraft] = useState<Omit<PurchaseDraft, "items">>(() => start
-    ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, note: start.note, budgetCode: start.budgetCode }
-    : { kind: props.defaultProjectId ? "project" : "office", projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", budgetCode: null });
+    ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, note: start.note, budgetCode: start.budgetCode,
+      advanceRequired: start.advanceRequired, advancePct: start.advancePct, prepayRequired: start.prepayRequired }
+    : { kind: props.defaultProjectId ? "project" : "office", projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
   const [items, setItems] = useState<ItemDraft[]>(() => start?.items.map((item) => ({ id: item.id, name: item.name, spec: item.spec, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice })) ?? [blankItem()]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -61,6 +62,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
     if (problem) { setError(projectText(problem)); return; }
     if (submit && draft.kind === "project" && !draft.budgetCode) { setError(projectText("PO_BUDGET_CODE_REQUIRED")); return; }
     if (submit && check?.over) { setError(projectText("PO_OVER_BUDGET")); return; }
+    if (draft.advanceRequired && !(draft.advancePct !== null && draft.advancePct > 0 && draft.advancePct <= 100)) { setError(projectText("PO_ADVANCE_PCT")); return; }
     setBusy(true); setError("");
     try {
       const saved = await props.store.saveDraft({ ...draft, items: cleaned, ...(start ? { id: start.id } : {}) });
@@ -116,6 +118,14 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
             <button type="button" className="button" onClick={() => setItems((current) => [...current, blankItem()])}><Plus className="ico" size={16} aria-hidden="true" /> Thêm dòng</button>
           </div>
           {check && <div style={{ gridColumn: "1 / -1" }}><BudgetCheckBox check={check} /></div>}
+          <fieldset className="po-terms" style={{ gridColumn: "1 / -1" }}>
+            <legend>Điều kiện thanh toán của nhà cung cấp</legend>
+            <label className="po-term"><input type="checkbox" checked={draft.advanceRequired} onChange={(event) => setDraft((current) => ({ ...current, advanceRequired: event.target.checked, advancePct: event.target.checked ? current.advancePct ?? 30 : null }))} />
+              <span><b>NCC cần tạm ứng</b><small>Phải lập đề nghị tạm ứng, ký duyệt và kế toán chi xong mới được đặt hàng, theo dõi.</small></span></label>
+            {draft.advanceRequired && <label className="field po-term-pct"><span>Tạm ứng (%)</span><input type="number" min={1} max={100} step="any" value={draft.advancePct ?? ""} onChange={(event) => set("advancePct", event.target.value ? Number(event.target.value) : null)} /><small className="field-hint">≈ {formatVnd(Math.round(estimateTotal(items) * (draft.advancePct ?? 0) / 100))}</small></label>}
+            <label className="po-term"><input type="checkbox" checked={draft.prepayRequired} onChange={(event) => set("prepayRequired", event.target.checked)} />
+              <span><b>NCC cần thanh toán trước khi giao hàng</b><small>Không chọn: thanh toán sau khi nhận hàng, kiểm tra.</small></span></label>
+          </fieldset>
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú, lý do mua</span><input value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>

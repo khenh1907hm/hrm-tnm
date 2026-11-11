@@ -60,14 +60,18 @@ export type PurchaseOrder = {
   budgetB: number | null;
   /** Đơn đi chuỗi ký theo bộ phận (đơn dự án theo quy trình mới). */
   usesChain: boolean;
+  /** Điều kiện thanh toán của NCC: có cần tạm ứng (bao nhiêu %), có cần thanh toán trước khi giao hàng. */
+  advanceRequired: boolean;
+  advancePct: number | null;
+  prepayRequired: boolean;
 };
 
-export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note" | "budgetCode"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
+export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note" | "budgetCode" | "advanceRequired" | "advancePct" | "prepayRequired"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
 
 export type PaymentKind = "advance" | "prepayment" | "final";
 export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = { advance: "Tạm ứng", prepayment: "Thanh toán trước", final: "Thanh toán còn lại" };
 export type PurchasePaymentStatus = "requested" | "approved" | "paid" | "rejected";
-export const PURCHASE_PAYMENT_STATUS_LABELS: Record<PurchasePaymentStatus, string> = { requested: "Chờ sếp duyệt", approved: "Chờ chi", paid: "Đã chi", rejected: "Từ chối" };
+export const PURCHASE_PAYMENT_STATUS_LABELS: Record<PurchasePaymentStatus, string> = { requested: "Chờ ký duyệt", approved: "Chờ kế toán chi", paid: "Đã chi", rejected: "Từ chối / trả về" };
 
 export type PurchasePayment = {
   id: string;
@@ -82,6 +86,13 @@ export type PurchasePayment = {
   paidAt: string | null;
   paidMethod: string;
   decisionNote: string;
+  /** Số đề nghị thanh toán (RFP-…), số và ngày hóa đơn ("tạm ứng" khi tạm ứng), thuế GTGT; amount là tiền trước thuế. */
+  rfpNo: string;
+  invoiceNo: string;
+  invoiceDate: string | null;
+  vatAmount: number;
+  /** Khoản của đơn dự án: ký theo chuỗi Phụ trách → P. Kỹ thuật → P. Vật tư → Lãnh đạo rồi Kế toán chi. */
+  usesChain: boolean;
 };
 
 export type PurchaseEvent = { id: string; orderId: string; at: string; actorName: string; action: string; note: string };
@@ -91,3 +102,6 @@ export type PurchaseRoles = { isApprover: boolean; isPayer: boolean; seesAll: bo
 export type PurchaseApprover = { employeeId: string; name: string; hasAccount: boolean };
 
 export type ReceiveLine = { id: string; receivedQty: number; acceptedQty: number; note: string };
+
+/** Nội dung một đề nghị tạm ứng / thanh toán (mẫu P-CF-03). */
+export type PaymentRequestInput = { kind: PaymentKind; amount: number; vatAmount: number; invoiceNo: string; invoiceDate: string | null; payee: string; note: string };

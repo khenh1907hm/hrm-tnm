@@ -1,6 +1,6 @@
 import type { ApprovalDocType, ApprovalStep, Department, DepartmentMembers } from "./approval";
 import type { BudgetLine, BudgetSheet, BudgetSheetHeader, CostCode } from "./budget";
-import type { PaymentKind, PurchaseApprover, PurchaseDraft, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseRoles, ReceiveLine } from "./types";
+import type { PaymentRequestInput, PurchaseApprover, PurchaseDraft, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseRoles, ReceiveLine } from "./types";
 
 /**
  * Nguồn dữ liệu đặt hàng: bộ nhớ (demo, người dùng demo là Admin + người duyệt + người chi) hoặc Supabase (RLS + hàm purchase_*).
@@ -26,7 +26,7 @@ export interface PurchaseStore {
   decide(id: string, approve: boolean, note: string): Promise<void>;
   markOrdered(id: string, supplier: string, contact: string, expected: string | null, note: string): Promise<void>;
   track(id: string, note: string, expected: string | null): Promise<void>;
-  requestPayment(id: string, kind: PaymentKind, amount: number, payee: string, note: string): Promise<void>;
+  requestPayment(id: string, input: PaymentRequestInput): Promise<void>;
   decidePayment(paymentId: string, approve: boolean, note: string): Promise<void>;
   pay(paymentId: string, method: string, note: string): Promise<void>;
   receive(id: string, lines: readonly ReceiveLine[], note: string): Promise<void>;
@@ -51,4 +51,6 @@ export interface PurchaseStore {
 }
 
 /** Một phiếu đang chờ người đăng nhập ký. */
-export type PendingApproval = { stepId: string; docType: ApprovalDocType; docId: string; projectId: string | null; projectCode: string; title: string; amount: number; role: ApprovalStep["role"]; targetDate: string };
+export type PendingApproval = { stepId: string; docType: ApprovalDocType; docId: string; projectId: string | null; projectCode: string; title: string; amount: number; role: ApprovalStep["role"]; targetDate: string;
+  /** Đề nghị thanh toán: đơn hàng chứa khoản đó (để mở). */
+  orderId?: string };

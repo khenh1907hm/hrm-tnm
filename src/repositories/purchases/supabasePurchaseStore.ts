@@ -24,6 +24,7 @@ const orderFromRow = (row: Row): PurchaseOrder => ({
   items: ((row.purchase_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map(itemFromRow),
   budgetCode: strOrNull(row.budget_code), budgetA: row.budget_a === null || row.budget_a === undefined ? null : num(row.budget_a),
   budgetB: row.budget_b === null || row.budget_b === undefined ? null : num(row.budget_b), usesChain: Boolean(row.uses_chain),
+  advanceRequired: Boolean(row.advance_required), advancePct: row.advance_pct === null || row.advance_pct === undefined ? null : num(row.advance_pct), prepayRequired: Boolean(row.prepay_required),
 });
 const sheetFromRow = (row: Row): BudgetSheet => ({
   id: str(row.id), projectId: str(row.project_id), revision: num(row.revision), number: str(row.number), status: row.status as BudgetSheet["status"],
@@ -32,7 +33,8 @@ const sheetFromRow = (row: Row): BudgetSheet => ({
   lines: ((row.project_budget_lines ?? []) as Row[]).map((line) => ({ code: str(line.code), nett: num(line.nett), budget: num(line.budget), supplier: str(line.supplier), contingency: num(line.contingency), remark: str(line.remark) }))
     .sort((a, b) => a.code.localeCompare(b.code)),
 });
-const paymentFromRow = (row: Row): PurchasePayment => ({ id: str(row.id), orderId: str(row.order_id), kind: row.kind as PurchasePayment["kind"], amount: num(row.amount), payee: str(row.payee), note: str(row.note), status: row.status as PurchasePayment["status"], requestedAt: str(row.requested_at), approvedAt: strOrNull(row.approved_at), paidAt: strOrNull(row.paid_at), paidMethod: str(row.paid_method), decisionNote: str(row.decision_note) });
+const paymentFromRow = (row: Row): PurchasePayment => ({ id: str(row.id), orderId: str(row.order_id), kind: row.kind as PurchasePayment["kind"], amount: num(row.amount), payee: str(row.payee), note: str(row.note), status: row.status as PurchasePayment["status"], requestedAt: str(row.requested_at), approvedAt: strOrNull(row.approved_at), paidAt: strOrNull(row.paid_at), paidMethod: str(row.paid_method), decisionNote: str(row.decision_note),
+  rfpNo: str(row.rfp_no), invoiceNo: str(row.invoice_no), invoiceDate: strOrNull(row.invoice_date), vatAmount: num(row.vat_amount), usesChain: Boolean(row.uses_chain) });
 const ORDER_COLUMNS = "*, purchase_items(*)";
 
 /** Store đặt hàng chế độ thật: đọc qua RLS, mọi bước chuyển trạng thái gọi hàm purchase_* ở máy chủ. */
@@ -60,7 +62,8 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
       return data ? orderFromRow(data as Row) : null;
     },
     async saveDraft(draft) {
-      const payload = { kind: draft.kind, project_id: draft.kind === "project" ? draft.projectId : null, budget_code: draft.kind === "project" ? draft.budgetCode : null, title: draft.title.trim(), department: draft.department.trim(), needed_by: draft.neededBy, delivery_address: draft.deliveryAddress.trim(), supplier: draft.supplier.trim(), supplier_contact: draft.supplierContact.trim(), note: draft.note.trim() };
+      const payload = { kind: draft.kind, project_id: draft.kind === "project" ? draft.projectId : null, budget_code: draft.kind === "project" ? draft.budgetCode : null,
+        advance_required: draft.advanceRequired, advance_pct: draft.advanceRequired ? draft.advancePct : null, prepay_required: draft.prepayRequired, title: draft.title.trim(), department: draft.department.trim(), needed_by: draft.neededBy, delivery_address: draft.deliveryAddress.trim(), supplier: draft.supplier.trim(), supplier_contact: draft.supplierContact.trim(), note: draft.note.trim() };
       let id = draft.id;
       if (id) await check(client.from("purchase_orders").update(payload).eq("id", id));
       else {
@@ -95,7 +98,9 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     async decide(id, approve, note) { await rpc("purchase_decide", { p_order: id, p_approve: approve, p_note: note }); },
     async markOrdered(id, supplier, contact, expected, note) { await rpc("purchase_mark_ordered", { p_order: id, p_supplier: supplier, p_contact: contact, p_expected: expected, p_note: note }); },
     async track(id, note, expected) { await rpc("purchase_track", { p_order: id, p_note: note, p_expected: expected }); },
-    async requestPayment(id, kind, amount, payee, note) { await rpc("purchase_request_payment", { p_order: id, p_kind: kind, p_amount: amount, p_payee: payee, p_note: note }); },
+    async requestPayment(id, input) {
+      await rpc("purchase_request_rfp", { p_order: id, p_kind: input.kind, p_amount: input.amount, p_vat: input.vatAmount, p_invoice_no: input.invoiceNo, p_invoice_date: input.invoiceDate, p_payee: input.payee, p_note: input.note });
+    },
     async decidePayment(paymentId, approve, note) { await rpc("purchase_decide_payment", { p_payment: paymentId, p_approve: approve, p_note: note }); },
     async pay(paymentId, method, note) { await rpc("purchase_pay", { p_payment: paymentId, p_method: method, p_note: note }); },
     async receive(id, lines, note) { await rpc("purchase_receive", { p_order: id, p_items: lines, p_note: note }); },
@@ -131,6 +136,7 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
       return (((await rpc("my_approvals", {})) ?? []) as Row[]).map((row) => ({
         stepId: str(row.step_id), docType: row.doc_type as ApprovalStep["docType"], docId: str(row.doc_id), projectId: strOrNull(row.project_id), projectCode: str(row.project_code),
         title: str(row.title), amount: num(row.amount), role: row.role as ApprovalStep["role"], targetDate: str(row.target_date),
+        ...(row.order_id ? { orderId: str(row.order_id) } : {}),
       }));
     },
     async departments() {

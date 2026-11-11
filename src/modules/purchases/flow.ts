@@ -18,7 +18,7 @@ export function draftIssue(draft: { kind: string; projectId: string | null; titl
 export const FLOW_STEPS = [
   { key: "draft", label: "Đơn nháp" },
   { key: "submitted", label: "Lập đơn, chờ duyệt" },
-  { key: "approved", label: "Sếp duyệt" },
+  { key: "approved", label: "Duyệt" },
   { key: "advance", label: "Tạm ứng" },
   { key: "ordered", label: "Đặt hàng, theo dõi" },
   { key: "prepayment", label: "Thanh toán trước" },
@@ -36,15 +36,19 @@ const STEP_RANK: Record<FlowStepKey, number> = { draft: 0, submitted: 1, approve
  * PUR-03: trạng thái từng bước. Bước thanh toán (tạm ứng, trước, còn lại) là tùy chọn: xong khi có khoản đã chi,
  * đang làm khi có khoản chờ duyệt hoặc chờ chi, bỏ qua khi đơn đã qua bước đó mà không có khoản nào.
  */
-export function stepStates(order: Pick<PurchaseOrder, "status">, payments: readonly Pick<PurchasePayment, "kind" | "status">[]): Record<FlowStepKey, StepState> {
+export function stepStates(order: Pick<PurchaseOrder, "status"> & Partial<Pick<PurchaseOrder, "advanceRequired" | "prepayRequired">>, payments: readonly Pick<PurchasePayment, "kind" | "status">[]): Record<FlowStepKey, StepState> {
   const rank = ORDER_RANK[order.status];
   const states = {} as Record<FlowStepKey, StepState>;
+  // PRC-30: NCC không cần tạm ứng / thanh toán trước thì bước đó "Không dùng" ngay từ đầu
+  const notNeeded = (key: FlowStepKey) => (key === "advance" && order.advanceRequired === false) || (key === "prepayment" && order.prepayRequired === false);
   for (const step of FLOW_STEPS) {
     const stepRank = STEP_RANK[step.key];
     if (step.key === "advance" || step.key === "prepayment" || step.key === "final") {
       const mine = payments.filter((payment) => payment.kind === step.key && payment.status !== "rejected");
       if (mine.some((payment) => payment.status === "requested" || payment.status === "approved")) states[step.key] = "current";
       else if (mine.some((payment) => payment.status === "paid")) states[step.key] = "done";
+      else if (notNeeded(step.key)) states[step.key] = "skipped";
+      else if (step.key === "advance" && order.advanceRequired && rank >= ORDER_RANK.approved && order.status !== "cancelled") states[step.key] = "current";
       else states[step.key] = rank > stepRank || order.status === "completed" ? "skipped" : "todo";
       continue;
     }
@@ -63,24 +67,47 @@ export type PurchaseAction =
  * Người lập: sửa và lập đơn khi nháp / bị từ chối; đặt hàng, đề nghị chi, nhận hàng, hoàn tất. Sếp: duyệt đơn, duyệt khoản chi,
  * và làm được mọi việc của người lập trừ sửa đơn. Kế toán (payer): chi khoản đã duyệt. Hủy: người lập trước khi đặt hàng, sếp hoặc Admin khi chưa xong.
  */
-export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterId"> & { usesChain?: boolean }, me: { userId: string; isAdmin: boolean; isProjectLead?: boolean } & PurchaseRoles, payments: readonly Pick<PurchasePayment, "status">[] = []): Set<PurchaseAction> {
+export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterId"> & Partial<Pick<PurchaseOrder, "usesChain" | "advanceRequired" | "prepayRequired">>, me: { userId: string; isAdmin: boolean; isProjectLead?: boolean } & PurchaseRoles, payments: readonly (Pick<PurchasePayment, "status"> & Partial<Pick<PurchasePayment, "kind" | "usesChain">>)[] = []): Set<PurchaseAction> {
   const actions = new Set<PurchaseAction>();
   const mine = order.requesterId === me.userId;
   const handler = mine || me.isApprover || me.isAdmin;
   const status = order.status;
   if (mine && (status === "draft" || status === "rejected")) { actions.add("edit"); actions.add("submit"); }
   if (me.isApprover && status === "submitted" && !order.usesChain) { actions.add("approve"); actions.add("reject"); }
-  if (handler && status === "approved") actions.add("order");
+  // PRC-31: NCC cần tạm ứng thì phải chi xong tạm ứng mới sang Đặt hàng, theo dõi
+  if (handler && status === "approved" && !orderBlock(order, payments)) actions.add("order");
   if (status === "approved" || status === "ordered" || status === "received") {
     actions.add("track");
-    if (handler || me.isPayer) { actions.add("requestAdvance"); actions.add("requestPrepayment"); if (status !== "approved") actions.add("requestFinal"); }
+    if (handler || me.isPayer) {
+      // Đơn đi quy trình mới: chỉ mở loại khoản NCC cần (đơn cũ giữ như trước)
+      const terms = order.advanceRequired !== undefined;
+      if (!terms || order.advanceRequired) actions.add("requestAdvance");
+      if (!terms || order.prepayRequired) actions.add("requestPrepayment");
+      if (status !== "approved") actions.add("requestFinal");
+    }
   }
   if ((handler || me.isProjectLead) && (status === "ordered" || status === "received")) actions.add("receive");
   if (handler && status === "received" && !payments.some((payment) => payment.status === "requested" || payment.status === "approved")) actions.add("complete");
   if (status !== "completed" && status !== "cancelled" && ((mine && ["draft", "submitted", "rejected", "approved"].includes(status)) || me.isApprover || me.isAdmin)) actions.add("cancel");
-  if (me.isApprover && payments.some((payment) => payment.status === "requested")) actions.add("decidePayment");
+  if (me.isApprover && payments.some((payment) => payment.status === "requested" && !payment.usesChain)) actions.add("decidePayment");
   if (me.isPayer && payments.some((payment) => payment.status === "approved")) actions.add("pay");
   return actions;
+}
+
+/** PRC-31: lý do chưa được Đặt hàng (NCC cần tạm ứng mà tạm ứng chưa chi xong), hoặc null. */
+export function orderBlock(order: Partial<Pick<PurchaseOrder, "advanceRequired">>, payments: readonly (Pick<PurchasePayment, "status"> & Partial<Pick<PurchasePayment, "kind">>)[]): string | null {
+  if (!order.advanceRequired) return null;
+  return payments.some((payment) => payment.kind === "advance" && payment.status === "paid") ? null : "PO_ADVANCE_NOT_PAID";
+}
+
+/** PRC-32: kiểm tra một đề nghị trước khi gửi: số tiền > 0, thuế không âm, có số hóa đơn (tạm ứng thì "tạm ứng"), tổng trước thuế không vượt giá trị đơn. */
+export function paymentIssue(order: Pick<PurchaseOrder, "totalEstimate" | "totalActual">, payments: readonly Pick<PurchasePayment, "amount" | "status">[], input: { kind: PaymentKind; amount: number; vatAmount: number; invoiceNo: string }): string | null {
+  if (!(input.amount > 0) || !Number.isInteger(input.amount)) return "PO_BAD_AMOUNT";
+  if (!(input.vatAmount >= 0) || !Number.isInteger(input.vatAmount)) return "PO_BAD_AMOUNT";
+  if (input.kind !== "advance" && input.invoiceNo.trim().length < 1) return "PO_INVOICE_REQUIRED";
+  const used = payments.filter((payment) => payment.status !== "rejected").reduce((sum, payment) => sum + payment.amount, 0);
+  if (used + input.amount > (order.totalActual ?? order.totalEstimate)) return "PO_PAY_OVER";
+  return null;
 }
 
 /** PUR-05: tổng tiền theo loại khoản chi đã chi, và số còn phải trả nhà cung cấp so với tiền thực nhận (tạm ứng tính vào đã trả). */
@@ -93,6 +120,7 @@ export function paymentSummary(order: Pick<PurchaseOrder, "totalEstimate" | "tot
 
 export const EVENT_LABELS: Record<string, string> = {
   submit: "Lập đơn, gửi duyệt", approve: "Duyệt đơn", reject: "Trả về / từ chối đơn",
+  "payment_sign:pic": "Phụ trách ký đề nghị thanh toán", "payment_sign:technical": "P. Kỹ thuật ký đề nghị thanh toán", "payment_sign:material": "P. Vật tư ký đề nghị thanh toán",
   "sign:pic": "Phụ trách ký", "sign:technical": "P. Kỹ thuật ký", "sign:material": "P. Vật tư ký", "sign:accounting": "Kế toán ký", "sign:leader": "Lãnh đạo ký", "sign:admin_office": "Hành chánh ký nhận", order: "Đặt hàng", track: "Cập nhật theo dõi",
   receive: "Nhận hàng, kiểm tra", complete: "Hoàn tất đơn", cancel: "Hủy đơn",
   "payment_request:advance": "Đề nghị tạm ứng", "payment_request:prepayment": "Đề nghị thanh toán trước", "payment_request:final": "Đề nghị thanh toán còn lại",
@@ -112,17 +140,23 @@ export function progressOf(status: PurchaseStatus): { percent: number; label: st
 }
 
 /** Gợi ý việc tiếp theo cho người đang xem (hiện dưới thanh tiến trình). */
-export function nextHint(order: Pick<PurchaseOrder, "status" | "requesterId">, me: { userId: string } & PurchaseRoles, payments: readonly Pick<PurchasePayment, "status">[]): string {
+export function nextHint(order: Pick<PurchaseOrder, "status" | "requesterId"> & Partial<Pick<PurchaseOrder, "advanceRequired" | "prepayRequired">>, me: { userId: string } & PurchaseRoles, payments: readonly (Pick<PurchasePayment, "status"> & Partial<Pick<PurchasePayment, "kind">>)[]): string {
   const mine = order.requesterId === me.userId;
   if (me.isApprover && order.status === "submitted") return "Bạn là người duyệt: xem hàng cần mua rồi bấm Duyệt đơn hoặc Từ chối.";
-  if (me.isApprover && payments.some((payment) => payment.status === "requested")) return "Có khoản tạm ứng / thanh toán chờ bạn duyệt ở mục Tạm ứng và thanh toán.";
+  if (me.isApprover && payments.some((payment) => payment.status === "requested")) return "Có khoản tạm ứng / thanh toán đang chờ duyệt ở mục Tạm ứng và thanh toán.";
   if (me.isPayer && payments.some((payment) => payment.status === "approved")) return "Có khoản đã được sếp duyệt chờ bạn Thực hiện chi.";
   switch (order.status) {
     case "draft": return mine ? "Kiểm tra lại hàng cần mua rồi bấm Lập đơn, gửi duyệt." : "Đơn đang được soạn.";
     case "rejected": return mine ? "Sếp đã trả về: sửa theo góp ý rồi lập lại." : "Sếp đã trả về cho người lập sửa.";
     case "submitted": return "Đang chờ sếp duyệt.";
-    case "approved": return "Đã duyệt. Nếu cần tiền mua thì Đề nghị tạm ứng; sau đó bấm Đặt hàng khi đã chốt nhà cung cấp.";
-    case "ordered": return "Đang chờ giao hàng: cập nhật theo dõi khi có tin; hàng về thì bấm Nhận hàng, kiểm tra.";
+    case "approved": return "advanceRequired" in order && order.advanceRequired
+      ? orderBlock(order, payments)
+        ? "Đã duyệt. NCC cần tạm ứng: lập Đề nghị tạm ứng, ký duyệt xong và kế toán chi rồi mới Đặt hàng, theo dõi."
+        : "Tạm ứng đã chi. Bấm Đặt hàng để chuyển sang theo dõi đơn hàng."
+      : "Đã duyệt. NCC không cần tạm ứng: bấm Đặt hàng để chuyển sang theo dõi đơn hàng.";
+    case "ordered": return "prepayRequired" in order && order.prepayRequired
+      ? "Đang theo dõi. NCC cần thanh toán trước: lập Đề nghị thanh toán trước (kèm hóa đơn). Hàng về thì bấm Nhận hàng, kiểm tra."
+      : "Đang chờ giao hàng: cập nhật theo dõi khi có tin; hàng về thì bấm Nhận hàng, kiểm tra.";
     case "received": return "Đã nhận hàng. Đề nghị thanh toán phần còn lại (nếu còn), chi xong thì bấm Hoàn tất đơn.";
     case "completed": return "Đơn đã hoàn tất.";
     default: return "Đơn đã hủy.";

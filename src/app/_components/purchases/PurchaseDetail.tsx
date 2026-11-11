@@ -3,14 +3,14 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, PackageCheck, Pencil, Send, Truck, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, EVENT_LABELS, lineTotal, nextHint, paymentSummary, stepStates } from "../../../modules/purchases/flow";
+import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentIssue, paymentSummary, stepStates } from "../../../modules/purchases/flow";
 import { FlowStepper } from "./FlowBar";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
-  PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PurchaseEvent, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
+  PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PaymentRequestInput, type PurchaseEvent, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
 } from "../../../modules/purchases/types";
 import type { Notify } from "../Toast";
-import { errorMessage, moneyInput, parseMoney } from "../projects/projectShared";
+import { errorMessage, moneyInput, parseMoney, projectText } from "../projects/projectShared";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { ApprovalChain } from "./ApprovalChain";
 import { BudgetCheckBox } from "./BudgetCheckBox";
@@ -86,7 +86,9 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           {actions.has("cancel") && <button type="button" className="button danger" onClick={() => { const why = ask("Lý do hủy đơn (ít nhất 3 ký tự):"); if (why) void act(() => store.cancel(order.id, why), "Đã hủy đơn."); }}>Hủy đơn</button>}
         </div>
         {panel === "order" && <OrderPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact, expected, note) => act(() => store.markOrdered(order.id, supplier, contact, expected, note), "Đã đặt hàng, bắt đầu theo dõi.")} />}
-        {panel === "payment" && <PaymentPanel kinds={requestKinds} defaultPayee={order.supplier} remaining={Math.max(0, summary.remaining - summary.pending)} onCancel={() => setPanel(null)} onSubmit={(kind, amount, payee, note) => act(() => store.requestPayment(order.id, kind, amount, payee, note), `Đã gửi đề nghị ${PAYMENT_KIND_LABELS[kind].toLowerCase()} cho sếp duyệt.`)} />}
+        {panel === "payment" && <PaymentPanel kinds={requestKinds} order={order} payments={payments} remaining={Math.max(0, summary.remaining - summary.pending)} onCancel={() => setPanel(null)}
+          onSubmit={(input) => act(async () => { await store.requestPayment(order.id, input); setChainKey((value) => value + 1); }, `Đã gửi đề nghị ${PAYMENT_KIND_LABELS[input.kind].toLowerCase()} ${order.usesChain ? "đi ký duyệt" : "cho sếp duyệt"}.`)} />}
+        {actions.has("track") && order.status === "approved" && orderBlock(order, payments) && <p className="warn-text">{projectText("PO_ADVANCE_NOT_PAID")}</p>}
         {panel === "track" && <TrackPanel expected={order.expectedDelivery} onCancel={() => setPanel(null)} onSubmit={(note, expected) => act(() => store.track(order.id, note, expected), "Đã cập nhật theo dõi.")} />}
         {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note) => act(() => store.receive(order.id, lines, note), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
       </section>
@@ -121,6 +123,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
 
       <section className="panel pj-section" aria-labelledby="po-pay-title">
         <h2 id="po-pay-title">Tạm ứng và thanh toán</h2>
+        <p className="po-terms-line">Điều kiện NCC: <span className={`pill ${order.advanceRequired ? "warn" : ""}`}>{order.advanceRequired ? `Cần tạm ứng${order.advancePct ? ` ${order.advancePct}%` : ""}` : "Không tạm ứng"}</span> <span className={`pill ${order.prepayRequired ? "warn" : ""}`}>{order.prepayRequired ? "Thanh toán trước khi giao" : "Thanh toán sau khi nhận hàng"}</span></p>
         <div className="pj-kpis">
           <div className="pj-kpi"><span>Đã chi tạm ứng</span><b>{formatVnd(summary.advance)}</b></div>
           <div className="pj-kpi"><span>Đã chi thanh toán</span><b>{formatVnd(summary.prepayment + summary.final)}</b><small>Trước {formatVnd(summary.prepayment)} · Còn lại {formatVnd(summary.final)}</small></div>
@@ -130,16 +133,19 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         {!payments.length ? <p className="muted">Chưa có khoản tạm ứng hay thanh toán nào.</p> : (
           <div className="table-scroll">
             <table className="pj-table">
-              <thead><tr><th>Loại</th><th className="pj-num">Số tiền</th><th>Người nhận</th><th>Nội dung</th><th>Trạng thái</th><th /></tr></thead>
+              <thead><tr><th>Đề nghị</th><th>Hóa đơn</th><th className="pj-num">Trước thuế</th><th className="pj-num">Thuế GTGT</th><th className="pj-num">Giá trị</th><th>Người nhận</th><th>Nội dung</th><th>Trạng thái</th><th /></tr></thead>
               <tbody>{payments.map((payment) => (
                 <tr key={payment.id}>
-                  <td>{PAYMENT_KIND_LABELS[payment.kind]}<br /><small className="muted">{dateTime(payment.requestedAt)}</small></td>
+                  <td>{PAYMENT_KIND_LABELS[payment.kind]}{payment.rfpNo ? <><br /><b>{payment.rfpNo}</b></> : null}<br /><small className="muted">{dateTime(payment.requestedAt)}</small></td>
+                  <td>{payment.invoiceNo || "—"}{payment.invoiceDate ? <><br /><small className="muted">{dmy(payment.invoiceDate)}</small></> : null}</td>
                   <td className="pj-num">{formatVnd(payment.amount)}</td>
+                  <td className="pj-num">{payment.vatAmount ? formatVnd(payment.vatAmount) : "—"}</td>
+                  <td className="pj-num"><b>{formatVnd(payment.amount + payment.vatAmount)}</b></td>
                   <td>{payment.payee}</td>
                   <td>{payment.note}{payment.decisionNote && <><br /><small className="muted">{payment.decisionNote}</small></>}</td>
                   <td><span className={`pill ${PAY_TONE[payment.status]}`}>{PURCHASE_PAYMENT_STATUS_LABELS[payment.status]}</span>{payment.paidAt && <><br /><small className="muted">{dateTime(payment.paidAt)}{payment.paidMethod ? ` · ${payment.paidMethod}` : ""}</small></>}</td>
                   <td className="po-actions">
-                    {payment.status === "requested" && props.roles.isApprover && <>
+                    {payment.status === "requested" && props.roles.isApprover && !payment.usesChain && <>
                       <button type="button" className="button primary" onClick={() => void act(() => store.decidePayment(payment.id, true, ""), "Đã duyệt khoản chi.")}>Duyệt</button>
                       <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối khoản chi:"); if (why) void act(() => store.decidePayment(payment.id, false, why), "Đã từ chối khoản chi."); }}>Từ chối</button>
                     </>}
@@ -151,6 +157,10 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           </div>
         )}
       </section>
+
+      {payments.filter((payment) => payment.usesChain && payment.status !== "rejected").map((payment) => (
+        <ApprovalChain key={payment.id} store={store} docType="payment" docId={payment.id} refreshKey={chainKey} title={`Ký đề nghị ${PAYMENT_KIND_LABELS[payment.kind].toLowerCase()} ${payment.rfpNo}`} onChanged={() => void reload()} setNotice={setNotice} />
+      ))}
 
       <section className="panel pj-section" aria-labelledby="po-log-title">
         <h2 id="po-log-title">Theo dõi đơn hàng</h2>
@@ -182,18 +192,36 @@ function OrderPanel(props: { order: PurchaseOrder; onCancel: () => void; onSubmi
   );
 }
 
-function PaymentPanel(props: { kinds: PaymentKind[]; defaultPayee: string; remaining: number; onCancel: () => void; onSubmit: (kind: PaymentKind, amount: number, payee: string, note: string) => Promise<void> }) {
+/** Đề nghị tạm ứng / thanh toán (P-CF-03): tiền trước thuế, thuế GTGT, số và ngày hóa đơn (tạm ứng ghi "tạm ứng"). */
+function PaymentPanel(props: { kinds: PaymentKind[]; order: PurchaseOrder; payments: readonly PurchasePayment[]; remaining: number; onCancel: () => void; onSubmit: (input: PaymentRequestInput) => Promise<void> }) {
+  const { order } = props;
+  const advanceAmount = order.advancePct ? Math.round((order.totalActual ?? order.totalEstimate) * order.advancePct / 100) : props.remaining;
   const [kind, setKind] = useState<PaymentKind>(props.kinds[0]!);
-  const [amount, setAmount] = useState(props.remaining);
-  const [payee, setPayee] = useState(props.kinds[0] === "advance" ? "" : props.defaultPayee);
+  const [amount, setAmount] = useState(props.kinds[0] === "advance" ? Math.min(advanceAmount, props.remaining) : props.remaining);
+  const [vat, setVat] = useState(0);
+  const [invoiceNo, setInvoiceNo] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState("");
+  const [payee, setPayee] = useState(order.supplier);
   const [note, setNote] = useState("");
+  const isAdvance = kind === "advance";
+  const issue = paymentIssue(order, props.payments, { kind, amount, vatAmount: vat, invoiceNo });
   return (
     <div className="po-inline">
-      <label className="field"><span>Loại</span><select value={kind} onChange={(event) => { const next = event.target.value as PaymentKind; setKind(next); setPayee(next === "advance" ? "" : props.defaultPayee); }}>{props.kinds.map((item) => <option key={item} value={item}>{PAYMENT_KIND_LABELS[item]}</option>)}</select></label>
-      <label className="field"><span>Số tiền (VNĐ) *</span><input inputMode="numeric" autoFocus value={moneyInput(amount)} onChange={(event) => setAmount(parseMoney(event.target.value))} /></label>
-      <label className="field"><span>{kind === "advance" ? "Người nhận tạm ứng" : "Người nhận (nhà cung cấp)"}</span><input value={payee} onChange={(event) => setPayee(event.target.value)} /></label>
-      <label className="field"><span>Nội dung</span><input value={note} placeholder={kind === "advance" ? "vd: Tạm ứng mua vật tư" : "vd: Theo hóa đơn số…"} onChange={(event) => setNote(event.target.value)} /></label>
-      <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" disabled={amount <= 0} onClick={() => void props.onSubmit(kind, amount, payee, note)}>Gửi sếp duyệt</button></div>
+      <label className="field"><span>Loại</span><select value={kind} onChange={(event) => { const next = event.target.value as PaymentKind; setKind(next); setAmount(next === "advance" ? Math.min(advanceAmount, props.remaining) : props.remaining); }}>{props.kinds.map((item) => <option key={item} value={item}>{PAYMENT_KIND_LABELS[item]}</option>)}</select></label>
+      <label className="field"><span>Số tiền trước thuế (VNĐ) *</span><input inputMode="numeric" autoFocus value={moneyInput(amount)} onChange={(event) => setAmount(parseMoney(event.target.value))} /><small className="field-hint">Còn có thể đề nghị {formatVnd(props.remaining)}</small></label>
+      <label className="field"><span>Thuế GTGT (VNĐ)</span><input inputMode="numeric" value={moneyInput(vat)} onChange={(event) => setVat(parseMoney(event.target.value))} />
+        <span className="button-row"><button type="button" className="link-button" onClick={() => setVat(Math.round(amount * 0.08))}>8%</button><button type="button" className="link-button" onClick={() => setVat(Math.round(amount * 0.1))}>10%</button></span></label>
+      {isAdvance
+        ? <p className="field"><span>Số hóa đơn</span><small className="field-hint">Tạm ứng: ghi “tạm ứng”, hóa đơn nộp khi thanh toán.</small></p>
+        : <>
+          <label className="field"><span>Số hóa đơn *</span><input value={invoiceNo} onChange={(event) => setInvoiceNo(event.target.value)} /></label>
+          <label className="field"><span>Ngày hóa đơn</span><input type="date" value={invoiceDate} onChange={(event) => setInvoiceDate(event.target.value)} /></label>
+        </>}
+      <label className="field"><span>Người nhận</span><input value={payee} onChange={(event) => setPayee(event.target.value)} /></label>
+      <label className="field"><span>Nội dung</span><input value={note} placeholder={isAdvance ? "vd: Tạm ứng 30% theo báo giá" : "vd: Thanh toán đợt 2 theo hóa đơn"} onChange={(event) => setNote(event.target.value)} /></label>
+      <p className="field"><span>Giá trị đề nghị</span><b>{formatVnd(amount + vat)}</b></p>
+      {issue && amount > 0 && <p className="form-error" role="alert">{projectText(issue)}</p>}
+      <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" disabled={Boolean(issue)} onClick={() => void props.onSubmit({ kind, amount, vatAmount: vat, invoiceNo, invoiceDate: invoiceDate || null, payee, note })}>{order.usesChain ? "Gửi ký duyệt" : "Gửi sếp duyệt"}</button></div>
     </div>
   );
 }

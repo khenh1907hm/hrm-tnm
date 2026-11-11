@@ -3,6 +3,7 @@ import { fixedClock } from "../../lib/clock";
 import { createMemoryProjectStore } from "../../repositories/projects/memoryProjectStore";
 import { createMemoryPurchaseStore } from "../../repositories/purchases/memoryPurchaseStore";
 import { buildSteps, canSign, currentStep, emptyDepartments, holdsRole, nextWorkday, type ApprovalStep } from "./approval";
+import { orderBlock, paymentIssue, stepStates } from "./flow";
 import { budgetCheck, categoryAmounts, DEFAULT_COST_CODES, groupOf, sheetIssue, sheetTotals } from "./budget";
 
 const header = { confirmation: "confirmed" as const, exchangeRate: 25_000, quoteNo: "TNM Q-0201-2025", offerPrice: 1_200_000_000, contractValue: 1_100_000_000, note: "" };
@@ -25,7 +26,7 @@ describe("procurement phase A", () => {
     let seq = 0;
     const clock = fixedClock("2026-11-12T09:00:00+07:00");
     const store = createMemoryPurchaseStore({ clock, newId: () => `id${++seq}`, projects: createMemoryProjectStore({ clock }) });
-    const order = (budgetCode: string | null, unitPrice: number) => store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode, title: "Tủ điện", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice }] });
+    const order = (budgetCode: string | null, unitPrice: number) => store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode, advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ điện", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice }] });
     await expect(store.submit((await order(null, 1_000)).id)).rejects.toThrow("PO_BUDGET_CODE_REQUIRED");
     await expect(store.submit((await order("175", 1_000)).id)).rejects.toThrow("PO_NO_BUDGET");
     const sheet = await store.newBudgetSheet("proj-1");
@@ -91,5 +92,68 @@ describe("procurement phase A", () => {
     await approve(second);
     expect((await store.listBudgetSheets("proj-1")).map((sheet) => [sheet.number, sheet.status])).toEqual([["DA-02", "approved"], ["DA-01", "superseded"]]);
     expect((await projects.getBudgets("proj-1"))?.map((budget) => [budget.category, budget.amount])).toEqual(expect.arrayContaining([["material", 120_000_000], ["labor", 40_000_000]]));
+  });
+
+  it("PRC_30 the progress bar branches on the supplier terms: no advance / no prepayment steps are skipped, a required advance is the current step after approval", () => {
+    const none = stepStates({ status: "approved", advanceRequired: false, prepayRequired: false }, []);
+    expect([none.advance, none.prepayment, none.ordered]).toEqual(["skipped", "skipped", "todo"]);
+    const advance = stepStates({ status: "approved", advanceRequired: true, prepayRequired: true }, []);
+    expect([advance.advance, advance.prepayment]).toEqual(["current", "todo"]);
+    expect(stepStates({ status: "ordered", advanceRequired: true, prepayRequired: false }, [{ kind: "advance", status: "paid" }]).advance).toBe("done");
+  });
+
+  it("PRC_31 when the supplier needs an advance, ordering waits until the advance is paid; an advance cannot be requested when the supplier does not need one", async () => {
+    expect(orderBlock({ advanceRequired: false }, [])).toBeNull();
+    expect(orderBlock({ advanceRequired: true }, [{ kind: "advance", status: "approved" }])).toBe("PO_ADVANCE_NOT_PAID");
+    expect(orderBlock({ advanceRequired: true }, [{ kind: "advance", status: "paid" }])).toBeNull();
+    let seq = 0;
+    const clock = fixedClock("2026-11-12T09:00:00+07:00");
+    const store = createMemoryPurchaseStore({ clock, newId: () => `id${++seq}`, projects: createMemoryProjectStore({ clock }) });
+    const sheet = await store.newBudgetSheet("proj-1");
+    await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
+    await store.submitBudgetSheet(sheet);
+    for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    await store.submit(order.id);
+    for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
+    await expect(store.requestPayment(order.id, { kind: "advance", amount: 1_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_PAYMENT_NOT_NEEDED");
+    await store.markOrdered(order.id, "NCC A", "", null, "");
+    expect((await store.getOrder(order.id))?.status).toBe("ordered");
+  });
+
+  it("PRC_32 a payment request needs an invoice number (except advances) and the total before tax cannot exceed the order value", () => {
+    const order = { totalEstimate: 40_000_000, totalActual: null };
+    const paid = [{ amount: 12_000_000, status: "paid" as const }, { amount: 5_000_000, status: "rejected" as const }];
+    expect(paymentIssue(order, paid, { kind: "prepayment", amount: 10_000_000, vatAmount: 800_000, invoiceNo: "" })).toBe("PO_INVOICE_REQUIRED");
+    expect(paymentIssue(order, paid, { kind: "advance", amount: 10_000_000, vatAmount: 0, invoiceNo: "" })).toBeNull();
+    expect(paymentIssue(order, paid, { kind: "final", amount: 28_000_001, vatAmount: 0, invoiceNo: "HD9" })).toBe("PO_PAY_OVER");
+    expect(paymentIssue(order, paid, { kind: "final", amount: 28_000_000, vatAmount: 2_240_000, invoiceNo: "HD9" })).toBeNull();
+    expect(paymentIssue(order, paid, { kind: "final", amount: 0, vatAmount: 0, invoiceNo: "HD9" })).toBe("PO_BAD_AMOUNT");
+  });
+
+  it("PRC_33 project payment requests are signed by person in charge, technical, material and leadership before accounting pays; a return rejects the request", async () => {
+    let seq = 0;
+    const clock = fixedClock("2026-11-12T09:00:00+07:00");
+    const store = createMemoryPurchaseStore({ clock, newId: () => `id${++seq}`, projects: createMemoryProjectStore({ clock }) });
+    const sheet = await store.newBudgetSheet("proj-1");
+    await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
+    await store.submitBudgetSheet(sheet);
+    for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: true, advancePct: 30, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    await store.submit(order.id);
+    for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
+    await store.requestPayment(order.id, { kind: "advance", amount: 3_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "NCC A", note: "" });
+    const [first] = await store.listPayments(order.id);
+    expect((await store.listSteps("payment", first!.id)).map((step) => step.role)).toEqual(["pic", "technical", "material", "leader"]);
+    expect((await store.myApprovals()).find((item) => item.docType === "payment")).toMatchObject({ orderId: order.id, amount: 3_000_000 });
+    const [pic] = await store.listSteps("payment", first!.id);
+    await store.sign(pic!.id, false, "Sai số tiền");
+    expect((await store.listPayments(order.id))[0]?.status).toBe("rejected");
+    await store.requestPayment(order.id, { kind: "advance", amount: 3_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "NCC A", note: "" });
+    const second = (await store.listPayments(order.id)).find((payment) => payment.status === "requested")!;
+    for (const step of await store.listSteps("payment", second.id)) await store.sign(step.id, true, "");
+    await store.pay(second.id, "Chuyển khoản", "");
+    await store.markOrdered(order.id, "NCC A", "", null, "");
+    expect((await store.getOrder(order.id))?.status).toBe("ordered");
   });
 });

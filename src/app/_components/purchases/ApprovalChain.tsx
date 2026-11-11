@@ -83,13 +83,13 @@ export function MyApprovals(props: { store: PurchaseStore; refreshKey?: unknown;
           <thead><tr><th>Phiếu</th><th>Dự án</th><th>Ký với vai trò</th><th className="pj-num">Số tiền</th><th>Mục tiêu</th><th /></tr></thead>
           <tbody>{items.map((item) => (
             <tr key={item.stepId}>
-              <td>{item.docType === "purchase" ? "Đơn đặt hàng" : "Ngân sách"}<br /><small className="muted">{item.title}</small></td>
+              <td>{item.docType === "purchase" ? "Đơn đặt hàng" : item.docType === "payment" ? "Đề nghị tạm ứng / thanh toán" : "Ngân sách"}<br /><small className="muted">{item.title}</small></td>
               <td>{item.projectCode || "—"}</td>
               <td>{ROLE_LABELS[item.role]}</td>
               <td className="pj-num">{formatVnd(item.amount)}</td>
               <td className={item.targetDate < today ? "warn-text" : undefined}>{dmy(item.targetDate)}{item.targetDate < today ? " · quá hạn" : ""}</td>
-              <td>{item.docType === "purchase"
-                ? <button type="button" className="button" onClick={() => props.onOpenOrder(item.docId)}>Mở đơn</button>
+              <td>{item.docType !== "budget"
+                ? <button type="button" className="button" onClick={() => props.onOpenOrder(item.docType === "payment" ? item.orderId ?? item.docId : item.docId)}>Mở đơn</button>
                 : item.projectId ? <a className="button" href={props.projectHref(item.projectId)}>Mở ngân sách</a> : null}</td>
             </tr>
           ))}</tbody>
