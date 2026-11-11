@@ -1,6 +1,6 @@
 import type { ApprovalDocType, ApprovalStep, Department, DepartmentMembers } from "./approval";
 import type { BudgetLine, BudgetSheet, BudgetSheetHeader, CostCode } from "./budget";
-import type { PaymentRequestInput, PurchaseApprover, PurchaseDraft, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseRoles, ReceiveLine } from "./types";
+import type { PaymentRequestInput, ReceiptRecord, PurchaseApprover, PurchaseDraft, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseRoles, ReceiveLine } from "./types";
 
 /**
  * Nguồn dữ liệu đặt hàng: bộ nhớ (demo, người dùng demo là Admin + người duyệt + người chi) hoặc Supabase (RLS + hàm purchase_*).
@@ -29,7 +29,11 @@ export interface PurchaseStore {
   requestPayment(id: string, input: PaymentRequestInput): Promise<void>;
   decidePayment(paymentId: string, approve: boolean, note: string): Promise<void>;
   pay(paymentId: string, method: string, note: string): Promise<void>;
-  receive(id: string, lines: readonly ReceiveLine[], note: string): Promise<void>;
+  receive(id: string, lines: readonly ReceiveLine[], note: string, record?: ReceiptRecord): Promise<void>;
+  /** Hành chánh phát hành PO chính thức (đơn dự án đã được Lãnh đạo duyệt); ký luôn bước Hành chánh nếu đang chờ. */
+  issuePo(id: string, supplier: string, contact: string): Promise<void>;
+  /** Ghi nhận NCC đã ký bản sao PO gửi lại (ngày, ghi chú nơi lưu bản ký). */
+  supplierAccept(id: string, note: string): Promise<void>;
   complete(id: string, note: string): Promise<void>;
   cancel(id: string, note: string): Promise<void>;
 

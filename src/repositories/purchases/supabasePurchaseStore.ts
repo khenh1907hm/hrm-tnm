@@ -24,6 +24,7 @@ const orderFromRow = (row: Row): PurchaseOrder => ({
   items: ((row.purchase_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map(itemFromRow),
   budgetCode: strOrNull(row.budget_code), budgetA: row.budget_a === null || row.budget_a === undefined ? null : num(row.budget_a),
   budgetB: row.budget_b === null || row.budget_b === undefined ? null : num(row.budget_b), usesChain: Boolean(row.uses_chain),
+  poNo: str(row.po_no), poIssuedAt: strOrNull(row.po_issued_at), supplierAcceptedAt: strOrNull(row.supplier_accepted_at), supplierAcceptNote: str(row.supplier_accept_note), receiptRecordNo: str(row.receipt_record_no),
   advanceRequired: Boolean(row.advance_required), advancePct: row.advance_pct === null || row.advance_pct === undefined ? null : num(row.advance_pct), prepayRequired: Boolean(row.prepay_required),
 });
 const sheetFromRow = (row: Row): BudgetSheet => ({
@@ -46,7 +47,9 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     async myUserId() { const { data } = await client.auth.getUser(); return data.user?.id ?? ""; },
     async myRoles() {
       const row = ((await rpc("purchase_my_roles", {})) as Row[] | null)?.[0];
-      return { isApprover: Boolean(row?.is_approver), isPayer: Boolean(row?.is_payer), seesAll: Boolean(row?.sees_all) };
+      // Bộ phận Hành chánh (phát hành PO); máy chủ chưa có hàm thì coi như không
+      const departments = ((await rpc("procurement_my_departments", {}).catch(() => [])) ?? []) as string[];
+      return { isApprover: Boolean(row?.is_approver), isPayer: Boolean(row?.is_payer), seesAll: Boolean(row?.sees_all), isAdminOffice: departments.includes("admin_office") };
     },
     async approvers() { return (((await rpc("purchase_approvers", {})) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name), hasAccount: Boolean(row.has_account) })); },
     async setApprovers(employeeIds) { await check(client.from("purchase_settings").update({ approver_employee_ids: employeeIds, updated_at: new Date().toISOString() }).eq("id", 1)); },
@@ -103,7 +106,11 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     },
     async decidePayment(paymentId, approve, note) { await rpc("purchase_decide_payment", { p_payment: paymentId, p_approve: approve, p_note: note }); },
     async pay(paymentId, method, note) { await rpc("purchase_pay", { p_payment: paymentId, p_method: method, p_note: note }); },
-    async receive(id, lines, note) { await rpc("purchase_receive", { p_order: id, p_items: lines, p_note: note }); },
+    async receive(id, lines, note, record) {
+      await rpc("purchase_receive_record", { p_order: id, p_items: lines, p_note: note, p_record_no: record?.recordNo ?? "", p_signed_both: record?.signedByBoth ?? false });
+    },
+    async issuePo(id, supplier, contact) { await rpc("purchase_issue_po", { p_order: id, p_supplier: supplier, p_contact: contact }); },
+    async supplierAccept(id, note) { await rpc("purchase_supplier_accept", { p_order: id, p_note: note }); },
     async complete(id, note) { await rpc("purchase_complete", { p_order: id, p_note: note }); },
     async cancel(id, note) { await rpc("purchase_cancel", { p_order: id, p_note: note }); },
 

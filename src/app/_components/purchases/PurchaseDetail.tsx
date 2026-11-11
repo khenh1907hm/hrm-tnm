@@ -7,7 +7,7 @@ import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentI
 import { FlowStepper } from "./FlowBar";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
-  PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PaymentRequestInput, type PurchaseEvent, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
+  PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PaymentRequestInput, type PurchaseEvent, type ReceiptRecord, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
 } from "../../../modules/purchases/types";
 import type { Notify } from "../Toast";
 import { errorMessage, moneyInput, parseMoney, projectText } from "../projects/projectShared";
@@ -28,7 +28,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
   const [events, setEvents] = useState<PurchaseEvent[]>([]);
   const [editing, setEditing] = useState(false);
-  const [panel, setPanel] = useState<"order" | "payment" | "track" | "receive" | null>(null);
+  const [panel, setPanel] = useState<"order" | "payment" | "track" | "receive" | "issuePo" | null>(null);
   const [chainKey, setChainKey] = useState(0);
 
   const fetchAll = useCallback(() => Promise.all([store.getOrder(props.orderId), store.listPayments(props.orderId), store.listEvents(props.orderId)]), [store, props.orderId]);
@@ -78,6 +78,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           {actions.has("submit") && <button type="button" className="button primary" onClick={() => void act(async () => { await store.submit(order.id); setChainKey((value) => value + 1); }, order.kind === "project" ? "Đã lập đơn, gửi ký duyệt." : "Đã lập đơn, gửi sếp duyệt.")}><Send className="ico" size={16} aria-hidden="true" /> Lập đơn, gửi duyệt</button>}
           {actions.has("approve") && <button type="button" className="button primary" onClick={() => void act(() => store.decide(order.id, true, window.prompt("Ghi chú khi duyệt (có thể để trống):") ?? ""), "Đã duyệt đơn hàng.")}><Check className="ico" size={16} aria-hidden="true" /> Duyệt đơn</button>}
           {actions.has("reject") && <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối (ít nhất 3 ký tự):"); if (why) void act(() => store.decide(order.id, false, why), "Đã từ chối, đơn trả về người lập."); }}><X className="ico" size={16} aria-hidden="true" /> Từ chối</button>}
+          {actions.has("issuePo") && <button type="button" className="button primary" onClick={() => setPanel("issuePo")}><Send className="ico" size={16} aria-hidden="true" /> Phát hành PO</button>}
+          {actions.has("supplierAccept") && <button type="button" className="button primary" onClick={() => { const note = window.prompt("NCC đã ký bản sao PO gửi lại. Ghi chú (ngày ký, nơi lưu bản ký…):", ""); if (note !== null) void act(() => store.supplierAccept(order.id, note), "Đã ghi nhận NCC ký xác nhận PO. PO có hiệu lực."); }}><Check className="ico" size={16} aria-hidden="true" /> NCC đã ký xác nhận PO</button>}
           {actions.has("order") && <button type="button" className="button primary" onClick={() => setPanel("order")}><Truck className="ico" size={16} aria-hidden="true" /> Đặt hàng</button>}
           {requestKinds.length > 0 && <button type="button" className="button" onClick={() => setPanel("payment")}>Đề nghị {requestKinds.map((kind) => PAYMENT_KIND_LABELS[kind].toLowerCase()).join(" / ")}</button>}
           {actions.has("track") && order.status !== "approved" && <button type="button" className="button" onClick={() => setPanel("track")}>Cập nhật theo dõi</button>}
@@ -90,7 +92,9 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           onSubmit={(input) => act(async () => { await store.requestPayment(order.id, input); setChainKey((value) => value + 1); }, `Đã gửi đề nghị ${PAYMENT_KIND_LABELS[input.kind].toLowerCase()} ${order.usesChain ? "đi ký duyệt" : "cho sếp duyệt"}.`)} />}
         {actions.has("track") && order.status === "approved" && orderBlock(order, payments) && <p className="warn-text">{projectText("PO_ADVANCE_NOT_PAID")}</p>}
         {panel === "track" && <TrackPanel expected={order.expectedDelivery} onCancel={() => setPanel(null)} onSubmit={(note, expected) => act(() => store.track(order.id, note, expected), "Đã cập nhật theo dõi.")} />}
-        {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note) => act(() => store.receive(order.id, lines, note), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
+        {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note, record) => act(() => store.receive(order.id, lines, note, record), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
+        {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
+        {order.poNo && <p className="po-terms-line">PO chính thức: <b>{order.poNo}</b> · phát hành {order.poIssuedAt ? dateTime(order.poIssuedAt) : "—"} · {order.supplierAcceptedAt ? <span className="pill ok">NCC đã ký nhận {dateTime(order.supplierAcceptedAt)}</span> : <span className="pill warn">Chờ NCC ký nhận</span>}{order.supplierAcceptNote ? ` · ${order.supplierAcceptNote}` : ""}{order.receiptRecordNo ? ` · Biên bản giao nhận ${order.receiptRecordNo}` : ""}</p>}
       </section>
 
       {order.usesChain && order.budgetCode && order.budgetA !== null && order.budgetB !== null && (
@@ -238,7 +242,24 @@ function TrackPanel(props: { expected: string | null; onCancel: () => void; onSu
   );
 }
 
-function ReceivePanel(props: { order: PurchaseOrder; onCancel: () => void; onSubmit: (lines: { id: string; receivedQty: number; acceptedQty: number; note: string }[], note: string) => Promise<void> }) {
+/** Phát hành PO chính thức (P-CC-08): xác nhận nhà cung cấp; hệ thống cấp số PO. */
+function IssuePoPanel(props: { order: PurchaseOrder; onCancel: () => void; onSubmit: (supplier: string, contact: string) => Promise<void> }) {
+  const [supplier, setSupplier] = useState(props.order.supplier);
+  const [contact, setContact] = useState(props.order.supplierContact);
+  return (
+    <div className="po-inline">
+      <label className="field"><span>Nhà cung cấp *</span><input value={supplier} autoFocus onChange={(event) => setSupplier(event.target.value)} /></label>
+      <label className="field"><span>Người nhận PO (Ông/Bà, điện thoại)</span><input value={contact} onChange={(event) => setContact(event.target.value)} /></label>
+      <p className="field"><span>Lưu ý</span><small className="field-hint">PO chỉ có hiệu lực khi NCC ký một bản sao và gửi lại (điều khoản PO). Sau đó bấm “NCC đã ký xác nhận PO”.</small></p>
+      <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" disabled={supplier.trim().length < 2} onClick={() => void props.onSubmit(supplier, contact)}>Phát hành PO</button></div>
+    </div>
+  );
+}
+
+function ReceivePanel(props: { order: PurchaseOrder; onCancel: () => void; onSubmit: (lines: { id: string; receivedQty: number; acceptedQty: number; note: string }[], note: string, record: ReceiptRecord) => Promise<void> }) {
+  const [recordNo, setRecordNo] = useState("");
+  const [signedByBoth, setSignedByBoth] = useState(false);
+  const needsRecord = props.order.usesChain;
   const [lines, setLines] = useState(() => props.order.items.map((item) => ({ id: item.id, receivedQty: item.receivedQty || item.quantity, acceptedQty: item.acceptedQty || item.quantity, note: item.inspectionNote })));
   const [note, setNote] = useState("");
   const update = (index: number, patch: Partial<(typeof lines)[number]>) => setLines((current) => current.map((line, at) => at === index ? { ...line, ...patch } : line));
@@ -260,7 +281,11 @@ function ReceivePanel(props: { order: PurchaseOrder; onCancel: () => void; onSub
       </div>
       <label className="field"><span>Ghi chú biên bản nhận hàng</span><input value={note} placeholder="vd: Nhận tại công trường, người nhận: …" onChange={(event) => setNote(event.target.value)} /></label>
       <small className="muted">Số đạt không được lớn hơn số nhận. Tiền thực nhận = số đạt × đơn giá. Nhận nhiều đợt thì lưu lại nhiều lần.</small>
-      <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" onClick={() => void props.onSubmit(lines, note)}>Lưu kết quả nhận hàng</button></div>
+      <div className="po-inline">
+        <label className="field"><span>Số biên bản giao nhận{needsRecord ? " *" : ""}</span><input value={recordNo} placeholder="vd: BBGN-0012" onChange={(event) => setRecordNo(event.target.value)} /></label>
+        <label className="po-term"><input type="checkbox" checked={signedByBoth} onChange={(event) => setSignedByBoth(event.target.checked)} /><span><b>Biên bản đã có chữ ký của cả hai bên</b><small>Rủi ro hàng hóa chỉ chuyển sang bên mua khi có xác nhận bằng văn bản của cả hai bên (điều khoản PO).</small></span></label>
+      </div>
+      <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" disabled={needsRecord && (!recordNo.trim() || !signedByBoth)} onClick={() => void props.onSubmit(lines, note, { recordNo, signedByBoth })}>Lưu kết quả nhận hàng</button></div>
     </div>
   );
 }

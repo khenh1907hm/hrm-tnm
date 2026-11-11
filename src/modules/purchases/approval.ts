@@ -16,6 +16,25 @@ export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {
   /** Đề nghị tạm ứng / thanh toán (P-CF-03): Lãnh đạo ký xong thì Kế toán chi. */
   payment: ["pic", "technical", "material", "leader"],
 };
+/**
+ * Ngày mục tiêu theo mẫu (ngày làm việc thứ mấy kể từ ngày gửi), không cộng dồn từng bước:
+ *  - P-CC-07: Phụ trách, P. Kỹ thuật ngày 1; P. Vật tư ngày 2; Kế toán, Lãnh đạo, Hành chánh ngày 3 (mẫu ghi 01/01, 01/01, 02/01, 03/01…; sơ đồ tổng quan: nháp 1 ngày, duyệt 1 ngày, phát hành 1 ngày).
+ *  - P-COST-03: sơ đồ tổng quan "Làm ngân sách 2 ngày": Phụ trách, P. Kỹ thuật ngày 1; Lãnh đạo ngày 2.
+ *  - P-CF-03: "Đề nghị thanh toán 1 ngày, Duyệt 1 ngày": Phụ trách, P. Kỹ thuật, P. Vật tư ngày 1; Lãnh đạo ngày 2.
+ */
+export const TARGET_DAY: Record<ApprovalDocType, Partial<Record<ApprovalRole, number>>> = {
+  budget: { pic: 1, technical: 1, leader: 2 },
+  purchase: { pic: 1, technical: 1, material: 2, accounting: 3, leader: 3, admin_office: 3 },
+  payment: { pic: 1, technical: 1, material: 1, leader: 2 },
+};
+
+/** Ngày làm việc thứ n sau ngày gửi. */
+export function nthWorkday(from: string, n: number, holidays: ReadonlySet<string> = new Set()): string {
+  let day = from;
+  for (let i = 0; i < n; i++) day = nextWorkday(day, holidays);
+  return day;
+}
+
 /** Bước quyết định: ký xong bước này thì phiếu được duyệt. */
 export const DECIDING_ROLE: ApprovalRole = "leader";
 
@@ -47,15 +66,14 @@ export function nextWorkday(iso: string, holidays: ReadonlySet<string> = new Set
 }
 
 /**
- * PRC-04: dựng chuỗi ký khi gửi. Mỗi bước có ngày mục tiêu = ngày làm việc kế tiếp của bước trước (bước 1: ngày làm việc sau ngày gửi).
+ * PRC-04: dựng chuỗi ký khi gửi. Ngày mục tiêu theo TARGET_DAY của mẫu (bỏ Chủ nhật, ngày lễ).
  * Bộ phận chưa có ai (và không phải Phụ trách) thì bỏ qua để chuỗi không bị kẹt.
  */
 export function buildSteps(docType: ApprovalDocType, docId: string, submittedOn: string, departments: DepartmentMembers, newId: () => string, holidays: ReadonlySet<string> = new Set()): ApprovalStep[] {
-  let day = submittedOn;
   return CHAINS[docType].map((role, index) => {
     const skipped = role !== "pic" && !departments[role].length;
-    if (!skipped) day = nextWorkday(day, holidays);
-    return { id: newId(), docType, docId, seq: index + 1, role, targetDate: day, result: skipped ? "skipped" : "pending", signerName: "", note: "", actedAt: null };
+    const targetDate = nthWorkday(submittedOn, TARGET_DAY[docType][role] ?? index + 1, holidays);
+    return { id: newId(), docType, docId, seq: index + 1, role, targetDate, result: skipped ? "skipped" : "pending", signerName: "", note: "", actedAt: null };
   });
 }
 

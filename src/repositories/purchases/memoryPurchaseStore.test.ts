@@ -23,7 +23,11 @@ describe("memory purchase store", () => {
     await expect(store.sign(chain[0]!.id, false, "x")).rejects.toThrow("PO_REASON_REQUIRED");
     for (const step of chain.filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, step.role === "leader" ? "OK" : "");
     expect((await store.getOrder(draft.id))!.status).toBe("approved");
-    // NCC cần tạm ứng: chưa chi tạm ứng thì chưa đặt hàng được
+    // PO chỉ hiệu lực khi NCC ký nhận; NCC cần tạm ứng: chưa chi tạm ứng thì chưa đặt hàng được
+    await expect(store.markOrdered(draft.id, "Vật tư Hòa Phát", "", null, "")).rejects.toThrow("PO_NOT_ISSUED");
+    await store.issuePo(draft.id, "Vật tư Hòa Phát", "Anh Bình");
+    await expect(store.requestPayment(draft.id, { kind: "advance", amount: 2_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_NOT_ACCEPTED");
+    await store.supplierAccept(draft.id, "NCC ký ngày 13/11");
     await expect(store.markOrdered(draft.id, "Vật tư Hòa Phát", "", null, "")).rejects.toThrow("PO_ADVANCE_NOT_PAID");
     await store.requestPayment(draft.id, { kind: "advance", amount: 2_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "Vật tư Hòa Phát", note: "" });
     const [advance] = await store.listPayments(draft.id);
@@ -35,7 +39,8 @@ describe("memory purchase store", () => {
     await expect(store.markOrdered(draft.id, "", "", null, "")).rejects.toThrow("PO_SUPPLIER_REQUIRED");
     await store.markOrdered(draft.id, "Vật tư Hòa Phát", "0901", "2026-11-20", "");
     const order = (await store.getOrder(draft.id))!;
-    await store.receive(draft.id, [{ id: order.items[0]!.id, receivedQty: 100, acceptedQty: 95, note: "5 m móp" }], "Nhận đủ");
+    await expect(store.receive(draft.id, [{ id: order.items[0]!.id, receivedQty: 100, acceptedQty: 95, note: "" }], "Nhận đủ")).rejects.toThrow("PO_RECEIPT_RECORD_REQUIRED");
+    await store.receive(draft.id, [{ id: order.items[0]!.id, receivedQty: 100, acceptedQty: 95, note: "5 m móp" }], "Nhận đủ", { recordNo: "BBGN-01", signedByBoth: true });
     expect((await store.getOrder(draft.id))!.totalActual).toBe(4_750_000);
     await expect(store.requestPayment(draft.id, { kind: "final", amount: 3_000_000, vatAmount: 0, invoiceNo: "HD001", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_PAY_OVER");
     await store.requestPayment(draft.id, { kind: "final", amount: 2_750_000, vatAmount: 220_000, invoiceNo: "HD001", invoiceDate: "2026-11-20", payee: "Vật tư Hòa Phát", note: "" });
@@ -46,7 +51,7 @@ describe("memory purchase store", () => {
     await store.complete(draft.id, "");
     expect((await store.getOrder(draft.id))!.status).toBe("completed");
     expect((await projects.listExpenses("proj-1"))?.map((expense) => [expense.category, expense.amount, expense.status])).toEqual([["material", 4_750_000, "approved"]]);
-    expect((await store.listEvents(draft.id)).map((event) => event.action)).toEqual(["submit", "sign:pic", "sign:technical", "sign:material", "sign:accounting", "approve",
+    expect((await store.listEvents(draft.id)).map((event) => event.action)).toEqual(["submit", "sign:pic", "sign:technical", "sign:material", "sign:accounting", "approve", "issue_po", "supplier_accept",
       "payment_request:advance", "payment_sign:pic", "payment_sign:technical", "payment_sign:material", "payment_approve:advance", "paid:advance", "order", "receive",
       "payment_request:final", "payment_sign:pic", "payment_sign:technical", "payment_sign:material", "payment_approve:final", "paid:final", "complete"]);
     await expect(store.cancel(draft.id, "Hủy thử")).rejects.toThrow("PO_BAD_STATUS");

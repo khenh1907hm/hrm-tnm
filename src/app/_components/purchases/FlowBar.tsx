@@ -1,10 +1,10 @@
 "use client";
-import { ArrowRight, Check, CircleCheck, CreditCard, FilePen, HandCoins, PackageCheck, Send, ShieldCheck, Truck, Wallet, type LucideIcon } from "lucide-react";
+import { ArrowRight, Check, CircleCheck, CreditCard, FilePen, FileSignature, HandCoins, PackageCheck, Send, ShieldCheck, Truck, Wallet, type LucideIcon } from "lucide-react";
 import { FLOW_STEPS, progressOf, type FlowStepKey, type StepState } from "../../../modules/purchases/flow";
 import type { PurchaseStatus } from "../../../modules/purchases/types";
 
 export const STEP_ICONS: Record<FlowStepKey, LucideIcon> = {
-  draft: FilePen, submitted: Send, approved: ShieldCheck, advance: HandCoins, ordered: Truck, prepayment: CreditCard, received: PackageCheck, final: Wallet, completed: CircleCheck,
+  draft: FilePen, submitted: Send, approved: ShieldCheck, po: FileSignature, advance: HandCoins, ordered: Truck, prepayment: CreditCard, received: PackageCheck, final: Wallet, completed: CircleCheck,
 };
 const OPTIONAL = new Set<FlowStepKey>(["advance", "prepayment", "final"]);
 const STATE_TEXT: Record<StepState, string> = { done: "Đã xong", current: "Đang ở bước này", todo: "Chưa tới", skipped: "Không dùng" };

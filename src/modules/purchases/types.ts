@@ -64,6 +64,13 @@ export type PurchaseOrder = {
   advanceRequired: boolean;
   advancePct: number | null;
   prepayRequired: boolean;
+  /** PO chính thức (P-CC-08) do Hành chánh phát hành sau khi Lãnh đạo duyệt, và ngày NCC ký nhận PO (PO chỉ hiệu lực khi NCC ký bản sao gửi lại). */
+  poNo: string;
+  poIssuedAt: string | null;
+  supplierAcceptedAt: string | null;
+  supplierAcceptNote: string;
+  /** Số biên bản giao nhận có chữ ký hai bên (rủi ro chuyển sang bên mua khi có xác nhận bằng văn bản của cả hai bên). */
+  receiptRecordNo: string;
 };
 
 export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note" | "budgetCode" | "advanceRequired" | "advancePct" | "prepayRequired"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
@@ -98,10 +105,12 @@ export type PurchasePayment = {
 export type PurchaseEvent = { id: string; orderId: string; at: string; actorName: string; action: string; note: string };
 
 /** Vai trò của người đăng nhập với đặt hàng (hàm purchase_my_roles). */
-export type PurchaseRoles = { isApprover: boolean; isPayer: boolean; seesAll: boolean };
+export type PurchaseRoles = { isApprover: boolean; isPayer: boolean; seesAll: boolean; /** Thuộc bộ phận Hành chánh (phát hành PO). */ isAdminOffice?: boolean };
 export type PurchaseApprover = { employeeId: string; name: string; hasAccount: boolean };
 
 export type ReceiveLine = { id: string; receivedQty: number; acceptedQty: number; note: string };
+/** Biên bản giao nhận của một lần nhận hàng. */
+export type ReceiptRecord = { recordNo: string; signedByBoth: boolean };
 
 /** Nội dung một đề nghị tạm ứng / thanh toán (mẫu P-CF-03). */
 export type PaymentRequestInput = { kind: PaymentKind; amount: number; vatAmount: number; invoiceNo: string; invoiceDate: string | null; payee: string; note: string };

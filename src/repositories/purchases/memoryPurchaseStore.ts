@@ -1,6 +1,6 @@
 import { systemClock, todayVN, type Clock } from "../../lib/clock";
 import type { ProjectStore } from "../../modules/projects/store";
-import { actualTotal, estimateTotal, orderBlock, paymentIssue } from "../../modules/purchases/flow";
+import { actualTotal, estimateTotal, orderBlock, paymentIssue, poBlock } from "../../modules/purchases/flow";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseApprover, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseStatus } from "../../modules/purchases/types";
 import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type DepartmentMembers } from "../../modules/purchases/approval";
@@ -41,7 +41,8 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   const done = () => { persist(); return Promise.resolve(); };
   // Đơn cũ trong localStorage chưa có các trường của quy trình mới
   data.orders = data.orders.map((order) => ({ ...order, budgetCode: order.budgetCode ?? null, budgetA: order.budgetA ?? null, budgetB: order.budgetB ?? null, usesChain: order.usesChain ?? false,
-    advanceRequired: order.advanceRequired ?? false, advancePct: order.advancePct ?? null, prepayRequired: order.prepayRequired ?? false }));
+    advanceRequired: order.advanceRequired ?? false, advancePct: order.advancePct ?? null, prepayRequired: order.prepayRequired ?? false,
+    poNo: order.poNo ?? "", poIssuedAt: order.poIssuedAt ?? null, supplierAcceptedAt: order.supplierAcceptedAt ?? null, supplierAcceptNote: order.supplierAcceptNote ?? "", receiptRecordNo: order.receiptRecordNo ?? "" }));
   data.payments = data.payments.map((payment) => ({ ...payment, rfpNo: payment.rfpNo ?? "", invoiceNo: payment.invoiceNo ?? "", invoiceDate: payment.invoiceDate ?? null, vatAmount: payment.vatAmount ?? 0, usesChain: payment.usesChain ?? false }));
   let rfpSeq = data.payments.filter((payment) => payment.rfpNo).length;
   const sheetOf = (id: string) => data.sheets.find((sheet) => sheet.id === id) ?? fail("BUDGET_NOT_FOUND");
@@ -71,7 +72,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   return {
     mode: "demo",
     async myUserId() { return me; },
-    async myRoles() { return { isApprover: true, isPayer: true, seesAll: true }; },
+    async myRoles() { return { isApprover: true, isPayer: true, seesAll: true, isAdminOffice: true }; },
     async approvers() { return clone(data.approvers); },
     async setApprovers(employeeIds) { data.approvers = employeeIds.map((employeeId) => data.approvers.find((item) => item.employeeId === employeeId) ?? { employeeId, name: employeeId, hasAccount: false }); return done(); },
 
@@ -85,7 +86,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const saved: PurchaseOrder = existing
         ? { ...existing, ...draft, id: existing.id, items, totalEstimate: estimateTotal(items) }
         : {
-          budgetA: null, budgetB: null, usesChain: false,
+          budgetA: null, budgetB: null, usesChain: false, poNo: "", poIssuedAt: null, supplierAcceptedAt: null, supplierAcceptNote: "", receiptRecordNo: "",
           ...draft, id: newId(), code: `DH-${month}-${String(++data.seq).padStart(4, "0")}`, requesterId: me, requesterName: "Admin demo", expectedDelivery: null, status: "draft",
           totalEstimate: estimateTotal(items), totalActual: null, decisionNote: "", submittedAt: null, approvedAt: null, orderedAt: null, receivedAt: null, completedAt: null, createdAt: now(), items,
         };
@@ -130,6 +131,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const order = orderOf(id); expect(order, "approved", "ordered", "received"); if (input.kind === "final" && order.status === "approved") fail("PO_BAD_STATUS");
       // PRC-30: đơn quy trình mới chỉ cho loại khoản NCC cần
       if (order.usesChain && ((input.kind === "advance" && !order.advanceRequired) || (input.kind === "prepayment" && !order.prepayRequired))) fail("PO_PAYMENT_NOT_NEEDED");
+      if (input.kind === "advance") { const blocked = poBlock(order); if (blocked) fail(blocked); }
       const issue = paymentIssue(order, data.payments.filter((payment) => payment.orderId === id), input); if (issue) fail(issue);
       const month = todayVN(clock).slice(2, 7).replace("-", "");
       const payment: PurchasePayment = {
@@ -153,15 +155,38 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       Object.assign(payment, { status: "paid", paidAt: now(), paidMethod: method.trim() });
       log(payment.orderId, `paid:${payment.kind}`, [`${payment.amount} đ`, method.trim(), note.trim()].filter(Boolean).join(" · ")); return done();
     },
-    async receive(id, lines, note) {
+    async issuePo(id, supplier, contact) {
+      const order = orderOf(id); expect(order, "approved");
+      if (!order.usesChain || order.poIssuedAt) fail("PO_BAD_STATUS");
+      if (supplier.trim().length < 2) fail("PO_SUPPLIER_REQUIRED");
+      const projects = await options.projects?.listProjects().catch(() => []) ?? [];
+      const code = projects.find((project) => project.id === order.projectId)?.code ?? "DA";
+      const issued = data.orders.filter((item) => item.projectId === order.projectId && item.poNo).length;
+      Object.assign(order, { poNo: `PO-${code}-${String(issued + 1).padStart(3, "0")}`, poIssuedAt: now(), supplier: supplier.trim(), supplierContact: contact.trim() });
+      // Phát hành PO = Hành chánh ký nhận đơn nháp
+      const office = docSteps("purchase", id).find((step) => step.role === "admin_office" && step.result === "pending");
+      if (office) Object.assign(office, { result: "signed", signerName: "Admin demo", note: `Phát hành ${order.poNo}`, actedAt: now() });
+      log(id, "issue_po", `${order.poNo} · ${supplier.trim()}`); return done();
+    },
+    async supplierAccept(id, note) {
+      const order = orderOf(id); expect(order, "approved");
+      if (!order.poIssuedAt || order.supplierAcceptedAt) fail("PO_BAD_STATUS");
+      Object.assign(order, { supplierAcceptedAt: now(), supplierAcceptNote: note.trim() });
+      log(id, "supplier_accept", note); return done();
+    },
+    async receive(id, lines, note, record) {
       const order = orderOf(id); expect(order, "ordered", "received");
+      // PRC-35: đơn dự án cần biên bản giao nhận có chữ ký hai bên
+      if (order.usesChain && (!record || !record.recordNo.trim() || !record.signedByBoth)) fail("PO_RECEIPT_RECORD_REQUIRED");
+      if (record?.recordNo.trim()) order.receiptRecordNo = record.recordNo.trim();
       order.items = order.items.map((item) => {
         const line = lines.find((entry) => entry.id === item.id);
         if (!line) return item;
         const receivedQty = Math.max(0, line.receivedQty);
         return { ...item, receivedQty, acceptedQty: Math.min(Math.max(0, line.acceptedQty), receivedQty), inspectionNote: line.note.trim() };
       });
-      Object.assign(order, { status: "received", receivedAt: order.receivedAt ?? now(), totalActual: actualTotal(order.items) }); log(id, "receive", note); return done();
+      Object.assign(order, { status: "received", receivedAt: order.receivedAt ?? now(), totalActual: actualTotal(order.items) });
+      log(id, "receive", [record?.recordNo.trim() ? `Biên bản giao nhận ${record.recordNo.trim()} (hai bên đã ký)` : "", note.trim()].filter(Boolean).join(" · ")); return done();
     },
     async complete(id, note) {
       const order = orderOf(id); expect(order, "received");

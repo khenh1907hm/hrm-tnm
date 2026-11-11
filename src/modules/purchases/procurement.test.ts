@@ -3,7 +3,7 @@ import { fixedClock } from "../../lib/clock";
 import { createMemoryProjectStore } from "../../repositories/projects/memoryProjectStore";
 import { createMemoryPurchaseStore } from "../../repositories/purchases/memoryPurchaseStore";
 import { buildSteps, canSign, currentStep, emptyDepartments, holdsRole, nextWorkday, type ApprovalStep } from "./approval";
-import { orderBlock, paymentIssue, stepStates } from "./flow";
+import { orderBlock, paymentIssue, poBlock, stepStates } from "./flow";
 import { budgetCheck, categoryAmounts, DEFAULT_COST_CODES, groupOf, sheetIssue, sheetTotals } from "./budget";
 
 const header = { confirmation: "confirmed" as const, exchangeRate: 25_000, quoteNo: "TNM Q-0201-2025", offerPrice: 1_200_000_000, contractValue: 1_100_000_000, note: "" };
@@ -43,15 +43,18 @@ describe("procurement phase A", () => {
     expect(await store.getOrder(ok.id)).toMatchObject({ status: "submitted", usesChain: true, budgetA: 100_000_000, budgetB: 65_000_000 });
   });
 
-  it("PRC_04 signing chain: fixed order with target workdays, empty departments skipped, only the current holder signs, a return stops the chain", () => {
+  it("PRC_04 signing chain: fixed order with target days from the form (not one day per step), empty departments skipped, only the current holder signs, a return stops the chain", () => {
     expect(nextWorkday("2026-11-14")).toBe("2026-11-16");
     const departments = { ...emptyDepartments(), leader: ["E1"], technical: ["E2"], accounting: ["E3"] };
     let n = 0;
     const steps = buildSteps("purchase", "po", "2026-11-13", departments, () => `s${++n}`);
+    // P-CC-07: Phụ trách, Kỹ thuật ngày 1; Vật tư ngày 2; Kế toán, Lãnh đạo, Hành chánh ngày 3 (gửi thứ Sáu 13/11, bỏ Chủ nhật)
     expect(steps.map((step) => [step.role, step.result, step.targetDate])).toEqual([
-      ["pic", "pending", "2026-11-14"], ["technical", "pending", "2026-11-16"], ["material", "skipped", "2026-11-16"],
-      ["accounting", "pending", "2026-11-17"], ["leader", "pending", "2026-11-18"], ["admin_office", "skipped", "2026-11-18"],
+      ["pic", "pending", "2026-11-14"], ["technical", "pending", "2026-11-14"], ["material", "skipped", "2026-11-16"],
+      ["accounting", "pending", "2026-11-17"], ["leader", "pending", "2026-11-17"], ["admin_office", "skipped", "2026-11-17"],
     ]);
+    expect(buildSteps("payment", "rfp", "2026-11-13", departments, () => "x").map((step) => step.targetDate)).toEqual(["2026-11-14", "2026-11-14", "2026-11-14", "2026-11-16"]);
+    expect(buildSteps("budget", "b", "2026-11-13", departments, () => "x").map((step) => step.targetDate)).toEqual(["2026-11-14", "2026-11-14", "2026-11-16"]);
     const signer = (employeeId: string, isPicOfDoc = false) => ({ employeeId, isAdmin: false, isPicOfDoc, departments });
     expect(currentStep(steps)?.role).toBe("pic");
     expect(canSign(steps, signer("E2"))).toBe(false);
@@ -117,6 +120,8 @@ describe("procurement phase A", () => {
     await store.submit(order.id);
     for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
     await expect(store.requestPayment(order.id, { kind: "advance", amount: 1_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_PAYMENT_NOT_NEEDED");
+    await store.issuePo(order.id, "NCC A", "");
+    await store.supplierAccept(order.id, "");
     await store.markOrdered(order.id, "NCC A", "", null, "");
     expect((await store.getOrder(order.id))?.status).toBe("ordered");
   });
@@ -142,6 +147,8 @@ describe("procurement phase A", () => {
     const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: true, advancePct: 30, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
     await store.submit(order.id);
     for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
+    await store.issuePo(order.id, "NCC A", "");
+    await store.supplierAccept(order.id, "");
     await store.requestPayment(order.id, { kind: "advance", amount: 3_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "NCC A", note: "" });
     const [first] = await store.listPayments(order.id);
     expect((await store.listSteps("payment", first!.id)).map((step) => step.role)).toEqual(["pic", "technical", "material", "leader"]);
@@ -155,5 +162,53 @@ describe("procurement phase A", () => {
     await store.pay(second.id, "Chuyển khoản", "");
     await store.markOrdered(order.id, "NCC A", "", null, "");
     expect((await store.getOrder(order.id))?.status).toBe("ordered");
+  });
+
+  it("PRC_34 project orders: administration issues the PO (numbered per project, signs the administration step) and the supplier must sign it back before advance or ordering", async () => {
+    expect(poBlock({ usesChain: false })).toBeNull();
+    expect(poBlock({ usesChain: true, poIssuedAt: null })).toBe("PO_NOT_ISSUED");
+    expect(poBlock({ usesChain: true, poIssuedAt: "x", supplierAcceptedAt: null })).toBe("PO_NOT_ACCEPTED");
+    expect(stepStates({ status: "approved", usesChain: true, poIssuedAt: null }, []).po).toBe("current");
+    expect(stepStates({ status: "approved", usesChain: false }, []).po).toBe("skipped");
+    let seq = 0;
+    const clock = fixedClock("2026-11-12T09:00:00+07:00");
+    const store = createMemoryPurchaseStore({ clock, newId: () => `id${++seq}`, projects: createMemoryProjectStore({ clock }) });
+    const sheet = await store.newBudgetSheet("proj-1");
+    await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
+    await store.submitBudgetSheet(sheet);
+    for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    await store.submit(order.id);
+    for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
+    await expect(store.supplierAccept(order.id, "")).rejects.toThrow("PO_BAD_STATUS");
+    await store.issuePo(order.id, "Công ty ABC", "Ông A");
+    expect(await store.getOrder(order.id)).toMatchObject({ poNo: "PO-DA-001", supplier: "Công ty ABC", supplierAcceptedAt: null });
+    expect((await store.listSteps("purchase", order.id)).find((step) => step.role === "admin_office")?.result).toBe("signed");
+    await expect(store.markOrdered(order.id, "Công ty ABC", "", null, "")).rejects.toThrow("PO_NOT_ACCEPTED");
+    await store.supplierAccept(order.id, "Bản ký lưu ở HC");
+    await store.markOrdered(order.id, "Công ty ABC", "", null, "");
+    expect((await store.getOrder(order.id))?.status).toBe("ordered");
+  });
+
+  it("PRC_35 receiving a project order needs a delivery record number signed by both parties", async () => {
+    let seq = 0;
+    const clock = fixedClock("2026-11-12T09:00:00+07:00");
+    const store = createMemoryPurchaseStore({ clock, newId: () => `id${++seq}`, projects: createMemoryProjectStore({ clock }) });
+    const sheet = await store.newBudgetSheet("proj-1");
+    await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
+    await store.submitBudgetSheet(sheet);
+    for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    await store.submit(order.id);
+    for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
+    await store.issuePo(order.id, "Công ty ABC", "");
+    await store.supplierAccept(order.id, "");
+    await store.markOrdered(order.id, "Công ty ABC", "", null, "");
+    const item = (await store.getOrder(order.id))!.items[0]!;
+    const lines = [{ id: item.id, receivedQty: 1, acceptedQty: 1, note: "" }];
+    await expect(store.receive(order.id, lines, "")).rejects.toThrow("PO_RECEIPT_RECORD_REQUIRED");
+    await expect(store.receive(order.id, lines, "", { recordNo: "BBGN-7", signedByBoth: false })).rejects.toThrow("PO_RECEIPT_RECORD_REQUIRED");
+    await store.receive(order.id, lines, "", { recordNo: "BBGN-7", signedByBoth: true });
+    expect(await store.getOrder(order.id)).toMatchObject({ status: "received", receiptRecordNo: "BBGN-7" });
   });
 });
