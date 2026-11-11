@@ -1,6 +1,8 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectStore } from "../../modules/projects/store";
 import type { AttendanceCheck, AttendanceContext, GpsFix } from "../../modules/projects/attendance";
+import type { MonthRecord } from "../../modules/projects/attendanceMonth";
+import type { AttendanceRequest } from "../../modules/projects/attendanceRequests";
 import {
   DEFAULT_LABOR_SETTINGS, type Holiday, type LaborRate, type LaborSettings, type PeriodLock, type Project, type ProjectBudget, type ProjectExpense,
   type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost, type TimesheetLine,
@@ -40,7 +42,8 @@ const projectFromRow = (row: Row): Project => ({
 });
 const checkFromRow = (row: Row): AttendanceCheck => ({
   id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), workDate: str(row.work_date), checkInAt: str(row.check_in_at),
-  inLat: num(row.in_lat), inLng: num(row.in_lng), inAccuracyM: row.in_accuracy_m === null ? null : num(row.in_accuracy_m), inDistanceM: num(row.in_distance_m), inPhoto: str(row.in_photo),
+  inLat: row.in_lat === null ? null : num(row.in_lat), inLng: row.in_lng === null ? null : num(row.in_lng), inAccuracyM: row.in_accuracy_m === null ? null : num(row.in_accuracy_m),
+  inDistanceM: row.in_distance_m === null ? null : num(row.in_distance_m), inPhoto: strOrNull(row.in_photo), source: row.source === "explanation" ? "explanation" : "gps",
   checkOutAt: strOrNull(row.check_out_at), outLat: row.out_lat === null ? null : num(row.out_lat), outLng: row.out_lng === null ? null : num(row.out_lng),
   outAccuracyM: row.out_accuracy_m === null ? null : num(row.out_accuracy_m), outDistanceM: row.out_distance_m === null ? null : num(row.out_distance_m), outPhoto: strOrNull(row.out_photo),
 });
@@ -103,6 +106,29 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
     },
     checkIn: (projectId, position, photo) => punch("check_in", projectId, position, photo),
     checkOut: (projectId, position, photo) => punch("check_out", projectId, position, photo),
+    async myMonth(month) {
+      const found = (await rpc("my_attendance_month", { p_month: month }) ?? []) as Row[];
+      return found.map((row): MonthRecord => ({
+        workDate: str(row.work_date), projectId: str(row.project_id), code: str(row.code), projectName: str(row.project_name),
+        checkInAt: strOrNull(row.check_in_at), checkOutAt: strOrNull(row.check_out_at), source: row.source === "explanation" ? "explanation" : row.source === "gps" ? "gps" : null,
+        sheetStatus: (row.sheet_status ?? null) as MonthRecord["sheetStatus"], attendance: (row.attendance ?? null) as MonthRecord["attendance"],
+        regularHours: row.regular_hours === null ? null : num(row.regular_hours), otHours: row.ot_hours === null ? null : num(row.ot_hours),
+        schedule: { workStart: hhmm(row.work_start, "08:00"), workEnd: hhmm(row.work_end, "17:00"), lunchStart: hhmm(row.lunch_start, "12:00"), lunchEnd: hhmm(row.lunch_end, "13:00"), stdHours: num(row.std_hours) },
+        weeklyOff: ((row.weekly_off ?? [0]) as number[]).map(Number),
+      }));
+    },
+    async listRequests(projectId) {
+      let query = client.from("attendance_requests").select("*").order("created_at", { ascending: false }).limit(500);
+      if (projectId) query = query.eq("project_id", projectId);
+      return (await rows(query)).map((row): AttendanceRequest => ({
+        id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), employeeName: str(row.employee_name), workDate: str(row.work_date), kind: row.kind as AttendanceRequest["kind"],
+        requestedIn: row.requested_in ? hhmm(row.requested_in, "") : null, requestedOut: row.requested_out ? hhmm(row.requested_out, "") : null, reason: str(row.reason), status: row.status as AttendanceRequest["status"],
+        reviewerName: str(row.reviewer_name), reviewedAt: strOrNull(row.reviewed_at), reviewNote: str(row.review_note), createdAt: str(row.created_at),
+      }));
+    },
+    async submitRequest(input) { await rpc("attendance_request_submit", { p_project: input.projectId, p_date: input.workDate, p_kind: input.kind, p_in: input.requestedIn, p_out: input.requestedOut, p_reason: input.reason }); },
+    async cancelRequest(id) { await rpc("attendance_request_cancel", { p_id: id }); },
+    async reviewRequest(id, approve, note) { await rpc("attendance_request_review", { p_id: id, p_approve: approve, p_note: note }); },
     async listChecks(projectId, from, to) {
       return (await rows(client.from("attendance_checks").select("*").eq("project_id", projectId).gte("work_date", from).lte("work_date", to).order("check_in_at"))).map(checkFromRow);
     },

@@ -4,6 +4,8 @@ import { monthOf } from "../../modules/projects/calendar";
 import type { ProjectStore } from "../../modules/projects/store";
 import { blocking, checkTimesheet } from "../../modules/projects/timesheetRules";
 import { distanceM, withinSite, type AttendanceCheck, type GpsFix } from "../../modules/projects/attendance";
+import type { MonthRecord } from "../../modules/projects/attendanceMonth";
+import { requestIssue, type AttendanceRequest } from "../../modules/projects/attendanceRequests";
 import {
   DEFAULT_LABOR_SETTINGS, DEFAULT_SITE_SETTINGS, type ProjectFinance, type Holiday, type LaborRate, type LaborSettings, type MemberRate, type PeriodLock, type Project, type ProjectBudget,
   type ProjectExpense, type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost,
@@ -25,11 +27,12 @@ export type ProjectData = {
   locks: PeriodLock[];
   finances: (ProjectFinance & { projectId: string })[];
   checks: AttendanceCheck[];
+  requests: AttendanceRequest[];
 };
 
 export const emptyProjectData = (): ProjectData => ({
   projects: [], budgets: [], members: [], memberRates: [], rates: [], settings: { ...DEFAULT_LABOR_SETTINGS }, holidays: [],
-  timesheets: [], costs: [], subcontracts: [], payments: [], expenses: [], locks: [], finances: [], checks: [],
+  timesheets: [], costs: [], subcontracts: [], payments: [], expenses: [], locks: [], finances: [], checks: [], requests: [],
 });
 
 const fail = (code: string, detail = ""): never => { throw new Error(detail ? `${code}:${detail}` : code); };
@@ -106,6 +109,57 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
       const path = `${projectId}/demo/${today()}-${actingAs}-out.jpg`;
       photos.set(path, URL.createObjectURL(photo));
       Object.assign(check, { checkOutAt: now(), outLat: position.lat, outLng: position.lng, outAccuracyM: position.accuracy, outDistanceM: distance, outPhoto: path });
+      persist();
+    },
+    async myMonth(month) {
+      if (!actingAs) return [];
+      const keys = new Set<string>();
+      for (const check of data.checks) if (check.employeeId === actingAs && check.workDate.startsWith(month)) keys.add(`${check.workDate}|${check.projectId}`);
+      for (const sheet of data.timesheets) if (sheet.status !== "draft" && sheet.workDate.startsWith(month) && sheet.lines.some((line) => line.employeeId === actingAs)) keys.add(`${sheet.workDate}|${sheet.projectId}`);
+      return [...keys].sort().flatMap((key): MonthRecord[] => {
+        const [workDate, projectId] = key.split("|") as [string, string];
+        const project = data.projects.find((item) => item.id === projectId);
+        if (!project) return [];
+        const check = data.checks.find((item) => item.projectId === projectId && item.employeeId === actingAs && item.workDate === workDate);
+        const sheet = data.timesheets.find((item) => item.projectId === projectId && item.workDate === workDate && item.status !== "draft" && item.lines.some((line) => line.employeeId === actingAs));
+        const line = sheet?.lines.find((item) => item.employeeId === actingAs);
+        return [{
+          workDate, projectId, code: project.code, projectName: project.name, checkInAt: check?.checkInAt ?? null, checkOutAt: check?.checkOutAt ?? null, source: check ? check.source ?? "gps" : null,
+          sheetStatus: sheet?.status ?? null, attendance: line?.attendance ?? null, regularHours: line?.regularHours ?? null, otHours: line?.otHours ?? null,
+          schedule: { workStart: project.workStart, workEnd: project.workEnd, lunchStart: project.lunchStart, lunchEnd: project.lunchEnd, stdHours: project.stdHours }, weeklyOff: project.weeklyOff,
+        }];
+      });
+    },
+    async listRequests(projectId) { return clone(data.requests.filter((item) => !projectId || item.projectId === projectId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+    async submitRequest(input) {
+      if (!actingAs) fail("CHECKIN_NO_EMPLOYEE");
+      const member = data.members.find((item) => item.projectId === input.projectId && item.employeeId === actingAs && item.joinedOn <= input.workDate && (item.leftOn === null || item.leftOn >= input.workDate)) ?? fail("TS_OUTSIDE_MEMBERSHIP");
+      const issue = requestIssue(input, today()); if (issue) fail(issue);
+      if (isLocked(input.projectId, input.workDate)) fail("TS_PERIOD_LOCKED");
+      if (data.requests.some((item) => item.projectId === input.projectId && item.employeeId === actingAs && item.workDate === input.workDate && item.status === "pending")) fail("ATR_PENDING_EXISTS");
+      data.requests.push({ id: newId(), projectId: input.projectId, employeeId: actingAs!, employeeName: member.displayName, workDate: input.workDate, kind: input.kind, requestedIn: input.requestedIn, requestedOut: input.requestedOut, reason: input.reason.trim(), status: "pending", reviewerName: "", reviewedAt: null, reviewNote: "", createdAt: now() });
+      persist();
+    },
+    async cancelRequest(id) {
+      const request = data.requests.find((item) => item.id === id && item.status === "pending" && item.employeeId === actingAs) ?? fail("ATR_NOT_PENDING");
+      request.status = "cancelled"; persist();
+    },
+    async reviewRequest(id, approve, note) {
+      const request = data.requests.find((item) => item.id === id) ?? fail("ATR_NOT_FOUND");
+      if (request.status !== "pending") fail("ATR_NOT_PENDING");
+      if (!approve && note.trim().length < 3) fail("ATR_REVIEW_NOTE");
+      Object.assign(request, { status: approve ? "approved" : "rejected", reviewerName: "Admin demo", reviewedAt: now(), reviewNote: note.trim() });
+      if (approve && (request.requestedIn || request.requestedOut)) {
+        const toIso = (time: string) => new Date(`${request.workDate}T${time}:00+07:00`).toISOString();
+        const check = data.checks.find((item) => item.projectId === request.projectId && item.employeeId === request.employeeId && item.workDate === request.workDate);
+        if (check) {
+          if (request.requestedIn) check.checkInAt = toIso(request.requestedIn);
+          if (request.requestedOut && toIso(request.requestedOut) > check.checkInAt) check.checkOutAt = toIso(request.requestedOut);
+        } else if (request.requestedIn) {
+          data.checks.push({ id: newId(), projectId: request.projectId, employeeId: request.employeeId, workDate: request.workDate, checkInAt: toIso(request.requestedIn), inLat: null, inLng: null, inAccuracyM: null, inDistanceM: null, inPhoto: null, source: "explanation",
+            checkOutAt: request.requestedOut ? toIso(request.requestedOut) : null, outLat: null, outLng: null, outAccuracyM: null, outDistanceM: null, outPhoto: null });
+        }
+      }
       persist();
     },
     async listChecks(projectId, from, to) { return clone(data.checks.filter((item) => item.projectId === projectId && item.workDate >= from && item.workDate <= to)); },

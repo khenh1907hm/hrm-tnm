@@ -8,11 +8,13 @@ export type AttendanceCheck = {
   employeeId: string;
   workDate: string;
   checkInAt: string;
-  inLat: number;
-  inLng: number;
+  inLat: number | null;
+  inLng: number | null;
   inAccuracyM: number | null;
-  inDistanceM: number;
-  inPhoto: string;
+  inDistanceM: number | null;
+  inPhoto: string | null;
+  /** gps: tự chấm; explanation: ghi bù từ phiếu giải trình đã duyệt (không có vị trí, ảnh). */
+  source?: "gps" | "explanation";
   checkOutAt: string | null;
   outLat: number | null;
   outLng: number | null;

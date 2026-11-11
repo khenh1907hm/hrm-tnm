@@ -3,6 +3,8 @@ import type {
   Subcontract, SubcontractPayment, Timesheet, TimesheetCost,
 } from "./types";
 import type { AttendanceCheck, AttendanceContext, GpsFix } from "./attendance";
+import type { MonthRecord } from "./attendanceMonth";
+import type { AttendanceRequest, RequestInput } from "./attendanceRequests";
 import type { OtherHours } from "./timesheetRules";
 
 /**
@@ -74,6 +76,13 @@ export interface ProjectStore {
   listChecks(projectId: string, from: string, to: string): Promise<AttendanceCheck[]>;
   /** Đường dẫn xem ảnh chấm công (link có hạn); null nếu không xem được. */
   photoUrl(path: string): Promise<string | null>;
+  /** Lịch chấm công tháng YYYY-MM của chính người đăng nhập (hàm my_attendance_month). */
+  myMonth(month: string): Promise<MonthRecord[]>;
+  /** Phiếu giải trình người xem đọc được (của mình; PM, CHT: của dự án; sếp: tất cả); lọc theo dự án nếu có. */
+  listRequests(projectId?: string): Promise<AttendanceRequest[]>;
+  submitRequest(input: RequestInput): Promise<void>;
+  cancelRequest(id: string): Promise<void>;
+  reviewRequest(id: string, approve: boolean, note: string): Promise<void>;
   /** Chỉ bản demo: xem thử như một nhân viên (để thử tự chấm công). */
   actAs?(employeeId: string | null): void;
 

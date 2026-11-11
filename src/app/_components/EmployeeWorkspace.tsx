@@ -28,24 +28,31 @@ const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
 };
 
 /**
- * Mục Dự án: được tick quyền xem dự án, hoặc là thành viên (không phải tổ viên) của một dự án.
- * Mục Chấm công: mọi tài khoản đã liên kết hồ sơ nhân sự (tự chấm công GPS; chưa thuộc dự án thì trang báo cần làm gì).
+ * Nhân viên thường chỉ có Chấm công (tự chấm, lịch tháng, giải trình). Thêm:
+ *  - Dự án: được tick quyền xem dự án, hoặc là PM / Chỉ huy trưởng của một dự án.
+ *  - Đặt hàng: có quyền mua hàng (purchases.*), xem dự án, hoặc giữ vai trò quản lý trong dự án (PM, CHT, giám sát, kỹ sư, tổ trưởng).
+ *  - Chấm công: mọi tài khoản đã liên kết hồ sơ nhân sự.
  */
-function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], ready: boolean, actor: Actor | undefined): { has: boolean; attends: boolean; known: boolean } {
+function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], ready: boolean, actor: Actor | undefined): { has: boolean; buys: boolean; attends: boolean; known: boolean } {
   const byAccess = actor ? hasAccess(actor, "projects.view") : false;
-  const [found, setFound] = useState<{ member: boolean; attends: boolean } | null>(null);
+  const buyAccess = actor ? hasAccess(actor, "purchases.view") : false;
+  const [found, setFound] = useState<{ member: boolean; staff: boolean; attends: boolean } | null>(null);
   useEffect(() => {
     if (!ready) return;
     let active = true;
     void store.myEmployeeId().then(async (employeeId) => {
       // Tổ viên không đọc được bảng thành viên: dự án mình đang làm lấy qua hàm my_attendance_context
       const [memberships, attending] = employeeId ? await Promise.all([store.listMembershipsOf(employeeId), store.myAttendance()]) : [[], []];
-      if (active) setFound({ member: memberships.some((item) => item.role !== "worker"), attends: employeeId !== null || attending.length > 0 });
-    }).catch(() => { if (active) setFound({ member: false, attends: false }); });
+      if (active) setFound({
+        member: memberships.some((item) => item.role === "pm" || item.role === "commander"),
+        staff: memberships.some((item) => item.role !== "worker"),
+        attends: employeeId !== null || attending.length > 0,
+      });
+    }).catch(() => { if (active) setFound({ member: false, staff: false, attends: false }); });
     return () => { active = false; };
   }, [store, ready]);
   const has = byAccess || found?.member === true;
-  return { has, attends: has || found?.attends === true, known: found !== null };
+  return { has, buys: has || buyAccess || found?.staff === true, attends: has || found?.attends === true, known: found !== null };
 }
 
 /** Trang Công cụ: các công cụ làm việc dùng chung. */
@@ -71,12 +78,12 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
   const projectStore = useProjectStore(props.mode, null);
   const projects = useHasProjects(projectStore.store, projectStore.ready, props.actor);
   const setNotice = useToast();
-  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "timesheet" || projects.attends));
+  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "purchases" || projects.buys) && (key !== "timesheet" || projects.attends));
   // Công nhân có dự án đang thi công: mở thẳng trang Chấm công
   const home: PageView = projects.attends && !projects.has ? "timesheet" : canUseTools ? roleInfo.home : "skills";
   const route = parseRoute(usePathname());
   // Mở thẳng trang dự án/chấm công: chờ biết người này có dự án hay không rồi mới chuyển hướng
-  const waitingProjects = route !== null && (route.view === "projects" || route.view === "timesheet") && !projects.known;
+  const waitingProjects = route !== null && (route.view === "projects" || route.view === "timesheet" || route.view === "purchases") && !projects.known;
   const allowed = waitingProjects || (route && EMPLOYEE_VIEWS.includes(route.view) && nav.includes(route.view) && !route.employeeId);
   const view: PageView = allowed ? route.view : home;
   const [changingPassword, setChangingPassword] = useState(false);

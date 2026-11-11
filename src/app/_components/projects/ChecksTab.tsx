@@ -9,6 +9,7 @@ import { activeOn } from "../../../modules/projects/tree";
 import type { ProjectStore } from "../../../modules/projects/store";
 import type { TabProps } from "./ProjectDetail";
 import { teamLabel } from "./TimesheetEntry";
+import { RequestsPanel } from "./RequestsPanel";
 
 export const scheduleOf = (project: TabProps["data"]["project"]) => ({ workStart: project.workStart, workEnd: project.workEnd, lunchStart: project.lunchStart, lunchEnd: project.lunchEnd, stdHours: project.stdHours });
 
@@ -16,7 +17,7 @@ export const scheduleOf = (project: TabProps["data"]["project"]) => ({ workStart
  * Quản lý chấm công GPS của dự án: theo ngày, mỗi người giờ Vào / Ra, khoảng cách tới công trường, ảnh chụp,
  * giờ thường và tăng ca tính theo giờ làm (PRJ-15). Ai chưa chấm cũng được liệt kê để tổ trưởng, CHT biết.
  */
-export function ChecksTab({ store, data, viewer }: TabProps) {
+export function ChecksTab({ store, data, viewer, reload, setNotice }: TabProps) {
   const { project } = data;
   const [date, setDate] = useState(data.today);
   const [team, setTeam] = useState("*");
@@ -28,6 +29,8 @@ export function ChecksTab({ store, data, viewer }: TabProps) {
   const done = members.filter((member) => checks.some((check) => check.employeeId === member.employeeId)).length;
 
   return (
+    <>
+    <RequestsPanel store={store} projectId={data.project.id} projectLabel={() => data.project.code} isPmOf={() => viewer.isPm} onChanged={() => void reload()} setNotice={setNotice} />
     <section className="panel pj-section" aria-labelledby="pj-checks-title">
       <div className="pj-section-head">
         <h2 id="pj-checks-title"><MapPin className="ico" size={18} aria-hidden="true" /> Chấm công GPS ({done}/{members.length} người đã chấm Vào)</h2>
@@ -54,7 +57,7 @@ export function ChecksTab({ store, data, viewer }: TabProps) {
                 <td>{member.displayName}<br /><small className="muted">{member.employeeCode}</small></td>
                 <td>{teamLabel(member.team)}</td>
                 <td>{check ? <Punch store={store} at={check.checkInAt} distance={check.inDistanceM} lat={check.inLat} lng={check.inLng} photo={check.inPhoto} /> : <span className="pill bad">Chưa chấm</span>}</td>
-                <td>{check?.checkOutAt ? <Punch store={store} at={check.checkOutAt} distance={check.outDistanceM ?? 0} lat={check.outLat!} lng={check.outLng!} photo={check.outPhoto} /> : check ? <span className="pill warn">Chưa chấm Ra</span> : ""}</td>
+                <td>{check?.checkOutAt ? <Punch store={store} at={check.checkOutAt} distance={check.outDistanceM} lat={check.outLat} lng={check.outLng} photo={check.outPhoto} /> : check ? <span className="pill warn">Chưa chấm Ra</span> : ""}</td>
                 <td className="pj-num">{hours ? formatHours(hours.regularHours) : "—"}</td>
                 <td className="pj-num">{hours?.otHours ? formatHours(hours.otHours) : "—"}</td>
                 <td>{hours ? [hours.late ? `Đi muộn ${formatMinutes(hours.late)}` : "", hours.incomplete ? "Tạm tính tới giờ kết thúc" : ""].filter(Boolean).join(" · ") : ""}</td>
@@ -64,10 +67,11 @@ export function ChecksTab({ store, data, viewer }: TabProps) {
         </table>
       </div>
     </section>
+    </>
   );
 }
 
-function Punch(props: { store: ProjectStore; at: string; distance: number; lat: number; lng: number; photo: string | null }) {
+function Punch(props: { store: ProjectStore; at: string; distance: number | null; lat: number | null; lng: number | null; photo: string | null }) {
   const [url, setUrl] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   useEffect(() => {
@@ -78,7 +82,7 @@ function Punch(props: { store: ProjectStore; at: string; distance: number; lat: 
   }, [open, props.photo, props.store, url]);
   return (
     <span>
-      <b>{vnClock(props.at)}</b> <small className="muted">· {props.distance} m · <a href={mapsLink(props.lat, props.lng)} target="_blank" rel="noreferrer">bản đồ</a></small>
+      <b>{vnClock(props.at)}</b> {props.lat === null || props.lng === null ? <span className="pill info">Ghi bù theo giải trình</span> : <small className="muted">· {props.distance ?? 0} m · <a href={mapsLink(props.lat, props.lng)} target="_blank" rel="noreferrer">bản đồ</a></small>}
       {props.photo && <> · <button type="button" className="link-button" onClick={() => setOpen((value) => !value)}><ImageIcon className="ico" size={13} aria-hidden="true" /> {open ? "Ẩn ảnh" : "Ảnh"}</button></>}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {open && (url ? <img src={url} alt={`Ảnh chấm lúc ${vnClock(props.at)}`} style={{ display: "block", width: 160, borderRadius: 6, marginTop: 4 }} /> : <small className="muted"> Đang tải ảnh…</small>)}

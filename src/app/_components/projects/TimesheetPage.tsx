@@ -11,6 +11,7 @@ import { errorMessage, viewerFor } from "./projectShared";
 import { teamLabel, TimesheetEntry } from "./TimesheetEntry";
 import { TimesheetOverview } from "./TimesheetOverview";
 import { SelfCheckIn } from "./SelfCheckIn";
+import { RequestsPanel } from "./RequestsPanel";
 import "./projects.css";
 
 type Choice = { project: Project; team: string };
@@ -39,6 +40,7 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
   const today = todayVN(systemClock);
   const [choices, setChoices] = useState<Choice[] | null>(null);
   const [overviewProjects, setOverviewProjects] = useState<Project[]>([]);
+  const [pmProjects, setPmProjects] = useState<Set<string>>(new Set());
   const [mode, setMode] = useState<Mode | null>(null);
   const [isMember, setIsMember] = useState(false);
   const [demoPeople, setDemoPeople] = useState<ProjectMember[]>([]);
@@ -59,6 +61,7 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
         const running = projects.filter((project) => project.status === "active");
         const options: Choice[] = [];
         const supervised: Project[] = [];
+        const pmOf = new Set<string>();
         const everyone: ProjectMember[] = [];
         for (const project of running) {
           const members = await store.listMembers(project.id);
@@ -66,6 +69,7 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
           const own = ownTeams(project, members, me);
           for (const team of own.teams) options.push({ project, team });
           if (seesAll || own.leads) supervised.push(project);
+          if (actor.role === "admin" || (me !== null && (project.pmEmployeeId === me || members.some((item) => item.employeeId === me && item.role === "pm")))) pmOf.add(project.id);
         }
         // Tổ viên không đọc được danh sách thành viên: hỏi máy chủ mình thuộc dự án nào
         // Mọi tài khoản đã liên kết hồ sơ đều có trang Tự chấm công (chưa thuộc dự án thì trang báo cần làm gì)
@@ -74,13 +78,14 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
         setCommon({ settings, holidays, me });
         setChoices(options);
         setOverviewProjects(supervised);
+        setPmProjects(pmOf);
         setIsMember(member);
         setDemoPeople(store.actAs ? everyone : []);
         setMode(seesAll ? "overview" : options.length ? "entry" : member || store.actAs ? "self" : supervised.length ? "overview" : "self");
       } catch (error) { if (active) { setNotice(errorMessage(error), "error"); setChoices([]); setMode("entry"); } }
     })();
     return () => { active = false; };
-  }, [props.ready, store, seesAll, setNotice]);
+  }, [props.ready, store, seesAll, actor.role, setNotice]);
 
   const choice = choices?.[picked] ?? null;
   const year = date.slice(0, 4);
@@ -127,7 +132,10 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
           <SelfCheckIn key={selfKey} store={store} holidays={common.holidays} setNotice={setNotice} />
         </>
       ) : mode === "overview" ? (
-        <TimesheetOverview store={store} projects={overviewProjects} holidays={common.holidays} today={today} setNotice={setNotice} {...(props.onOpenProject ? { onOpenProject: props.onOpenProject } : {})} />
+        <>
+          <RequestsPanel store={store} projectLabel={(projectId) => overviewProjects.find((item) => item.id === projectId)?.code ?? "—"} isPmOf={(projectId) => actor.role === "admin" || pmProjects.has(projectId)} setNotice={setNotice} />
+          <TimesheetOverview store={store} projects={overviewProjects} holidays={common.holidays} today={today} setNotice={setNotice} {...(props.onOpenProject ? { onOpenProject: props.onOpenProject } : {})} />
+        </>
       ) : !choices.length ? (
         <div className="panel empty-state"><p>Bạn chưa phụ trách tổ nào ở dự án đang thi công.</p><small className="muted">Nhờ PM hoặc chỉ huy trưởng thêm bạn vào dự án với vai trò Tổ trưởng, và nhờ Admin liên kết tài khoản với hồ sơ nhân sự của bạn.</small></div>
       ) : (

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Building2, Camera, Check, CheckCircle2, Clock3, Coffee, FolderX, Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, X } from "lucide-react";
 import "./checkin.css";
+import { AttendanceMonthView } from "./AttendanceMonthView";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { dayKind } from "../../../modules/projects/calendar";
 import { distanceM, formatMinutes, hoursFromCheck, mapsLink, vnClock, withinSite, type AttendanceContext, type GpsFix } from "../../../modules/projects/attendance";
@@ -60,6 +61,7 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
   const [step, setStep] = useState<Step | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const today = todayVN(systemClock);
 
   const fetchAll = useCallback(() => store.myAttendance(), [store]);
@@ -154,12 +156,14 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
           </section>
         );
       })}
+      <AttendanceMonthView store={store} holidays={props.holidays} today={today} projects={contexts.map((context) => ({ id: context.projectId, label: `${context.code} · ${context.name}` }))} setNotice={setNotice} refreshKey={refreshKey} />
       {step && <CameraDialog step={step} onClose={() => setStep(null)} onSubmit={async (photo) => {
         try {
           await (step.kind === "in" ? store.checkIn(step.context.projectId, step.fix, photo) : store.checkOut(step.context.projectId, step.fix, photo));
           setNotice(step.kind === "in" ? "Đã chấm Vào." : "Đã chấm Ra.", "success");
           setStep(null);
           await reload();
+          setRefreshKey((value) => value + 1);
         } catch (error) { setStep(null); setProblem(errorMessage(error)); }
       }} />}
     </div>
