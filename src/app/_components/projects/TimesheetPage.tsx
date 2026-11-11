@@ -68,7 +68,8 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
           if (seesAll || own.leads) supervised.push(project);
         }
         // Tổ viên không đọc được danh sách thành viên: hỏi máy chủ mình thuộc dự án nào
-        const member = me !== null && (everyone.some((item) => item.employeeId === me) || (await store.myAttendance()).length > 0);
+        // Mọi tài khoản đã liên kết hồ sơ đều có trang Tự chấm công (chưa thuộc dự án thì trang báo cần làm gì)
+        const member = me !== null;
         if (!active) return;
         setCommon({ settings, holidays, me });
         setChoices(options);

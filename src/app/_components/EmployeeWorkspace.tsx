@@ -26,7 +26,7 @@ const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
 
 /**
  * Mục Dự án: được tick quyền xem dự án, hoặc là thành viên (không phải tổ viên) của một dự án.
- * Mục Chấm công: thêm cả tổ viên đang thuộc dự án đang thi công (để tự chấm công GPS).
+ * Mục Chấm công: mọi tài khoản đã liên kết hồ sơ nhân sự (tự chấm công GPS; chưa thuộc dự án thì trang báo cần làm gì).
  */
 function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], ready: boolean, actor: Actor | undefined): { has: boolean; attends: boolean; known: boolean } {
   const byAccess = actor ? hasAccess(actor, "projects.view") : false;
@@ -37,7 +37,7 @@ function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], read
     void store.myEmployeeId().then(async (employeeId) => {
       // Tổ viên không đọc được bảng thành viên: dự án mình đang làm lấy qua hàm my_attendance_context
       const [memberships, attending] = employeeId ? await Promise.all([store.listMembershipsOf(employeeId), store.myAttendance()]) : [[], []];
-      if (active) setFound({ member: memberships.some((item) => item.role !== "worker"), attends: attending.length > 0 });
+      if (active) setFound({ member: memberships.some((item) => item.role !== "worker"), attends: employeeId !== null || attending.length > 0 });
     }).catch(() => { if (active) setFound({ member: false, attends: false }); });
     return () => { active = false; };
   }, [store, ready]);

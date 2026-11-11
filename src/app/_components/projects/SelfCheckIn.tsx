@@ -74,7 +74,7 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
   };
 
   if (!contexts) return <div className="loading">Đang tải…</div>;
-  if (!contexts.length) return <div className="panel empty-state"><p>Bạn chưa thuộc dự án nào đang thi công.</p><small className="muted">Nhờ chỉ huy trưởng thêm bạn vào dự án, và nhờ Admin liên kết tài khoản với hồ sơ nhân sự của bạn.</small></div>;
+  if (!contexts.length) return <div className="panel empty-state"><p><b>Bạn chưa được thêm vào dự án nào đang thi công.</b></p><small className="muted">Muốn chấm công, nhờ chỉ huy trưởng hoặc PM thêm bạn vào dự án (tab Sơ đồ &amp; thành viên của dự án). Sau đó mở lại trang này để bấm Chấm Vào.</small></div>;
 
   return (
     <div className="ts-sheet">
