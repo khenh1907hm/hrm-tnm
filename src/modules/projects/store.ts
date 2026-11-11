@@ -74,6 +74,8 @@ export interface ProjectStore {
   /** Mẫu chung của công ty (tiêu đề + khối Văn phòng) để sơ đồ mới của mọi dự án dùng lại. */
   getOrgTemplate(): Promise<OrgChart | null>;
   saveOrgTemplate(template: OrgChart): Promise<void>;
+  /** Nhân sự đang làm để chọn vào sơ đồ (mã, tên, chức vụ, số điện thoại) cho người không xem được hồ sơ nhân sự. */
+  orgChartPeople(query: string, employeeId?: string): Promise<{ id: string; code: string; name: string; position: string; phone: string }[]>;
 
   /** Dự án đang thi công mà người đăng nhập là thành viên (để tự chấm công). */
   myAttendance(): Promise<AttendanceContext[]>;

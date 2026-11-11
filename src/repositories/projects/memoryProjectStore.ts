@@ -86,6 +86,8 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
     async getOrgChart(projectId) { const found = (data.orgCharts ?? []).find((item) => item.projectId === projectId); return found ? clone({ header: found.header, people: found.people }) : null; },
     async saveOrgChart(projectId, chart) { data.orgCharts = [...(data.orgCharts ?? []).filter((item) => item.projectId !== projectId), { ...clone(chart), projectId }]; persist(); },
     async getOrgTemplate() { return data.orgTemplate ? clone(data.orgTemplate) : null; },
+    // Demo: chọn người qua nguồn nhân sự của trang (không có hàm máy chủ)
+    async orgChartPeople() { return []; },
     async saveOrgTemplate(template) { data.orgTemplate = clone(template); persist(); },
     async saveFinance(projectId, finance) { data.finances = [...data.finances.filter((item) => item.projectId !== projectId), { ...finance, projectId }]; persist(); },
 

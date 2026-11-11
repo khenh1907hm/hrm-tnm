@@ -94,3 +94,5 @@
 .oc-sign { margin-top: calc(var(--u) * 5); }
 .oc-signer { margin-top: calc(var(--u) * 16); }
 .oc-face.empty { border: calc(var(--u) * 1.5) solid #fff; background: rgba(255, 255, 255, .18); }
+.oc-modal-body { padding: 16px 20px 6px; }
+.oc-modal-body .oc-person { margin-top: 6px; }

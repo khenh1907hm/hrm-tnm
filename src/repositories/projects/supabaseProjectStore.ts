@@ -107,6 +107,11 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
       const doc = (data as { doc?: OrgChart } | null)?.doc;
       return doc && Array.isArray(doc.people) ? { header: { ...DEFAULT_ORG_HEADER, ...doc.header }, people: doc.people } : null;
     },
+    async orgChartPeople(query, employeeId) {
+      const { data, error } = await client.rpc("org_chart_people", { p_query: query, p_id: employeeId ?? null });
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map((row) => ({ id: str(row.id), code: str(row.code), name: str(row.name), position: str(row.position), phone: str(row.phone) }));
+    },
     async saveOrgTemplate(template) { await run(client.from("org_chart_template").upsert({ id: 1, doc: template })); },
     async saveFinance(projectId, finance) { await run(client.from("project_finance").upsert({ project_id: projectId, capital: finance.capital, note: finance.note })); },
     async myAttendance() {

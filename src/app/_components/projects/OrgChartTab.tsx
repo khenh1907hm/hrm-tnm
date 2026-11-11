@@ -120,8 +120,24 @@ const POSITIONS: [string, string][] = [
   ["site:left", "Công trường · nhánh trái"], ["site:right", "Công trường · nhánh phải"], ["site:group", "Quản lý nhóm (hàng dưới)"],
 ];
 
+/**
+ * Không xem được hồ sơ nhân sự: chọn qua hàm máy chủ org_chart_people (mã, tên, chức vụ, số điện thoại của nhân sự đang làm);
+ * máy chủ chưa có hoặc trả rỗng thì chọn trong thành viên dự án.
+ */
+function serverSource(store: ProjectStore, members: readonly ProjectMember[]): EmployeeSource {
+  const fallback = membersSource(members);
+  return {
+    search: async (query: string) => {
+      const people = await store.orgChartPeople(query).catch(() => []);
+      return people.length ? people : fallback?.search(query) ?? [];
+    },
+    get: async (employeeId: string) => (await store.orgChartPeople("", employeeId).catch(() => []))[0] ?? await fallback?.get?.(employeeId) ?? null,
+  };
+}
+
 /** Nguồn chọn người từ danh sách thành viên dự án (chỉ có mã, tên, vai trò). */
 function membersSource(members: readonly ProjectMember[]): EmployeeSource {
+  if (!members.length) return null;
   const seen = new Map<string, ProjectMember>();
   for (const member of members) if (!seen.has(member.employeeId)) seen.set(member.employeeId, member);
   const options = [...seen.values()].map((member) => ({ id: member.employeeId, code: member.employeeCode, name: member.displayName, position: MEMBER_ROLE_LABELS[member.role] }));
@@ -159,7 +175,7 @@ export type OrgChartEditorProps = {
 export function OrgChartEditor(props: OrgChartEditorProps) {
   const { store, project, members, today, canEdit, setNotice } = props;
   // Không có quyền xem hồ sơ nhân sự (PM, CHT dùng giao diện nhân viên): chọn trong thành viên của dự án
-  const employees = useMemo<EmployeeSource>(() => props.employees ?? (members.length ? membersSource(members) : null), [props.employees, members]);
+  const employees = useMemo<EmployeeSource>(() => props.employees ?? serverSource(store, members), [props.employees, store, members]);
   const [saved, setSaved] = useState<OrgChart | null | undefined>(undefined);
   const [chart, setChart] = useState<OrgChart | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -403,6 +419,7 @@ function PersonModal(props: { person: OrgPerson; header: OrgChartHeader; employe
     <div className="modal-backdrop" role="presentation" onKeyDown={(event) => { if (event.key === "Escape") props.onClose(); }}>
       <section className="modal-card oc-modal" role="dialog" aria-modal="true" aria-labelledby="oc-person-title">
         <header><h2 id="oc-person-title">{person.titleEn || "Ô sơ đồ"}{person.name ? ` · ${person.name}` : ""}</h2><button type="button" className="close" aria-label="Đóng" onClick={props.onClose}>×</button></header>
+        <div className="oc-modal-body">
         <EmployeePicker label="Chọn nhân viên (lấy tên, số điện thoại, ảnh từ hồ sơ)" source={props.employees} onPick={(option) => {
           if (!option) return;
           onChange({ employeeId: option.id, name: option.name.toUpperCase(), phone: option.phone ?? "", photo: null });
@@ -436,6 +453,7 @@ function PersonModal(props: { person: OrgPerson; header: OrgChartHeader; employe
               </select>
             </label>
           </div>
+        </div>
         </div>
         <footer>
           <button type="button" className="button danger" onClick={() => { if (window.confirm("Bỏ ô này khỏi sơ đồ?")) props.onRemove(); }}><Trash2 className="ico" size={16} aria-hidden="true" /> Bỏ ô</button>
