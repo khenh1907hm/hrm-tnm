@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, PackageCheck, Pencil, Send, Truck, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, EVENT_LABELS, FLOW_STEPS, lineTotal, paymentSummary, stepStates } from "../../../modules/purchases/flow";
+import { allowedActions, EVENT_LABELS, lineTotal, nextHint, paymentSummary, stepStates } from "../../../modules/purchases/flow";
+import { FlowStepper } from "./FlowBar";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
   PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PurchaseEvent, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
@@ -65,12 +66,9 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
       </div>
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
-        <ol className="po-steps">
-          {FLOW_STEPS.map((step, index) => <li key={step.key} className={steps[step.key]} title={steps[step.key] === "skipped" ? "Không dùng bước này" : undefined}><span className="dot">{steps[step.key] === "done" ? "✓" : index + 1}</span>{step.label}</li>)}
-        </ol>
+        <FlowStepper states={steps} cancelled={order.status === "cancelled"} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
         {order.status === "rejected" && <p className="warn-text">Sếp từ chối: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
         {order.status === "cancelled" && <p className="warn-text">Đơn đã hủy: {order.decisionNote}</p>}
-        {order.status === "submitted" && !props.roles.isApprover && <p className="muted">Đang chờ sếp duyệt.</p>}
         <div className="po-actions">
           {actions.has("edit") && <button type="button" className="button" onClick={() => setEditing(true)}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa đơn</button>}
           {actions.has("submit") && <button type="button" className="button primary" onClick={() => void act(() => store.submit(order.id), "Đã lập đơn, gửi sếp duyệt.")}><Send className="ico" size={16} aria-hidden="true" /> Lập đơn, gửi duyệt</button>}

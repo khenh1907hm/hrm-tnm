@@ -99,3 +99,31 @@ export const EVENT_LABELS: Record<string, string> = {
   "payment_reject:advance": "Sếp từ chối tạm ứng", "payment_reject:prepayment": "Sếp từ chối thanh toán trước", "payment_reject:final": "Sếp từ chối thanh toán còn lại",
   "paid:advance": "Đã chi tạm ứng", "paid:prepayment": "Đã chi thanh toán trước", "paid:final": "Đã chi thanh toán còn lại",
 };
+
+/** PUR-03: phần trăm tiến độ và tên bước hiện tại của đơn (cho thanh tiến độ ở danh sách). */
+export function progressOf(status: PurchaseStatus): { percent: number; label: string } {
+  const map: Record<PurchaseStatus, [number, string]> = {
+    draft: [5, "Đang soạn nháp"], rejected: [5, "Sếp trả về, cần sửa"], submitted: [20, "Chờ sếp duyệt"], approved: [35, "Đã duyệt, chờ đặt hàng"],
+    ordered: [60, "Đang theo dõi giao hàng"], received: [85, "Đã nhận, chờ thanh toán / hoàn tất"], completed: [100, "Hoàn tất"], cancelled: [0, "Đã hủy"],
+  };
+  const [percent, label] = map[status];
+  return { percent, label };
+}
+
+/** Gợi ý việc tiếp theo cho người đang xem (hiện dưới thanh tiến trình). */
+export function nextHint(order: Pick<PurchaseOrder, "status" | "requesterId">, me: { userId: string } & PurchaseRoles, payments: readonly Pick<PurchasePayment, "status">[]): string {
+  const mine = order.requesterId === me.userId;
+  if (me.isApprover && order.status === "submitted") return "Bạn là người duyệt: xem hàng cần mua rồi bấm Duyệt đơn hoặc Từ chối.";
+  if (me.isApprover && payments.some((payment) => payment.status === "requested")) return "Có khoản tạm ứng / thanh toán chờ bạn duyệt ở mục Tạm ứng và thanh toán.";
+  if (me.isPayer && payments.some((payment) => payment.status === "approved")) return "Có khoản đã được sếp duyệt chờ bạn Thực hiện chi.";
+  switch (order.status) {
+    case "draft": return mine ? "Kiểm tra lại hàng cần mua rồi bấm Lập đơn, gửi duyệt." : "Đơn đang được soạn.";
+    case "rejected": return mine ? "Sếp đã trả về: sửa theo góp ý rồi lập lại." : "Sếp đã trả về cho người lập sửa.";
+    case "submitted": return "Đang chờ sếp duyệt.";
+    case "approved": return "Đã duyệt. Nếu cần tiền mua thì Đề nghị tạm ứng; sau đó bấm Đặt hàng khi đã chốt nhà cung cấp.";
+    case "ordered": return "Đang chờ giao hàng: cập nhật theo dõi khi có tin; hàng về thì bấm Nhận hàng, kiểm tra.";
+    case "received": return "Đã nhận hàng. Đề nghị thanh toán phần còn lại (nếu còn), chi xong thì bấm Hoàn tất đơn.";
+    case "completed": return "Đơn đã hoàn tất.";
+    default: return "Đơn đã hủy.";
+  }
+}

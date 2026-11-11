@@ -37,7 +37,7 @@ const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
   // Ai cũng mở được: RLS chỉ trả dự án người đó được xem (theo quyền hoặc theo vai trò trong dự án)
   projects: null,
   timesheet: null,
-  laborRates: "admin",
+  laborRates: "projects.rates",
   // Ai cũng lập được đơn hàng; RLS chỉ trả đơn người đó được xem
   purchases: null,
 };

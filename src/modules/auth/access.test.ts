@@ -44,7 +44,7 @@ describe("quyền theo từng người", () => {
 
   it("danh sách rỗng là thu hết quyền, khác với chưa tùy chỉnh", () => {
     expect(effectiveAccess("hr", [])).toEqual([]);
-    expect(effectiveAccess("hr", null)).toEqual(ACCESS_KEYS.filter((key) => key !== "projects.manage"));
+    expect(effectiveAccess("hr", null)).toEqual(ACCESS_KEYS.filter((key) => !["projects.manage", "projects.finance", "projects.rates", "purchases.approve"].includes(key)));
   });
 
   it("Chờ cấp quyền hay vai trò lạ không có gì, kể cả còn danh sách cũ", () => {
@@ -65,5 +65,17 @@ describe("quyền theo từng người", () => {
 
   it("mọi mục bắt buộc đều có trong danh mục", () => {
     for (const item of ACCESS_ITEMS) for (const needed of item.requires) expect(ACCESS_KEYS).toContain(needed);
+  });
+});
+
+describe("quyền theo chức năng", () => {
+  it("ACC_08 new function-level keys exist; HR default excludes money, rates, project management and purchase approval", () => {
+    for (const key of ["projects.finance", "projects.rates", "purchases.approve", "purchases.pay"] as const) expect(ACCESS_KEYS).toContain(key);
+    const hr = defaultAccess("hr");
+    for (const key of ["projects.manage", "projects.finance", "projects.rates", "purchases.approve"] as const) expect(hr).not.toContain(key);
+    expect(hr).toContain("purchases.pay");
+    expect(normalizeAccess(["purchases.approve"])).toEqual(["purchases.view", "purchases.approve"]);
+    expect(normalizeAccess(["projects.finance"])).toEqual(["projects.view", "projects.finance"]);
+    expect(needsHrWorkspace(["purchases.view", "purchases.approve", "projects.view", "projects.finance", "tools"])).toBe(false);
   });
 });

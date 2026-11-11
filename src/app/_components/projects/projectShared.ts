@@ -43,7 +43,7 @@ export function viewerFor(actor: Actor, myEmployeeId: string | null, project: Pr
   const isLead = isPm || mine.some((member) => member.role === "commander");
   const leaderTeams = mine.filter((member) => member.role === "leader" && member.team).map((member) => member.team);
   // Tiền (vốn, ngân sách, đơn giá, chi phí): Admin, PM và Chỉ huy trưởng của dự án
-  return { isAdmin, isPm, isLead, leaderTeams, canSeeMoney: isLead, canEditProject: isPm || hasAccess(actor, "projects.manage") };
+  return { isAdmin, isPm, isLead, leaderTeams, canSeeMoney: isLead || hasAccess(actor, "projects.finance"), canEditProject: isPm || hasAccess(actor, "projects.manage") };
 }
 
 export const canCreateProject = (actor: Actor) => actor.role === "admin" || hasAccess(actor, "projects.manage");

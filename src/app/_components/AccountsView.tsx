@@ -4,7 +4,8 @@ import type { BulkWorkerResult } from "../../lib/accountAdmin";
 import { useEffect, useState } from "react";
 import { ACCOUNT_ROLES, ACCOUNT_ROLE_LABELS, MIN_PASSWORD_LENGTH, type Account, type AccountRole } from "../../lib/accountAdmin";
 import { getSupabaseClient } from "../../lib/supabase/client";
-import { ACCESS_ITEMS, ACCESS_KEYS, defaultAccess, effectiveAccess, toggleAccess, type AccessKey, type Actor, type ActorRole } from "../../modules/auth/permissions";
+import { ACCESS_ITEMS, ACCESS_KEYS, defaultAccess, effectiveAccess, normalizeAccess, toggleAccess, type AccessKey, type Actor, type ActorRole } from "../../modules/auth/permissions";
+import { normalizeText } from "../../lib/text";
 import type { SetNotice } from "./shared";
 import { EmployeePicker } from "./projects/ProjectsPage";
 import type { EmployeeOption, EmployeeSource } from "./projects/projectShared";
@@ -63,6 +64,10 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
   const [bulk, setBulk] = useState(false);
 
   const [attempt, setAttempt] = useState(0);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState<AccountRole | "*" | "linked" | "unlinked">("*");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     if (props.mode !== "live") return;
@@ -96,6 +101,7 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
   };
 
   const pending = accounts?.filter((item) => item.role === "pending" && !item.locked).length ?? 0;
+  const paged = pageAccounts(accounts ?? [], { query, role: roleFilter, page, pageSize });
   return <>
     <div className="page-head">
       <div><h1>Tài khoản &amp; phân quyền</h1><p>{demo ? "Bản demo: tài khoản mẫu, thay đổi chỉ lưu trong phiên này. Dùng nút Xem thử để xem người đó thấy gì." : "Thêm tài khoản, cấp vai trò, chọn quyền từng người, đặt lại mật khẩu hoặc khóa người đã nghỉ. Mọi thay đổi ghi vào Nhật ký."}</p></div>
@@ -105,6 +111,17 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
       </div>
     </div>
     {pending > 0 && <p className="list-notice is-warn">{pending} tài khoản đang chờ cấp quyền: chọn vai trò ở cột Vai trò.</p>}
+    <div className="pj-toolbar" style={{ marginBottom: 12 }}>
+      <label className="sr-only" htmlFor="acc-search">Tìm tài khoản</label>
+      <input id="acc-search" type="search" placeholder="Tìm theo email, họ tên, mã nhân viên" value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} style={{ flex: 1, minWidth: 220 }} />
+      <select aria-label="Lọc theo vai trò" value={roleFilter} onChange={(event) => { setRoleFilter(event.target.value as typeof roleFilter); setPage(1); }}>
+        <option value="*">Mọi vai trò</option>
+        {ACCOUNT_ROLES.map((role) => <option key={role} value={role}>{ACCOUNT_ROLE_LABELS[role]}</option>)}
+        <option value="linked">Đã liên kết hồ sơ</option>
+        <option value="unlinked">Chưa liên kết hồ sơ</option>
+      </select>
+      <select aria-label="Số dòng mỗi trang" value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>{[20, 50, 100].map((size) => <option key={size} value={size}>{size} / trang</option>)}</select>
+    </div>
     <section className="panel">
       {error && <p className="empty">{error} <button type="button" className="button" onClick={() => setAttempt((value) => value + 1)}>Thử lại</button></p>}
       {!error && <div className="table-scroll">
@@ -112,7 +129,8 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
           <thead><tr><th>Email</th><th>Họ tên</th><th>Vai trò</th><th>Quyền</th><th>Hồ sơ nhân sự</th><th>Đăng nhập gần nhất</th><th>Trạng thái</th><th aria-label="Thao tác" /></tr></thead>
           <tbody>
             {accounts === null && <tr><td colSpan={8} className="empty">Đang tải tài khoản…</td></tr>}
-            {accounts?.map((account) => {
+            {accounts !== null && !paged.items.length && <tr><td colSpan={8} className="empty">Không có tài khoản khớp bộ lọc.</td></tr>}
+            {paged.items.map((account) => {
               const self = account.id === actor.id;
               const busy = busyId === account.id;
               return <tr key={account.id} className={account.locked ? "is-locked" : undefined}>
@@ -147,6 +165,16 @@ export function AccountsView(props: { actor: Actor; mode: "demo" | "live"; setNo
             })}
           </tbody>
         </table>
+      </div>}
+      {accounts !== null && paged.total > 0 && <div className="pager" style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center", justifyContent: "space-between", padding: "10px 14px" }}>
+        <span className="muted">Hiện {(paged.page - 1) * pageSize + 1}–{Math.min(paged.page * pageSize, paged.total)} / {paged.total} tài khoản</span>
+        <div className="button-row">
+          <button type="button" className="button" disabled={paged.page <= 1} onClick={() => setPage(1)}>« Đầu</button>
+          <button type="button" className="button" disabled={paged.page <= 1} onClick={() => setPage(paged.page - 1)}>‹ Trước</button>
+          <span style={{ alignSelf: "center" }}>Trang {paged.page} / {paged.pages}</span>
+          <button type="button" className="button" disabled={paged.page >= paged.pages} onClick={() => setPage(paged.page + 1)}>Sau ›</button>
+          <button type="button" className="button" disabled={paged.page >= paged.pages} onClick={() => setPage(paged.pages)}>Cuối »</button>
+        </div>
       </div>}
     </section>
     <section className="panel accounts-roles">
@@ -205,6 +233,25 @@ function CreateAccountModal(props: { onClose: () => void; onCreated: (account: A
   </ModalShell>;
 }
 
+/** ACC-07: lọc tài khoản theo chữ (email, họ tên, hồ sơ), vai trò hoặc liên kết hồ sơ, rồi cắt trang (trang ngoài phạm vi thì kẹp lại). */
+export function pageAccounts(accounts: readonly Account[], options: { query: string; role: AccountRole | "*" | "linked" | "unlinked"; page: number; pageSize: number }) {
+  const tokens = normalizeText(options.query).split(/\s+/).filter(Boolean);
+  const matched = accounts.filter((account) => (options.role === "*" || (options.role === "linked" ? account.employeeId !== null : options.role === "unlinked" ? account.employeeId === null : account.role === options.role))
+    && tokens.every((token) => normalizeText(`${account.email} ${account.fullName} ${account.employeeLabel ?? ""}`).includes(token)));
+  const pages = Math.max(1, Math.ceil(matched.length / options.pageSize));
+  const page = Math.min(Math.max(1, options.page), pages);
+  return { items: matched.slice((page - 1) * options.pageSize, page * options.pageSize), total: matched.length, pages, page };
+}
+
+/** Mẫu quyền nhanh theo công việc (tick sẵn các mục, vẫn chỉnh tay được). */
+const ACCESS_PRESETS: readonly { label: string; hint: string; keys: readonly AccessKey[] }[] = [
+  { label: "Nhân sự (HR)", hint: "Hồ sơ, chứng chỉ, nhắc hạn, chữ ký, mẫu báo cáo", keys: ["employees.view", "employees.edit", "employees.import", "employees.export", "employees.archive", "certificates.edit", "certificateTypes.manage", "reminders.manage", "signatures.manage", "reports.manage", "tools"] },
+  { label: "Kế toán", hint: "Xem mọi đơn hàng, thực hiện chi, xem vốn và chi phí dự án", keys: ["projects.view", "projects.finance", "purchases.view", "purchases.pay", "tools"] },
+  { label: "Sếp duyệt", hint: "Duyệt đơn hàng, khoản chi; xem vốn, chi phí mọi dự án", keys: ["projects.view", "projects.finance", "purchases.view", "purchases.approve", "tools"] },
+  { label: "Quản lý dự án", hint: "Tạo, sửa mọi dự án, xem vốn, đơn giá và lịch làm việc", keys: ["projects.view", "projects.manage", "projects.finance", "projects.rates", "purchases.view", "tools"] },
+  { label: "Chỉ công cụ", hint: "Mặc định của Kỹ sư, Nhân viên", keys: ["tools"] },
+];
+
 /** Chọn từng mục quyền cho một người; khớp đúng mặc định của vai trò thì lưu là "Theo vai trò". */
 function AccessModal(props: { account: Account; onClose: () => void; onSave: (permissions: AccessKey[] | null) => Promise<void> }) {
   const { account } = props;
@@ -218,13 +265,23 @@ function AccessModal(props: { account: Account; onClose: () => void; onSave: (pe
     <button type="button" className="button primary" disabled={busy} onClick={() => { setBusy(true); void props.onSave(followsRole ? null : selected).finally(() => setBusy(false)); }}>{busy ? "Đang lưu…" : "Lưu quyền"}</button>
   </>}>
     <p className="muted">Vai trò <b>{ACCOUNT_ROLE_LABELS[account.role]}</b> giữ nguyên. Tick thêm để người này làm được việc của bộ phận khác, bỏ tick để thu lại. Quản trị tài khoản và Nhật ký luôn chỉ dành cho Admin; Kho Skill AI luôn mở cho mọi người.</p>
-    {ACCESS_GROUPS.map((group) => <fieldset className="access-group" key={group}>
-      <legend>{group}</legend>
+    <div className="access-presets">
+      <b>Mẫu nhanh theo công việc:</b>
+      <div className="button-row">{ACCESS_PRESETS.map((preset) => <button key={preset.label} type="button" className="button" title={preset.hint} onClick={() => setSelected(normalizeAccess([...preset.keys]))}>{preset.label}</button>)}</div>
+    </div>
+    {ACCESS_GROUPS.map((group) => {
+      const keys = ACCESS_ITEMS.filter((item) => item.group === group).map((item) => item.key);
+      const on = keys.filter((key) => selected.includes(key)).length;
+      return <fieldset className="access-group" key={group}>
+      <legend>{group} <small className="muted">({on}/{keys.length})</small>
+        <button type="button" className="link-button" style={{ marginLeft: 8 }} onClick={() => setSelected((current) => on === keys.length ? keys.reduce((list, key) => toggleAccess(list, key, false), current) : normalizeAccess([...current, ...keys]))}>{on === keys.length ? "Bỏ cả nhóm" : "Chọn cả nhóm"}</button>
+      </legend>
       {ACCESS_ITEMS.filter((item) => item.group === group).map((item) => <label className="access-item" key={item.key}>
         <input type="checkbox" checked={selected.includes(item.key)} onChange={(event) => setSelected((current) => toggleAccess(current, item.key, event.target.checked))} />
         <span><b>{item.label}</b><small>{item.hint}</small></span>
       </label>)}
-    </fieldset>)}
+    </fieldset>;
+    })}
   </ModalShell>;
 }
 

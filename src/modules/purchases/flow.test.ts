@@ -63,3 +63,16 @@ describe("purchase flow", () => {
     expect(paymentSummary({ totalEstimate: 3_000_000, totalActual: 2_500_000 }, payments).remaining).toBe(1_500_000);
   });
 });
+
+describe("purchase progress", () => {
+  it("PUR_03 progress percent rises with the status and the hint tells each role what to do next", async () => {
+    const { progressOf, nextHint } = await import("./flow");
+    const order = ["draft", "submitted", "approved", "ordered", "received", "completed"] as const;
+    const percents = order.map((status) => progressOf(status).percent);
+    expect([...percents].sort((a, b) => a - b)).toEqual(percents);
+    expect(progressOf("completed")).toEqual({ percent: 100, label: "Hoàn tất" });
+    expect(nextHint({ status: "submitted", requesterId: "u1" }, { userId: "boss", isApprover: true, isPayer: false, seesAll: true }, [])).toMatch(/Duyệt đơn/);
+    expect(nextHint({ status: "ordered", requesterId: "u1" }, { userId: "kt", isApprover: false, isPayer: true, seesAll: true }, [{ status: "approved" }])).toMatch(/Thực hiện chi/);
+    expect(nextHint({ status: "draft", requesterId: "u1" }, { userId: "u1", isApprover: false, isPayer: false, seesAll: false }, [])).toMatch(/Lập đơn/);
+  });
+});

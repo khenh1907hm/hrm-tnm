@@ -11,7 +11,8 @@ import { PURCHASE_KIND_LABELS, PURCHASE_STATUS_LABELS, type PurchaseApprover, ty
 import type { Notify } from "../Toast";
 import { EmployeePicker } from "../projects/ProjectsPage";
 import { errorMessage, viewerFor, type EmployeeSource } from "../projects/projectShared";
-import { PurchaseDetail, STATUS_TONE } from "./PurchaseDetail";
+import { PurchaseDetail } from "./PurchaseDetail";
+import { FlowLegend, MiniProgress } from "./FlowBar";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import "../projects/projects.css";
 import "./purchases.css";
@@ -40,7 +41,7 @@ export function PurchaseList(props: { orders: PurchaseOrder[]; projects: readonl
   return (
     <div className="table-scroll">
       <table className="pj-table">
-        <thead><tr><th>Mã</th><th>Nội dung</th>{!props.hideProject && <th>Cho</th>}<th>Người lập</th><th className="pj-num">Tổng</th><th>Trạng thái</th></tr></thead>
+        <thead><tr><th>Mã</th><th>Nội dung</th>{!props.hideProject && <th>Cho</th>}<th>Người lập</th><th className="pj-num">Tổng</th><th>Tiến độ</th></tr></thead>
         <tbody>{props.orders.map((order) => {
           const project = order.projectId ? props.projects.find((item) => item.id === order.projectId) : null;
           const pays = props.pending.filter((payment) => payment.orderId === order.id);
@@ -51,7 +52,7 @@ export function PurchaseList(props: { orders: PurchaseOrder[]; projects: readonl
               {!props.hideProject && <td>{project ? `${project.code}` : PURCHASE_KIND_LABELS[order.kind]}{order.kind === "office" && order.department ? <><br /><small className="muted">{order.department}</small></> : null}</td>}
               <td>{order.requesterName}</td>
               <td className="pj-num">{formatVnd(order.totalActual ?? order.totalEstimate)}</td>
-              <td><span className={`pill ${STATUS_TONE[order.status]}`}>{PURCHASE_STATUS_LABELS[order.status]}</span>
+              <td><MiniProgress status={order.status} />
                 {pays.some((payment) => payment.status === "requested") && <><br /><small className="warn-text">Có khoản chi chờ duyệt</small></>}
                 {pays.some((payment) => payment.status === "approved") && <><br /><small className="warn-text">Có khoản chờ chi</small></>}</td>
             </tr>
@@ -101,12 +102,13 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
   return (
     <section className="pj-page">
       <div className="page-head">
-        <div><h1>Đặt hàng</h1><p>Mua hàng cho dự án và văn phòng: lập đơn → sếp duyệt → tạm ứng → đặt hàng, theo dõi → thanh toán → nhận hàng, kiểm tra. Người duyệt: <b>{approverNames}</b>.</p></div>
+        <div><h1>Đặt hàng</h1><p>Mua hàng cho dự án và văn phòng. Người duyệt: <b>{approverNames}</b>.</p></div>
         <div className="button-row">
           {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Người duyệt</button>}
           <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus className="ico" size={16} aria-hidden="true" /> Đơn hàng mới</button>
         </div>
       </div>
+      <section className="panel pj-section" aria-label="Quy trình đặt hàng"><FlowLegend /></section>
       {context.approvers.some((item) => !item.hasAccount) && <p className="list-notice is-warn">{context.approvers.filter((item) => !item.hasAccount).map((item) => item.name).join(", ")} chưa có tài khoản liên kết hồ sơ nên chưa duyệt được. Admin vào Tài khoản & phân quyền để cấp và liên kết.</p>}
       {settings && <ApproverSettings store={store} approvers={context.approvers} employees={props.employees} onSaved={() => { setSettings(false); void reload(); }} setNotice={setNotice} />}
       <div className="pj-tabs" role="tablist" aria-label="Lọc đơn">

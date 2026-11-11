@@ -31,7 +31,10 @@ export const ACCESS_ITEMS = [
   { key: "tools", group: "Tài liệu", label: "Công cụ", hint: "Ảnh Trước / Sau và tách nền ảnh.", requires: [], grants: [] },
   { key: "projects.view", group: "Dự án", label: "Xem mọi dự án và giờ công", hint: "Không gồm số tiền: tiền chỉ Admin và PM của dự án xem được. Người trong dự án luôn xem được dự án của mình.", requires: [], grants: [] },
   { key: "projects.manage", group: "Dự án", label: "Tạo, sửa dự án", hint: "Tạo dự án mới, gán PM, sửa thông tin và ngân sách của mọi dự án.", requires: ["projects.view"], grants: [] },
+  { key: "projects.finance", group: "Dự án", label: "Xem vốn, chi phí mọi dự án", hint: "Vốn, ngân sách, đơn giá riêng, tiền công, phiếu chi, thầu phụ của mọi dự án. PM và chỉ huy trưởng luôn xem được dự án của mình.", requires: ["projects.view"], grants: [] },
+  { key: "projects.rates", group: "Dự án", label: "Đơn giá nhân công và lịch làm việc", hint: "Đơn giá giờ của từng người, hệ số tăng ca, trần giờ làm, ngày lễ.", requires: [], grants: [] },
   { key: "purchases.view", group: "Mua hàng", label: "Xem mọi đơn hàng", hint: "Xem đơn hàng của mọi người, cả dự án và văn phòng. Ai cũng tự lập và xem đơn của mình; duyệt đơn chỉ người phê duyệt.", requires: [], grants: [] },
+  { key: "purchases.approve", group: "Mua hàng", label: "Duyệt đơn hàng và khoản chi", hint: "Duyệt hoặc từ chối đơn hàng, tạm ứng, thanh toán (như người phê duyệt). Admin không tự có quyền này, phải tick riêng cho người được duyệt.", requires: ["purchases.view"], grants: [] },
   { key: "purchases.pay", group: "Mua hàng", label: "Thực hiện chi (kế toán)", hint: "Chi tạm ứng và thanh toán cho các khoản đã được sếp duyệt.", requires: ["purchases.view"], grants: [] },
 ] as const satisfies readonly { key: string; group: string; label: string; hint: string; requires: readonly string[]; grants: readonly Permission[] }[];
 export type AccessKey = typeof ACCESS_ITEMS[number]["key"];
@@ -55,11 +58,14 @@ export function toggleAccess(current: readonly AccessKey[], key: AccessKey, on: 
   return normalizeAccess(current.filter((item) => item !== key && !requiresOf(item).includes(key)));
 }
 
+/** HR mặc định có mọi mục trừ các mục này (khớp private.has_access ở Supabase). */
+export const HR_EXCLUDED: readonly AccessKey[] = ["projects.manage", "projects.finance", "projects.rates", "purchases.approve"];
+
 /** Quyền mặc định khi Admin chưa tùy chỉnh. */
 export function defaultAccess(role: string): readonly AccessKey[] {
   if (role === "admin") return ACCESS_KEYS;
   // HR mặc định có mọi mục trừ Tạo, sửa dự án (chỉ Admin tạo dự án, spec quản lý dự án mục 2.2)
-  if (role === "hr") return ACCESS_KEYS.filter((key) => key !== "projects.manage");
+  if (role === "hr") return ACCESS_KEYS.filter((key) => !HR_EXCLUDED.includes(key));
   return role === "engineer" || role === "employee" ? TOOLS_ONLY : NO_ACCESS;
 }
 
