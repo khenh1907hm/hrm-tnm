@@ -53,9 +53,16 @@ export type PurchaseOrder = {
   completedAt: string | null;
   createdAt: string;
   items: PurchaseItem[];
+  /** Mã ngân sách (mã chi phí P-COST-03), bắt buộc với đơn dự án khi gửi duyệt. */
+  budgetCode: string | null;
+  /** Ảnh chụp lúc gửi / duyệt: A = ngân sách của mã, B = đã đặt trước đơn này. */
+  budgetA: number | null;
+  budgetB: number | null;
+  /** Đơn đi chuỗi ký theo bộ phận (đơn dự án theo quy trình mới). */
+  usesChain: boolean;
 };
 
-export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
+export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note" | "budgetCode"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
 
 export type PaymentKind = "advance" | "prepayment" | "final";
 export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = { advance: "Tạm ứng", prepayment: "Thanh toán trước", final: "Thanh toán còn lại" };

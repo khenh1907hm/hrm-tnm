@@ -14,6 +14,9 @@ import { errorMessage, viewerFor, type EmployeeSource } from "../projects/projec
 import { PurchaseDetail } from "./PurchaseDetail";
 import { FlowLegend, MiniProgress } from "./FlowBar";
 import { PurchaseFormModal } from "./PurchaseFormModal";
+import { MyApprovals } from "./ApprovalChain";
+import { DEPARTMENTS, emptyDepartments, ROLE_LABELS, type Department, type DepartmentMembers } from "../../../modules/purchases/approval";
+import { projectPath } from "../routes";
 import "../projects/projects.css";
 import "./purchases.css";
 
@@ -75,10 +78,12 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [deptSettings, setDeptSettings] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchAll = useCallback(() => Promise.all([loadContext(store, props.projectStore, props.actor), store.listOrders(), store.listPendingPayments()]), [store, props.projectStore, props.actor]);
   const apply = useCallback(([nextContext, nextOrders, nextPending]: Awaited<ReturnType<typeof fetchAll>>) => { setContext(nextContext); setOrders(nextOrders); setPending(nextPending); }, []);
-  const reload = useCallback(async () => { try { apply(await fetchAll()); } catch (error) { setNotice(errorMessage(error), "error"); } }, [fetchAll, apply, setNotice]);
+  const reload = useCallback(async () => { try { apply(await fetchAll()); setRefreshKey((value) => value + 1); } catch (error) { setNotice(errorMessage(error), "error"); } }, [fetchAll, apply, setNotice]);
   useEffect(() => {
     if (!props.ready) return;
     let active = true;
@@ -104,12 +109,15 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
       <div className="page-head">
         <div><h1>Đặt hàng</h1><p>Mua hàng cho dự án và văn phòng. Người duyệt: <b>{approverNames}</b>.</p></div>
         <div className="button-row">
-          {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Người duyệt</button>}
+          {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setDeptSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Bộ phận ký duyệt</button>}
+          {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Người duyệt đơn văn phòng</button>}
           <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus className="ico" size={16} aria-hidden="true" /> Đơn hàng mới</button>
         </div>
       </div>
       <section className="panel pj-section" aria-label="Quy trình đặt hàng"><FlowLegend /></section>
       {context.approvers.some((item) => !item.hasAccount) && <p className="list-notice is-warn">{context.approvers.filter((item) => !item.hasAccount).map((item) => item.name).join(", ")} chưa có tài khoản liên kết hồ sơ nên chưa duyệt được. Admin vào Tài khoản & phân quyền để cấp và liên kết.</p>}
+      {deptSettings && <DepartmentSettings store={store} employees={props.employees} onSaved={() => { setDeptSettings(false); void reload(); }} setNotice={setNotice} />}
+      <MyApprovals store={store} refreshKey={refreshKey} onOpenOrder={(id) => props.onOpen(id)} projectHref={(projectId) => projectPath(projectId)} />
       {settings && <ApproverSettings store={store} approvers={context.approvers} employees={props.employees} onSaved={() => { setSettings(false); void reload(); }} setNotice={setNotice} />}
       <div className="pj-tabs" role="tablist" aria-label="Lọc đơn">
         <button type="button" role="tab" aria-selected={tab === "todo"} onClick={() => setTab("todo")}>Cần tôi xử lý ({todoCount})</button>
@@ -123,7 +131,53 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
         <select aria-label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value as PurchaseStatus | "*")}><option value="*">Mọi trạng thái</option>{(Object.keys(PURCHASE_STATUS_LABELS) as PurchaseStatus[]).map((key) => <option key={key} value={key}>{PURCHASE_STATUS_LABELS[key]}</option>)}</select>
       </div>
       <section className="panel pj-section"><PurchaseList orders={shown} projects={context.projects} pending={pending} onOpen={(id) => props.onOpen(id)} /></section>
-      {creating && <PurchaseFormModal store={store} projects={context.projects} initial={null} onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi sếp duyệt.` : `Đã lưu nháp ${order.code}.`, "success"); void reload(); props.onOpen(order.id); }} />}
+      {creating && <PurchaseFormModal store={store} projects={context.projects} initial={null} onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi ${order.kind === "project" ? "ký duyệt" : "sếp duyệt"}.` : `Đã lưu nháp ${order.code}.`, "success"); void reload(); props.onOpen(order.id); }} />}
+    </section>
+  );
+}
+
+/** Người thuộc từng bộ phận ký duyệt (P. Kỹ thuật, P. Vật tư, Kế toán, Lãnh đạo, Hành chánh). Bộ phận để trống thì chuỗi ký bỏ qua bước đó. */
+function DepartmentSettings(props: { store: PurchaseStore; employees: EmployeeSource; onSaved: () => void; setNotice: Notify }) {
+  const [members, setMembers] = useState<DepartmentMembers | null>(null);
+  const [names, setNames] = useState<Record<string, string>>({});
+  const [pickerKey, setPickerKey] = useState(0);
+  useEffect(() => {
+    let active = true;
+    void props.store.departments().then((list) => {
+      if (!active) return;
+      const next = emptyDepartments();
+      for (const item of list) next[item.department].push(item.employeeId);
+      setMembers(next);
+      setNames(Object.fromEntries(list.map((item) => [item.employeeId, item.name])));
+    }, () => { if (active) setMembers(emptyDepartments()); });
+    return () => { active = false; };
+  }, [props.store]);
+  if (!members) return <div className="loading">Đang tải bộ phận…</div>;
+  const set = (department: Department, ids: string[]) => setMembers({ ...members, [department]: ids });
+  const save = async () => {
+    try { await props.store.setDepartments(members); props.setNotice("Đã lưu bộ phận ký duyệt.", "success"); props.onSaved(); }
+    catch (error) { props.setNotice(errorMessage(error), "error"); }
+  };
+  return (
+    <section className="panel pj-section" aria-labelledby="po-dept-title">
+      <h2 id="po-dept-title"><Settings2 className="ico" size={18} aria-hidden="true" /> Bộ phận ký duyệt</h2>
+      <p className="muted">Đơn hàng dự án ký lần lượt: Phụ trách (PM của dự án) → P. Kỹ thuật → P. Vật tư → Kế toán → Lãnh đạo → Hành chánh. Ngân sách: Phụ trách → P. Kỹ thuật → Lãnh đạo. Bộ phận chưa có ai thì bước đó được bỏ qua. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
+      <div className="dept-grid">
+        {DEPARTMENTS.map((department) => (
+          <div key={department} className="dept-card">
+            <b>{ROLE_LABELS[department]}</b>
+            <ul className="file-chips">{members[department].map((id) => <li key={id} className="file-chip">{names[id] ?? id} <button type="button" className="link-button" aria-label={`Bỏ ${names[id] ?? id}`} onClick={() => set(department, members[department].filter((item) => item !== id))}><Trash2 size={13} aria-hidden="true" /></button></li>)}</ul>
+            {!members[department].length && <small className="muted">Chưa có ai (bỏ qua bước này)</small>}
+            <EmployeePicker key={`${department}-${pickerKey}`} label="Thêm người" source={props.employees} exclude={new Set(members[department])} onPick={(option) => {
+              if (!option) return;
+              setNames((current) => ({ ...current, [option.id]: option.name }));
+              set(department, [...members[department], option.id]);
+              setPickerKey((value) => value + 1);
+            }} />
+          </div>
+        ))}
+      </div>
+      <div className="button-row"><button type="button" className="button primary" onClick={() => void save()}>Lưu bộ phận</button></div>
     </section>
   );
 }

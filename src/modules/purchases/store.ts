@@ -1,3 +1,5 @@
+import type { ApprovalDocType, ApprovalStep, Department, DepartmentMembers } from "./approval";
+import type { BudgetLine, BudgetSheet, BudgetSheetHeader, CostCode } from "./budget";
 import type { PaymentKind, PurchaseApprover, PurchaseDraft, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseRoles, ReceiveLine } from "./types";
 
 /**
@@ -30,4 +32,23 @@ export interface PurchaseStore {
   receive(id: string, lines: readonly ReceiveLine[], note: string): Promise<void>;
   complete(id: string, note: string): Promise<void>;
   cancel(id: string, note: string): Promise<void>;
+
+  /* Mua hàng dự án theo quy trình (giai đoạn A): mã chi phí, ngân sách theo mã, chuỗi ký. */
+  costCodes(): Promise<CostCode[]>;
+  listBudgetSheets(projectId: string): Promise<BudgetSheet[]>;
+  /** Lập lần ngân sách mới (chép từ lần mới nhất); trả về id. */
+  newBudgetSheet(projectId: string): Promise<string>;
+  saveBudgetSheet(id: string, header: BudgetSheetHeader, lines: readonly BudgetLine[]): Promise<void>;
+  submitBudgetSheet(id: string): Promise<void>;
+  deleteBudgetSheet(id: string): Promise<void>;
+  /** A (ngân sách của mã) và B (đã đặt, trừ đơn đang xét) theo lần ngân sách đã duyệt mới nhất; null khi dự án chưa có ngân sách duyệt. */
+  checkBudget(projectId: string, code: string, orderId: string | null): Promise<{ sheetNumber: string; a: number; b: number } | null>;
+  listSteps(docType: ApprovalDocType, docId: string): Promise<(ApprovalStep & { canSign: boolean })[]>;
+  sign(stepId: string, approve: boolean, note: string): Promise<void>;
+  myApprovals(): Promise<PendingApproval[]>;
+  departments(): Promise<{ department: Department; employeeId: string; name: string }[]>;
+  setDepartments(members: DepartmentMembers): Promise<void>;
 }
+
+/** Một phiếu đang chờ người đăng nhập ký. */
+export type PendingApproval = { stepId: string; docType: ApprovalDocType; docId: string; projectId: string | null; projectCode: string; title: string; amount: number; role: ApprovalStep["role"]; targetDate: string };

@@ -12,6 +12,9 @@ import {
 import type { Notify } from "../Toast";
 import { errorMessage, moneyInput, parseMoney } from "../projects/projectShared";
 import { PurchaseFormModal } from "./PurchaseFormModal";
+import { ApprovalChain } from "./ApprovalChain";
+import { BudgetCheckBox } from "./BudgetCheckBox";
+import { budgetCheck } from "../../../modules/purchases/budget";
 
 export const STATUS_TONE: Record<PurchaseOrder["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", ordered: "warn", received: "ok", completed: "ok", cancelled: "" };
 const PAY_TONE: Record<PurchasePayment["status"], string> = { requested: "warn", approved: "warn", paid: "ok", rejected: "bad" };
@@ -26,6 +29,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const [events, setEvents] = useState<PurchaseEvent[]>([]);
   const [editing, setEditing] = useState(false);
   const [panel, setPanel] = useState<"order" | "payment" | "track" | "receive" | null>(null);
+  const [chainKey, setChainKey] = useState(0);
 
   const fetchAll = useCallback(() => Promise.all([store.getOrder(props.orderId), store.listPayments(props.orderId), store.listEvents(props.orderId)]), [store, props.orderId]);
   const apply = useCallback(([next, pays, logs]: Awaited<ReturnType<typeof fetchAll>>) => { setOrder(next); setPayments(pays); setEvents(logs); }, []);
@@ -67,11 +71,11 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
         <FlowStepper states={steps} cancelled={order.status === "cancelled"} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
-        {order.status === "rejected" && <p className="warn-text">Sếp từ chối: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
+        {order.status === "rejected" && <p className="warn-text">{order.usesChain ? "Bị trả về" : "Sếp từ chối"}: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
         {order.status === "cancelled" && <p className="warn-text">Đơn đã hủy: {order.decisionNote}</p>}
         <div className="po-actions">
           {actions.has("edit") && <button type="button" className="button" onClick={() => setEditing(true)}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa đơn</button>}
-          {actions.has("submit") && <button type="button" className="button primary" onClick={() => void act(() => store.submit(order.id), "Đã lập đơn, gửi sếp duyệt.")}><Send className="ico" size={16} aria-hidden="true" /> Lập đơn, gửi duyệt</button>}
+          {actions.has("submit") && <button type="button" className="button primary" onClick={() => void act(async () => { await store.submit(order.id); setChainKey((value) => value + 1); }, order.kind === "project" ? "Đã lập đơn, gửi ký duyệt." : "Đã lập đơn, gửi sếp duyệt.")}><Send className="ico" size={16} aria-hidden="true" /> Lập đơn, gửi duyệt</button>}
           {actions.has("approve") && <button type="button" className="button primary" onClick={() => void act(() => store.decide(order.id, true, window.prompt("Ghi chú khi duyệt (có thể để trống):") ?? ""), "Đã duyệt đơn hàng.")}><Check className="ico" size={16} aria-hidden="true" /> Duyệt đơn</button>}
           {actions.has("reject") && <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối (ít nhất 3 ký tự):"); if (why) void act(() => store.decide(order.id, false, why), "Đã từ chối, đơn trả về người lập."); }}><X className="ico" size={16} aria-hidden="true" /> Từ chối</button>}
           {actions.has("order") && <button type="button" className="button primary" onClick={() => setPanel("order")}><Truck className="ico" size={16} aria-hidden="true" /> Đặt hàng</button>}
@@ -86,6 +90,11 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         {panel === "track" && <TrackPanel expected={order.expectedDelivery} onCancel={() => setPanel(null)} onSubmit={(note, expected) => act(() => store.track(order.id, note, expected), "Đã cập nhật theo dõi.")} />}
         {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note) => act(() => store.receive(order.id, lines, note), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
       </section>
+
+      {order.usesChain && order.budgetCode && order.budgetA !== null && order.budgetB !== null && (
+        <BudgetCheckBox title="Xác nhận đặt hàng (P-CC-07)" check={budgetCheck(order.budgetCode, "", order.budgetA, order.budgetB, order.totalEstimate)} />
+      )}
+      {order.usesChain && <ApprovalChain store={store} docType="purchase" docId={order.id} refreshKey={chainKey} title="Chuỗi ký đơn đặt hàng" onChanged={() => void reload()} setNotice={setNotice} />}
 
       <section className="panel pj-section" aria-labelledby="po-items-title">
         <h2 id="po-items-title">Hàng cần mua</h2>

@@ -63,13 +63,13 @@ export type PurchaseAction =
  * Người lập: sửa và lập đơn khi nháp / bị từ chối; đặt hàng, đề nghị chi, nhận hàng, hoàn tất. Sếp: duyệt đơn, duyệt khoản chi,
  * và làm được mọi việc của người lập trừ sửa đơn. Kế toán (payer): chi khoản đã duyệt. Hủy: người lập trước khi đặt hàng, sếp hoặc Admin khi chưa xong.
  */
-export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterId">, me: { userId: string; isAdmin: boolean; isProjectLead?: boolean } & PurchaseRoles, payments: readonly Pick<PurchasePayment, "status">[] = []): Set<PurchaseAction> {
+export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterId"> & { usesChain?: boolean }, me: { userId: string; isAdmin: boolean; isProjectLead?: boolean } & PurchaseRoles, payments: readonly Pick<PurchasePayment, "status">[] = []): Set<PurchaseAction> {
   const actions = new Set<PurchaseAction>();
   const mine = order.requesterId === me.userId;
   const handler = mine || me.isApprover || me.isAdmin;
   const status = order.status;
   if (mine && (status === "draft" || status === "rejected")) { actions.add("edit"); actions.add("submit"); }
-  if (me.isApprover && status === "submitted") { actions.add("approve"); actions.add("reject"); }
+  if (me.isApprover && status === "submitted" && !order.usesChain) { actions.add("approve"); actions.add("reject"); }
   if (handler && status === "approved") actions.add("order");
   if (status === "approved" || status === "ordered" || status === "received") {
     actions.add("track");
@@ -92,7 +92,8 @@ export function paymentSummary(order: Pick<PurchaseOrder, "totalEstimate" | "tot
 }
 
 export const EVENT_LABELS: Record<string, string> = {
-  submit: "Lập đơn, gửi duyệt", approve: "Sếp duyệt đơn", reject: "Sếp từ chối đơn", order: "Đặt hàng", track: "Cập nhật theo dõi",
+  submit: "Lập đơn, gửi duyệt", approve: "Duyệt đơn", reject: "Trả về / từ chối đơn",
+  "sign:pic": "Phụ trách ký", "sign:technical": "P. Kỹ thuật ký", "sign:material": "P. Vật tư ký", "sign:accounting": "Kế toán ký", "sign:leader": "Lãnh đạo ký", "sign:admin_office": "Hành chánh ký nhận", order: "Đặt hàng", track: "Cập nhật theo dõi",
   receive: "Nhận hàng, kiểm tra", complete: "Hoàn tất đơn", cancel: "Hủy đơn",
   "payment_request:advance": "Đề nghị tạm ứng", "payment_request:prepayment": "Đề nghị thanh toán trước", "payment_request:final": "Đề nghị thanh toán còn lại",
   "payment_approve:advance": "Sếp duyệt tạm ứng", "payment_approve:prepayment": "Sếp duyệt thanh toán trước", "payment_approve:final": "Sếp duyệt thanh toán còn lại",

@@ -1,6 +1,8 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseEvent, PurchaseItem, PurchaseOrder, PurchasePayment } from "../../modules/purchases/types";
+import { groupOf, type BudgetSheet, type CostCode } from "../../modules/purchases/budget";
+import type { ApprovalStep, Department } from "../../modules/purchases/approval";
 
 type Row = Record<string, unknown>;
 const num = (value: unknown) => value === null || value === undefined ? 0 : Number(value);
@@ -20,6 +22,15 @@ const orderFromRow = (row: Row): PurchaseOrder => ({
   note: str(row.note), status: row.status as PurchaseOrder["status"], totalEstimate: num(row.total_estimate), totalActual: row.total_actual === null ? null : num(row.total_actual), decisionNote: str(row.decision_note),
   submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at), orderedAt: strOrNull(row.ordered_at), receivedAt: strOrNull(row.received_at), completedAt: strOrNull(row.completed_at), createdAt: str(row.created_at),
   items: ((row.purchase_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map(itemFromRow),
+  budgetCode: strOrNull(row.budget_code), budgetA: row.budget_a === null || row.budget_a === undefined ? null : num(row.budget_a),
+  budgetB: row.budget_b === null || row.budget_b === undefined ? null : num(row.budget_b), usesChain: Boolean(row.uses_chain),
+});
+const sheetFromRow = (row: Row): BudgetSheet => ({
+  id: str(row.id), projectId: str(row.project_id), revision: num(row.revision), number: str(row.number), status: row.status as BudgetSheet["status"],
+  confirmation: row.confirmation as BudgetSheet["confirmation"], exchangeRate: num(row.exchange_rate), quoteNo: str(row.quote_no), offerPrice: num(row.offer_price),
+  contractValue: num(row.contract_value), note: str(row.note), createdAt: str(row.created_at), submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at),
+  lines: ((row.project_budget_lines ?? []) as Row[]).map((line) => ({ code: str(line.code), nett: num(line.nett), budget: num(line.budget), supplier: str(line.supplier), contingency: num(line.contingency), remark: str(line.remark) }))
+    .sort((a, b) => a.code.localeCompare(b.code)),
 });
 const paymentFromRow = (row: Row): PurchasePayment => ({ id: str(row.id), orderId: str(row.order_id), kind: row.kind as PurchasePayment["kind"], amount: num(row.amount), payee: str(row.payee), note: str(row.note), status: row.status as PurchasePayment["status"], requestedAt: str(row.requested_at), approvedAt: strOrNull(row.approved_at), paidAt: strOrNull(row.paid_at), paidMethod: str(row.paid_method), decisionNote: str(row.decision_note) });
 const ORDER_COLUMNS = "*, purchase_items(*)";
@@ -49,7 +60,7 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
       return data ? orderFromRow(data as Row) : null;
     },
     async saveDraft(draft) {
-      const payload = { kind: draft.kind, project_id: draft.kind === "project" ? draft.projectId : null, title: draft.title.trim(), department: draft.department.trim(), needed_by: draft.neededBy, delivery_address: draft.deliveryAddress.trim(), supplier: draft.supplier.trim(), supplier_contact: draft.supplierContact.trim(), note: draft.note.trim() };
+      const payload = { kind: draft.kind, project_id: draft.kind === "project" ? draft.projectId : null, budget_code: draft.kind === "project" ? draft.budgetCode : null, title: draft.title.trim(), department: draft.department.trim(), needed_by: draft.neededBy, delivery_address: draft.deliveryAddress.trim(), supplier: draft.supplier.trim(), supplier_contact: draft.supplierContact.trim(), note: draft.note.trim() };
       let id = draft.id;
       if (id) await check(client.from("purchase_orders").update(payload).eq("id", id));
       else {
@@ -90,5 +101,41 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     async receive(id, lines, note) { await rpc("purchase_receive", { p_order: id, p_items: lines, p_note: note }); },
     async complete(id, note) { await rpc("purchase_complete", { p_order: id, p_note: note }); },
     async cancel(id, note) { await rpc("purchase_cancel", { p_order: id, p_note: note }); },
+
+    async costCodes() {
+      const { data, error } = await client.from("cost_codes").select("code, name").eq("active", true).order("code");
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).flatMap((row): CostCode[] => { const group = groupOf(str(row.code)); return group ? [{ code: str(row.code), name: str(row.name), group }] : []; });
+    },
+    async listBudgetSheets(projectId) {
+      const { data, error } = await client.from("project_budget_sheets").select("*, project_budget_lines(*)").eq("project_id", projectId).order("revision", { ascending: false });
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map(sheetFromRow);
+    },
+    async newBudgetSheet(projectId) { return str(await rpc("budget_sheet_new", { p_project: projectId })); },
+    async saveBudgetSheet(id, header, lines) { await rpc("budget_sheet_save", { p_sheet: id, p_header: header, p_lines: lines }); },
+    async submitBudgetSheet(id) { await rpc("budget_sheet_submit", { p_sheet: id }); },
+    async deleteBudgetSheet(id) { await rpc("budget_sheet_delete", { p_sheet: id }); },
+    async checkBudget(projectId, code, orderId) {
+      const row = ((await rpc("purchase_budget_check", { p_project: projectId, p_code: code, p_order: orderId })) as Row[] | null)?.[0];
+      return row && row.sheet_id ? { sheetNumber: str(row.sheet_number), a: num(row.budget_a), b: num(row.ordered_b) } : null;
+    },
+    async listSteps(docType, docId) {
+      return (((await rpc("approval_steps_of", { p_type: docType, p_doc: docId })) ?? []) as Row[]).map((row) => ({
+        id: str(row.id), docType, docId, seq: num(row.seq), role: row.role as ApprovalStep["role"], targetDate: str(row.target_date), result: row.result as ApprovalStep["result"],
+        signerName: str(row.signer_name), note: str(row.note), actedAt: strOrNull(row.acted_at), canSign: Boolean(row.can_sign),
+      }));
+    },
+    async sign(stepId, approve, note) { await rpc("approval_sign", { p_step: stepId, p_approve: approve, p_note: note }); },
+    async myApprovals() {
+      return (((await rpc("my_approvals", {})) ?? []) as Row[]).map((row) => ({
+        stepId: str(row.step_id), docType: row.doc_type as ApprovalStep["docType"], docId: str(row.doc_id), projectId: strOrNull(row.project_id), projectCode: str(row.project_code),
+        title: str(row.title), amount: num(row.amount), role: row.role as ApprovalStep["role"], targetDate: str(row.target_date),
+      }));
+    },
+    async departments() {
+      return (((await rpc("procurement_departments", {})) ?? []) as Row[]).map((row) => ({ department: row.department as Department, employeeId: str(row.employee_id), name: str(row.name) }));
+    },
+    async setDepartments(members) { await check(client.from("procurement_settings").update({ departments: members, updated_at: new Date().toISOString() }).eq("id", 1)); },
   };
 }
