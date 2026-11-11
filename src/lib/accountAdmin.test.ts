@@ -129,8 +129,12 @@ describe("liên kết tài khoản với hồ sơ nhân sự", () => {
 
 describe("tài khoản chấm công cho công nhân", () => {
   it("ACC_06 đăng nhập bằng mã nhân viên đổi thành email nội bộ; email thật giữ nguyên", async () => {
-    const { loginEmail, workerEmail, isWorkerEmail, initialPassword } = await import("./workerLogin");
-    expect(loginEmail(" TNM001 ")).toBe("tnm001@nhanvien.tnm.com.vn");
+    const { loginEmail, loginCandidates, workerEmail, isWorkerEmail, initialPassword } = await import("./workerLogin");
+    expect(loginEmail(" TNM001 ")).toBe("tnm001@tnm.com.vn");
+    expect(loginCandidates("TNM001")).toEqual(["tnm001@tnm.com.vn", "tnm001@nhanvien.tnm.com.vn"]);
+    expect(loginCandidates("hr@tnm.vn")).toEqual(["hr@tnm.vn"]);
+    expect(isWorkerEmail("tnm001@nhanvien.tnm.com.vn")).toBe(true);
+    expect(isWorkerEmail("ketoan@tnm.com.vn")).toBe(false);
     expect(loginEmail("hr@tnm.vn")).toBe("hr@tnm.vn");
     expect(isWorkerEmail(workerEmail("TNM9"))).toBe(true);
     expect(initialPassword(() => 0)).toBe("aaaaaaaa");
@@ -144,7 +148,7 @@ describe("tài khoản chấm công cho công nhân", () => {
     expect(first.status).toBe(200);
     const results = ((await first.json()) as { results: { code: string; login: string; password: string | null; status: string }[] }).results;
     expect(results.map((item) => [item.login, item.password, item.status])).toEqual([["TNM001", "pass1234", "created"], ["TNM002", "pass1234", "created"]]);
-    const created = [...accounts.values()].find((item) => item.email === "tnm001@nhanvien.tnm.com.vn");
+    const created = [...accounts.values()].find((item) => item.email === "tnm001@tnm.com.vn");
     expect(created).toMatchObject({ role: "employee", employeeId: "emp-1" });
     expect(audit.filter((event) => event.action === "account.create")).toHaveLength(2);
     const again = await handleAccountRequest(request("POST", { ...body, employees: body.employees.slice(0, 1) }), env, deps(store));

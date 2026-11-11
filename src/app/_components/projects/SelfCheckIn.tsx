@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Camera, LogIn, LogOut, MapPin, RefreshCw, X } from "lucide-react";
+import { AlertTriangle, Building2, Camera, Check, CheckCircle2, Clock3, Coffee, FolderX, Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, X } from "lucide-react";
+import "./checkin.css";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { dayKind } from "../../../modules/projects/calendar";
 import { distanceM, formatMinutes, hoursFromCheck, mapsLink, vnClock, withinSite, type AttendanceContext, type GpsFix } from "../../../modules/projects/attendance";
@@ -11,6 +12,15 @@ import type { Notify } from "../Toast";
 import { errorMessage, projectText } from "./projectShared";
 
 type Step = { kind: "in" | "out"; context: AttendanceContext; fix: GpsFix; distance: number };
+
+/** Đồng hồ lớn và ngày hôm nay (giờ Việt Nam), tự chạy mỗi giây. */
+function LiveClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const timer = window.setInterval(() => setNow(new Date()), 1000); return () => window.clearInterval(timer); }, []);
+  const time = now.toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", weekday: "long", day: "2-digit", month: "2-digit", year: "numeric" });
+  return <div className="ci-clock" aria-live="off"><b suppressHydrationWarning>{time}</b><span suppressHydrationWarning>{date}</span></div>;
+}
 
 /** Đọc GPS độ chính xác cao một lần; lỗi trả câu tiếng Việt. */
 function readGps(): Promise<GpsFix> {
@@ -74,33 +84,73 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
   };
 
   if (!contexts) return <div className="loading">Đang tải…</div>;
-  if (!contexts.length) return <div className="panel empty-state"><p><b>Bạn chưa được thêm vào dự án nào đang thi công.</b></p><small className="muted">Muốn chấm công, nhờ chỉ huy trưởng hoặc PM thêm bạn vào dự án (tab Sơ đồ &amp; thành viên của dự án). Sau đó mở lại trang này để bấm Chấm Vào.</small></div>;
 
   return (
-    <div className="ts-sheet">
-      {problem && <p className="form-error panel" role="alert" style={{ padding: 12 }}>{problem}</p>}
-      {busy && <p className="muted" role="status">{busy}</p>}
+    <div className="ci-wrap">
+      <LiveClock />
+      {!contexts.length && (
+        <section className="ci-card ci-empty">
+          <span className="ci-empty-icon" aria-hidden="true"><FolderX size={28} /></span>
+          <b>Bạn chưa được thêm vào dự án nào đang thi công</b>
+          <p>Nhờ chỉ huy trưởng hoặc PM thêm bạn vào dự án. Sau đó mở lại trang này để bấm <b>Chấm Vào</b>.</p>
+        </section>
+      )}
+      {problem && <p className="ci-alert" role="alert"><AlertTriangle size={18} aria-hidden="true" /> {problem}</p>}
+      {busy && <p className="ci-busy" role="status"><Loader2 size={18} className="ci-spin" aria-hidden="true" /> {busy}</p>}
       {contexts.map((context) => {
         const kind = dayKind(today, context.weeklyOff, props.holidays);
         const done = context.today;
         const hours = done ? hoursFromCheck({ workDate: today, checkInAt: done.checkInAt, checkOutAt: done.checkOutAt }, context.schedule, kind) : null;
+        const next: "in" | "out" | null = !done ? "in" : !done.checkOutAt ? "out" : null;
         return (
-          <section key={context.projectId} className="panel ts-head" aria-label={`Chấm công ${context.code}`}>
-            <b>{context.code} · {context.name}</b>
-            <span className="muted">{context.team ? `${context.team} · ` : ""}Giờ làm {context.schedule.workStart}–{context.schedule.workEnd}, nghỉ trưa {context.schedule.lunchStart}–{context.schedule.lunchEnd}{kind !== "workday" ? " · Hôm nay là ngày nghỉ: giờ làm tính tăng ca" : ""}</span>
-            {done ? (
-              <p style={{ margin: 0 }}>
-                Vào <b>{vnClock(done.checkInAt)}</b> (cách {done.inDistanceM} m)
-                {done.checkOutAt ? <> · Ra <b>{vnClock(done.checkOutAt)}</b> (cách {done.outDistanceM} m)</> : " · chưa chấm Ra"}
-                {hours && <><br /><span className="muted">Tạm tính: {formatHours(hours.regularHours)} giờ thường{hours.otHours ? `, ${formatHours(hours.otHours)} giờ tăng ca` : ""}{hours.late ? ` · đi muộn ${formatMinutes(hours.late)}` : ""}{hours.incomplete ? " (chưa chấm Ra)" : ""}. Chỉ huy trưởng duyệt mới tính tiền.</span></>}
-              </p>
-            ) : <p className="muted" style={{ margin: 0 }}>Hôm nay bạn chưa chấm công.</p>}
-            <div className="button-row">
-              {!done && <button type="button" className="button primary" style={{ minHeight: 48, flex: 1 }} disabled={busy !== null} onClick={() => void start("in", context)}><LogIn className="ico" size={18} aria-hidden="true" /> Chấm Vào</button>}
-              {done && !done.checkOutAt && <button type="button" className="button primary" style={{ minHeight: 48, flex: 1 }} disabled={busy !== null} onClick={() => void start("out", context)}><LogOut className="ico" size={18} aria-hidden="true" /> Chấm Ra</button>}
-              {done?.checkOutAt && <span className="pill ok">Đã chấm đủ Vào và Ra hôm nay</span>}
+          <section key={context.projectId} className="ci-card" aria-label={`Chấm công ${context.code}`}>
+            <header className="ci-project">
+              <span className="ci-project-icon" aria-hidden="true"><Building2 size={20} /></span>
+              <div>
+                <b>{context.name}</b>
+                <small>{context.code}{context.team ? ` · ${context.team}` : ""}</small>
+              </div>
+            </header>
+            <div className="ci-chips">
+              <span><Clock3 size={14} aria-hidden="true" /> {context.schedule.workStart}–{context.schedule.workEnd}</span>
+              <span><Coffee size={14} aria-hidden="true" /> Nghỉ {context.schedule.lunchStart}–{context.schedule.lunchEnd}</span>
+              <span><MapPin size={14} aria-hidden="true" /> Trong {context.siteRadiusM} m</span>
+              {kind !== "workday" && <span className="warn">Ngày nghỉ: tính tăng ca</span>}
             </div>
-            <small className="muted"><MapPin className="ico" size={13} aria-hidden="true" /> Phải bật định vị (GPS), đứng trong {context.siteRadiusM} m quanh công trường và chụp ảnh khuôn mặt tại chỗ.</small>
+
+            {next ? (
+              <button type="button" className={`ci-punch ${next}`} disabled={busy !== null} onClick={() => void start(next, context)}>
+                {next === "in" ? <LogIn size={34} aria-hidden="true" /> : <LogOut size={34} aria-hidden="true" />}
+                <b>{next === "in" ? "Chấm Vào" : "Chấm Ra"}</b>
+                <small>Bấm để chụp ảnh và ghi vị trí</small>
+              </button>
+            ) : (
+              <div className="ci-done"><CheckCircle2 size={40} aria-hidden="true" /><b>Đã chấm đủ hôm nay</b><small>Hẹn gặp lại ngày mai</small></div>
+            )}
+
+            <ol className="ci-timeline">
+              <li className={done ? "ok" : ""}>
+                <span className="ci-dot" aria-hidden="true">{done ? <Check size={14} /> : null}</span>
+                <span>Vào</span>
+                <b>{done ? vnClock(done.checkInAt) : "--:--"}</b>
+                <small>{done ? `cách ${done.inDistanceM} m${hours?.late ? ` · muộn ${formatMinutes(hours.late)}` : ""}` : "Chưa chấm"}</small>
+              </li>
+              <li className={done?.checkOutAt ? "ok" : ""}>
+                <span className="ci-dot" aria-hidden="true">{done?.checkOutAt ? <Check size={14} /> : null}</span>
+                <span>Ra</span>
+                <b>{done?.checkOutAt ? vnClock(done.checkOutAt) : "--:--"}</b>
+                <small>{done?.checkOutAt ? `cách ${done.outDistanceM} m` : "Chưa chấm"}</small>
+              </li>
+            </ol>
+
+            {hours && (
+              <div className="ci-stats">
+                <div><b>{formatHours(hours.regularHours)}</b><small>giờ thường</small></div>
+                <div><b>{formatHours(hours.otHours)}</b><small>giờ tăng ca</small></div>
+                <div><b>{hours.incomplete ? "Tạm tính" : "Đủ"}</b><small>{hours.incomplete ? "chưa chấm Ra" : "Vào và Ra"}</small></div>
+              </div>
+            )}
+            <small className="ci-note"><ShieldCheck size={13} aria-hidden="true" /> Cần bật định vị (GPS) và cho phép camera. Giờ do máy chủ ghi; chỉ huy trưởng duyệt mới tính tiền.</small>
           </section>
         );
       })}

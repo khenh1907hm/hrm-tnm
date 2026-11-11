@@ -1,0 +1,43 @@
+/* Khung giao diện nhân viên (Kỹ sư, Nhân viên, công nhân). Máy tính: thanh bên; điện thoại: thanh trên + thanh điều hướng dưới đáy. */
+.emp-topbar, .emp-tabbar, .emp-menu { display: none; }
+.emp-side .brand { display: flex; align-items: center; gap: 10px; }
+.emp-side-foot { display: grid; gap: 8px; }
+.emp-account-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.emp-account-line > span:last-child { display: grid; min-width: 0; }
+.emp-account-line b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.emp-account-line small { opacity: .8; }
+.emp-avatar { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: #fff; font-weight: 700; font-size: 13px; flex: none; }
+
+@media (max-width: 768px) {
+  .emp-shell { display: block; min-height: 100vh; }
+  .emp-shell .emp-side { display: none; }
+  .emp-topbar {
+    display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 20;
+    padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top));
+    background: var(--nav-bg); color: #fff; box-shadow: 0 2px 10px rgba(15, 23, 42, .18);
+  }
+  .emp-topbar-logo { width: 38px; height: auto; flex: none; }
+  .emp-topbar b { flex: 1; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emp-avatar-button { border: 0; background: transparent; padding: 0; min-width: 44px; min-height: 44px; display: grid; place-items: center; }
+  .emp-avatar-button .emp-avatar { background: rgba(255, 255, 255, .18); border: 1px solid rgba(255, 255, 255, .35); }
+  .emp-menu {
+    display: grid; gap: 8px; position: fixed; top: 64px; right: 10px; left: 10px; z-index: 30;
+    padding: 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  }
+  .emp-menu .button { min-height: 44px; justify-content: center; }
+  .emp-menu .emp-account-line small { color: var(--muted); }
+  .emp-tabbar {
+    display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -4px 16px rgba(15, 23, 42, .08);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .emp-tabbar a { display: grid; justify-items: center; align-content: center; gap: 3px; min-height: 60px; padding: 6px 2px; color: var(--muted); font-size: 11px; font-weight: 600; text-decoration: none; position: relative; }
+  .emp-tabbar a.active { color: var(--brand); }
+  .emp-tabbar a.active::before { content: ""; position: absolute; top: 0; left: 28%; right: 28%; height: 3px; border-radius: 0 0 3px 3px; background: var(--brand); }
+  .emp-tabbar a span { text-align: center; line-height: 1.15; }
+  .emp-main { padding: 14px 14px calc(84px + env(safe-area-inset-bottom)) !important; }
+  .emp-main .page-head { margin-bottom: 12px; }
+  /* Tên trang đã nằm ở thanh trên cùng */
+  .emp-main .page-head h1 { display: none; }
+  .emp-main .page-head p { font-size: 13px; }
+}
