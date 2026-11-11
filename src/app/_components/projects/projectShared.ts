@@ -52,6 +52,8 @@ export const canCreateProject = (actor: Actor) => actor.role === "admin" || hasA
 export type EmployeeOption = { id: string; code: string; name: string; position: string; phone?: string; hasPhoto?: boolean };
 export type EmployeeSource = {
   search(query: string): Promise<EmployeeOption[]>;
+  /** Một nhân sự theo id (tên, số điện thoại) để điền sơ đồ tổ chức từ hồ sơ. */
+  get?(employeeId: string): Promise<EmployeeOption | null>;
   /** Ảnh chân dung của nhân sự (để điền sơ đồ tổ chức); không có thì null. */
   photo?(employeeId: string): Promise<Blob | null>;
 } | null;

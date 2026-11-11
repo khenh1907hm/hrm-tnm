@@ -15,7 +15,6 @@ import { CostsTab } from "./CostsTab";
 import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
-import { MembersTab } from "./MembersTab";
 import { OverviewTab } from "./OverviewTab";
 import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from "./projectShared";
 import { formatDateVn } from "./ProjectsPage";
@@ -65,8 +64,8 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "members" | "orgChart" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["members", "Sơ đồ & thành viên"], ["orgChart", "Sơ đồ nhà thầu (in)"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["purchases", "Đặt hàng"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "members" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["members", "Sơ đồ & thành viên"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["purchases", "Đặt hàng"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
 
 export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employees: EmployeeSource; project: Project; setNotice: Notify; onBack: () => void; onEdit: () => void; onChanged: () => void; children?: ReactNode }) {
   const { store, project, actor, setNotice } = props;
@@ -111,8 +110,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
       {!data || !viewer ? <div className="loading">Đang tải dữ liệu dự án…</div> : (() => {
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
         if (tab === "overview") return <OverviewTab {...tabProps} />;
-        if (tab === "members") return <MembersTab {...tabProps} />;
-        if (tab === "orgChart") return <OrgChartTab {...tabProps} />;
+        if (tab === "members") return <OrgChartTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "costs") return <CostsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;

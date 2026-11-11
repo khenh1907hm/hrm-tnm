@@ -68,7 +68,7 @@ export const DEFAULT_ORG_HEADER: OrgChartHeader = {
 
 export const blankPerson = (id: string, section: OrgSection, branch: OrgPerson["branch"], titleEn = "", titleVi = ""): OrgPerson => ({
   id, section, branch, titleEn, titleVi, name: "", phone: "", email: "", photo: null,
-  workerCount: branch === "group" ? 0 : null, color: section === "office" && branch === "main" ? "blue" : "green", employeeId: null,
+  workerCount: branch === "group" ? 0 : null, color: "blue", employeeId: null,
 });
 
 /** Giám đốc mặc định của công ty trên mọi sơ đồ. */
@@ -128,53 +128,90 @@ export function renumberGroups(people: OrgPerson[]): OrgPerson[] {
   });
 }
 
+/** Chức vụ theo vai trò trong dự án: vị trí trên sơ đồ và tên chức vụ Anh / Việt. */
+const ROLE_SLOT: Partial<Record<ProjectMember["role"], { section: OrgSection; branch: OrgPerson["branch"]; titleEn: string; titleVi: string }>> = {
+  pm: { section: "office", branch: "main", titleEn: "Project Manager", titleVi: "Quản lý dự án" },
+  commander: { section: "site", branch: "main", titleEn: "Site Manager", titleVi: "Quản lý công trường" },
+  supervisor: { section: "site", branch: "right", titleEn: "Supervisor", titleVi: "Giám sát" },
+  engineer: { section: "site", branch: "right", titleEn: "Engineer", titleVi: "Kỹ sư" },
+  leader: { section: "site", branch: "group", titleEn: "", titleVi: "" },
+};
+
 /**
- * Điền Quản lý nhóm từ cây thành viên dự án: mỗi tổ trưởng (leader) thành một nhóm,
- * số công nhân = số người có quản lý trực tiếp là tổ trưởng đó. Chỉ huy trưởng thành Quản lý công trường nếu ô đang trống.
+ * Đồng bộ sơ đồ với thành viên đang làm của dự án: PM → khối Văn phòng, CHT → Quản lý công trường (điền ô trống nếu có),
+ * giám sát / kỹ sư → nhánh phải công trường, tổ trưởng → Quản lý nhóm, số công nhân = số người dưới tổ trưởng.
+ * Người đã có trên sơ đồ (cùng nhân sự) giữ nguyên ô, chỉ cập nhật số công nhân. Ô nhóm trống của mẫu bỏ khi đã có tổ trưởng thật.
  */
-export function fillFromMembers(chart: OrgChart, members: readonly ProjectMember[], newId: () => string, today: string): OrgChart {
+export function mergeMembers(chart: OrgChart, members: readonly ProjectMember[], newId: () => string, today: string): OrgChart {
   const active = members.filter((member) => !member.leftOn || member.leftOn >= today);
-  const leaders = active.filter((member) => member.role === "leader");
-  const keep = chart.people.filter((person) => person.branch !== "group" || person.name.trim() || person.employeeId);
-  const known = new Set(keep.map((person) => person.employeeId).filter(Boolean));
-  const added = leaders.filter((leader) => !known.has(leader.employeeId)).map((leader) => ({
-    ...blankPerson(newId(), "site", "group"),
-    name: leader.displayName.toUpperCase(),
-    employeeId: leader.employeeId,
-    email: suggestEmail(leader.displayName, chart.header.emailDomain),
-    workerCount: active.filter((member) => member.parentId === leader.id).length,
-  }));
-  // Cập nhật số công nhân của nhóm đã có
-  const counted = keep.map((person) => {
-    const leader = person.branch === "group" && person.employeeId ? leaders.find((item) => item.employeeId === person.employeeId) : undefined;
-    return leader ? { ...person, workerCount: active.filter((member) => member.parentId === leader.id).length } : person;
+  const workersOf = (member: ProjectMember) => active.filter((item) => item.parentId === member.id).length;
+  let people = chart.people.map((person) => {
+    const leader = person.branch === 'group' && person.employeeId ? active.find((member) => member.role === 'leader' && member.employeeId === person.employeeId) : undefined;
+    return leader ? { ...person, workerCount: workersOf(leader) } : person;
   });
-  const commander = active.find((member) => member.role === "commander");
-  const filled = counted.map((person) => person.section === "site" && person.branch === "main" && !person.name.trim() && commander && !counted.some((item) => item.employeeId === commander.employeeId)
-    ? { ...person, name: commander.displayName.toUpperCase(), employeeId: commander.employeeId, email: suggestEmail(commander.displayName, chart.header.emailDomain) }
-    : person);
-  return { ...chart, people: renumberGroups([...filled, ...added].slice(0, 64)) };
+  const known = new Set(people.map((person) => person.employeeId).filter(Boolean));
+  const added: OrgPerson[] = [];
+  for (const member of active) {
+    const slot = ROLE_SLOT[member.role];
+    if (!slot || known.has(member.employeeId)) continue;
+    known.add(member.employeeId);
+    // Email không có trong hồ sơ: để trống, người lập tự nhập hoặc bấm Gợi ý
+    const filled = { name: member.displayName.toUpperCase(), employeeId: member.employeeId };
+    const emptySite = slot.section === 'site' && slot.branch === 'main' ? people.find((person) => person.section === 'site' && person.branch === 'main' && !person.name.trim()) : undefined;
+    if (emptySite) { people = people.map((person) => person === emptySite ? { ...person, ...filled } : person); continue; }
+    added.push({ ...blankPerson(newId(), slot.section, slot.branch, slot.titleEn, slot.titleVi), ...filled, workerCount: slot.branch === 'group' ? workersOf(member) : null });
+  }
+  if (added.some((person) => person.branch === 'group')) people = people.filter((person) => !(person.branch === 'group' && !person.name.trim() && !person.employeeId));
+  return { ...chart, people: renumberGroups([...people, ...added].slice(0, 64)) };
 }
 
-export type OrgBox = { person: OrgPerson; x: number; y: number; w: number; h: number };
-export type OrgLine = { x1: number; y1: number; x2: number; y2: number };
+/** Sơ đồ mới dựng từ dữ liệu: mẫu chung (tiêu đề + Văn phòng) rồi đồng bộ thành viên dự án. */
+export function buildFromProject(newId: () => string, project: { customerName: string; name: string }, today: string, template: OrgChart | null, members: readonly ProjectMember[]): OrgChart {
+  return mergeMembers(defaultOrgChart(newId, project, today, template), members, newId, today);
+}
+
+/** Thông tin hồ sơ nhân sự để điền ô: tên, số điện thoại, ảnh (đã thu nhỏ). Trường trống thì giữ giá trị cũ. */
+export type EmployeeFacts = { name?: string | undefined; phone?: string | undefined; photo?: string | null };
+export function applyEmployeeFacts(person: OrgPerson, facts: EmployeeFacts, overwrite: boolean): OrgPerson {
+  const take = (current: string, next: string | undefined) => next && (overwrite || !current.trim()) ? next : current;
+  return {
+    ...person,
+    name: take(person.name, facts.name?.toUpperCase()),
+    phone: take(person.phone, facts.phone),
+    photo: facts.photo && (overwrite || !person.photo) ? facts.photo : person.photo,
+  };
+}
+
+export type OrgBox = { person: OrgPerson; x: number; y: number; w: number; h: number; ghost: boolean };
+export type OrgLine = { x1: number; y1: number; x2: number; y2: number; ghost: boolean };
 export type OrgLayout = { boxes: OrgBox[]; lines: OrgLine[]; headOfficeY: number; scale: number };
 
 const BOX_W = 232;
 const BOX_H = 84;
+const GHOST_H = 34;
 const GAP_Y = 22;
 const SIDE_GAP = 46;
 const TOP = 132;
 const MARGIN = 24;
 
+/** Ô "+ Thêm" giữ chỗ khi đang sửa: id dạng ghost:<khối>:<nhánh>. */
+export const GHOST_PREFIX = "ghost:";
+export const isGhost = (person: Pick<OrgPerson, "id">) => person.id.startsWith(GHOST_PREFIX);
+export function ghostSlots(people: readonly OrgPerson[]): OrgPerson[] {
+  const ghost = (section: OrgSection, branch: OrgPerson["branch"]): OrgPerson => ({ ...blankPerson(`${GHOST_PREFIX}${section}:${branch}`, section, branch), workerCount: null });
+  const groups = people.filter((person) => person.branch === "group").length;
+  return [ghost("office", "main"), ghost("office", "right"), ghost("site", "main"), ghost("site", "left"), ghost("site", "right"), ...(groups < ORG_MAX_GROUPS ? [ghost("site", "group")] : [])];
+}
+
 /**
  * Tính vị trí các ô và đường nối. Trục chính ở giữa (x = 505). Nhánh phải / trái của văn phòng nối vào trục
  * ngay dưới ô văn phòng cuối; nhánh của công trường nối ngang vào trục, ô thấp nhất nằm trên thanh ngang.
  * Quản lý nhóm xếp một hàng dưới thanh ngang, ô đầu ngay dưới trục, các ô sau sang phải (đủ chỗ thì dời trái).
- * Sơ đồ quá cao thì thu nhỏ cả cụm (scale) để vừa một trang.
+ * Ô "+ Thêm" (ghost) thấp hơn và nằm ở chỗ ô kế tiếp sẽ xuất hiện. Sơ đồ quá cao thì thu nhỏ cả cụm (scale).
  */
 export function layoutOrgChart(people: readonly OrgPerson[]): OrgLayout {
   const cx = 505;
+  const hOf = (person: OrgPerson) => isGhost(person) ? GHOST_H : BOX_H;
   const pick = (section: OrgSection, branch: OrgPerson["branch"]) => people.filter((person) => person.section === section && person.branch === branch);
   const officeMain = pick("office", "main");
   const officeRight = pick("office", "right");
@@ -182,47 +219,75 @@ export function layoutOrgChart(people: readonly OrgPerson[]): OrgLayout {
   const siteMain = pick("site", "main");
   const siteLeft = pick("site", "left");
   const siteRight = pick("site", "right");
-  const groups = people.filter((person) => person.branch === "group").slice(0, ORG_MAX_GROUPS);
+  const realGroups = people.filter((person) => person.branch === "group" && !isGhost(person)).slice(0, ORG_MAX_GROUPS);
+  const groups = [...realGroups, ...people.filter((person) => person.branch === "group" && isGhost(person)).slice(0, 1)];
   const boxes: OrgBox[] = [];
   const lines: OrgLine[] = [];
-  const main = (person: OrgPerson, y: number) => { const box = { person, x: cx - BOX_W / 2, y, w: BOX_W, h: BOX_H }; boxes.push(box); return box; };
+  const push = (person: OrgPerson, x: number, y: number, w: number) => { const box = { person, x, y, w, h: hOf(person), ghost: isGhost(person) }; boxes.push(box); return box; };
+  const line = (x1: number, y1: number, x2: number, y2: number, ghost = false) => { lines.push({ x1, y1, x2, y2, ghost }); };
 
   // Văn phòng: trục chính
   let y = TOP;
   let lastBottom = TOP - GAP_Y;
-  officeMain.forEach((person) => { const box = main(person, y); lastBottom = box.y + box.h; y += BOX_H + GAP_Y; });
-  // Nhánh văn phòng: xếp chồng cạnh trục, bắt đầu thấp hơn ô đầu nửa ô
-  const officeJoin = lastBottom + 14;
-  const sideStart = TOP + (officeMain.length > 1 ? BOX_H / 2 + GAP_Y : 0);
-  const officeSide = (list: OrgPerson[], dir: 1 | -1) => list.forEach((person, index) => {
-    const x = dir === 1 ? cx + BOX_W / 2 + SIDE_GAP + 20 : cx - BOX_W / 2 - SIDE_GAP - 20 - BOX_W;
-    const box = { person, x, y: sideStart + index * (BOX_H + GAP_Y), w: BOX_W, h: BOX_H };
-    boxes.push(box);
-    const edge = dir === 1 ? box.x : box.x + box.w;
-    const elbow = edge - dir * 22;
-    const mid = box.y + box.h / 2;
-    lines.push({ x1: edge, y1: mid, x2: elbow, y2: mid }, { x1: elbow, y1: mid, x2: elbow, y2: Math.max(officeJoin, mid) }, { x1: elbow, y1: Math.max(officeJoin, mid), x2: cx, y2: Math.max(officeJoin, mid) });
+  let officeRealBottom = TOP;
+  officeMain.forEach((person) => {
+    const box = push(person, cx - BOX_W / 2, y, BOX_W);
+    if (box.ghost) line(cx, lastBottom, cx, box.y, true); else officeRealBottom = box.y + box.h;
+    lastBottom = box.y + box.h;
+    y += box.h + GAP_Y;
   });
+  // Nhánh văn phòng: xếp chồng cạnh trục, bắt đầu thấp hơn ô đầu nửa ô
+  const realOfficeMain = officeMain.filter((person) => !isGhost(person)).length;
+  const officeJoin = officeRealBottom + 14;
+  const sideStart = TOP + (realOfficeMain > 1 ? BOX_H / 2 + GAP_Y : 0);
+  const sideJoins: number[] = [];
+  const officeSide = (list: OrgPerson[], dir: 1 | -1) => {
+    let top = sideStart;
+    list.forEach((person) => {
+      const x = dir === 1 ? cx + BOX_W / 2 + SIDE_GAP + 20 : cx - BOX_W / 2 - SIDE_GAP - 20 - BOX_W;
+      const box = push(person, x, top, BOX_W);
+      top += box.h + GAP_Y;
+      const edge = dir === 1 ? box.x : box.x + box.w;
+      const elbow = edge - dir * 22;
+      const mid = box.y + box.h / 2;
+      const join = Math.max(officeJoin, mid);
+      line(edge, mid, elbow, mid, box.ghost);
+      line(elbow, mid, elbow, join, box.ghost);
+      line(elbow, join, cx, join, box.ghost);
+      if (!box.ghost) sideJoins.push(join);
+    });
+  };
   officeSide(officeRight, 1);
   officeSide(officeLeft, -1);
   const officeBottom = Math.max(lastBottom, ...boxes.map((box) => box.y + box.h), TOP);
-  const sideJoins = boxes.filter((box) => box.person.section === "office" && box.person.branch !== "main").map((box) => Math.max(officeJoin, box.y + box.h / 2));
   const headOfficeY = officeBottom + 18;
 
-  // Công trường
-  y = headOfficeY + 22;
-  let siteBottom = y - GAP_Y;
-  siteMain.forEach((person) => { const box = main(person, y); siteBottom = box.y + box.h; y += BOX_H + GAP_Y; });
-  const sideRows = Math.max(siteLeft.length, siteRight.length);
-  const busY = Math.max(siteBottom + 34, siteBottom + 34 + (sideRows - 1) * (BOX_H + GAP_Y) - BOX_H / 2 + 16);
-  const siteSide = (list: OrgPerson[], dir: 1 | -1) => list.forEach((person, index) => {
-    const mid = busY - (list.length - 1 - index) * (BOX_H + GAP_Y);
-    const x = dir === 1 ? cx + BOX_W / 2 + SIDE_GAP + 20 : cx - BOX_W / 2 - SIDE_GAP - 20 - BOX_W;
-    const box = { person, x: dir === -1 ? Math.max(MARGIN + 50, x - 30) : x, y: mid - BOX_H / 2, w: BOX_W, h: BOX_H };
-    boxes.push(box);
-    const edge = dir === 1 ? box.x : box.x + box.w;
-    lines.push({ x1: edge, y1: mid, x2: cx, y2: mid });
+  // Công trường: trục chính
+  const siteTop = headOfficeY + 22;
+  y = siteTop;
+  let siteBottom = siteTop - GAP_Y;
+  let prevBottom = headOfficeY;
+  siteMain.forEach((person) => {
+    const box = push(person, cx - BOX_W / 2, y, BOX_W);
+    if (box.ghost) line(cx, prevBottom, cx, box.y, true);
+    prevBottom = box.y + box.h;
+    siteBottom = box.y + box.h;
+    y += box.h + GAP_Y;
   });
+  // Nhánh công trường: ô cuối nằm trên thanh ngang, các ô trước xếp lên trên
+  const stackAbove = (list: OrgPerson[]) => list.length ? list.slice(0, -1).reduce((sum, person) => sum + hOf(person) + GAP_Y, 0) + hOf(list[list.length - 1]!) / 2 : 0;
+  const busY = Math.max(siteBottom + 34, siteTop + Math.max(stackAbove(siteLeft), stackAbove(siteRight)));
+  const siteSide = (list: OrgPerson[], dir: 1 | -1) => {
+    let bottom = busY + (list.length ? hOf(list[list.length - 1]!) / 2 : 0);
+    [...list].reverse().forEach((person) => {
+      const h = hOf(person);
+      const x = dir === 1 ? cx + BOX_W / 2 + SIDE_GAP + 20 : Math.max(MARGIN + 50, cx - BOX_W / 2 - SIDE_GAP - 50 - BOX_W);
+      const box = push(person, x, bottom - h, BOX_W);
+      bottom -= h + GAP_Y;
+      const mid = box.y + box.h / 2;
+      line(dir === 1 ? box.x : box.x + box.w, mid, cx, mid, box.ghost);
+    });
+  };
   siteSide(siteLeft, -1);
   siteSide(siteRight, 1);
 
@@ -234,22 +299,23 @@ export function layoutOrgChart(people: readonly OrgPerson[]): OrgLayout {
   let gx = cx - gw / 2;
   const rowWidth = groups.length * gw + (groups.length - 1) * gap;
   if (gx + rowWidth > ORG_CANVAS.width - MARGIN) gx = Math.max(MARGIN, ORG_CANVAS.width - MARGIN - rowWidth);
-  const groupBoxes = groups.map((person, index) => { const box = { person, x: gx + index * (gw + gap), y: groupTop, w: gw, h: BOX_H }; boxes.push(box); return box; });
+  const groupBoxes = groups.map((person, index) => push(person, gx + index * (gw + gap), groupTop, gw));
 
-  // Trục dọc: từ ô văn phòng đầu tới thanh ngang (hoặc ô công trường cuối)
-  const trunkTop = officeMain.length ? TOP + BOX_H : headOfficeY;
-  const trunkBottom = groups.length || siteLeft.length || siteRight.length ? busY : siteBottom;
-  const deepestJoin = Math.max(trunkTop, ...sideJoins);
-  if (trunkBottom > trunkTop) lines.push({ x1: cx, y1: trunkTop, x2: cx, y2: Math.max(trunkBottom, deepestJoin) });
-  else if (deepestJoin > trunkTop) lines.push({ x1: cx, y1: trunkTop, x2: cx, y2: deepestJoin });
+  // Trục dọc: từ ô văn phòng đầu tới thanh ngang (hoặc ô công trường cuối thật)
+  const realSite = siteMain.filter((person) => !isGhost(person)).length;
+  const realSides = [...siteLeft, ...siteRight].filter((person) => !isGhost(person)).length;
+  const trunkTop = realOfficeMain ? TOP + BOX_H : headOfficeY;
+  const realSiteBottom = realSite ? siteTop + realSite * (BOX_H + GAP_Y) - GAP_Y : headOfficeY;
+  const trunkBottom = realGroups.length || realSides ? busY : realSiteBottom;
+  const deepest = Math.max(trunkBottom, ...sideJoins);
+  if (deepest > trunkTop) line(cx, trunkTop, cx, deepest);
+  if (!realGroups.length && !realSides && groupBoxes.length) line(cx, realSiteBottom, cx, busY, true);
   // Thanh ngang công trường và nhánh xuống từng nhóm
-  if (groupBoxes.length) {
-    const centers = groupBoxes.map((box) => box.x + box.w / 2);
-    const left = Math.min(cx, ...centers);
-    const right = Math.max(cx, ...centers);
-    lines.push({ x1: left, y1: busY, x2: right, y2: busY });
-    centers.forEach((center) => lines.push({ x1: center, y1: busY, x2: center, y2: groupTop }));
-  }
+  groupBoxes.forEach((box) => {
+    const center = box.x + box.w / 2;
+    line(Math.min(cx, center), busY, Math.max(cx, center), busY, box.ghost);
+    line(center, busY, center, groupTop, box.ghost);
+  });
 
   const bottom = Math.max(...boxes.map((box) => box.y + box.h), headOfficeY + 40);
   const limit = ORG_CANVAS.height - 40;

@@ -128,6 +128,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       const result = await app.employees.list(actor, { query, page: 1, pageSize: 100 });
       return result.ok ? result.value.items.filter((employee) => !employee.archivedAt && employee.status !== "resigned").map((employee) => ({ id: employee.id, code: employee.code, name: employee.name, position: employee.position, phone: employee.phone, hasPhoto: Boolean(employee.photo) })) : [];
     },
+    get: async (employeeId: string) => {
+      const found = await app.employees.get(actor, employeeId);
+      return found.ok ? { id: found.value.id, code: found.value.code, name: found.value.name, position: found.value.position, phone: found.value.phone, hasPhoto: Boolean(found.value.photo) } : null;
+    },
     photo: (employeeId: string) => photoLoaderRef.current(employeeId),
   } : null, [app, actor]);
   const projectStore = useProjectStore(backend.mode, employeeSource);
@@ -473,7 +477,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
         {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} partners={partnerStore} loadSignatureFile={loadSignatureFile} />}
         {view === "skills" && <SkillsClient embedded />}
-        {view === "tools" && <ToolsPage />}
+        {view === "tools" && <ToolsPage orgChart={{ store: projectStore.store, ready: projectStore.ready, actor, employees: employeeSource, setNotice }} />}
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}

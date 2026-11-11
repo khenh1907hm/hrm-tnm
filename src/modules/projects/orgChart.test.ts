@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  blankPerson, defaultOrgChart, fillFromMembers, layoutOrgChart, orgChartIssue, ORG_CANVAS, signDateText, suggestEmail, toCompanyTemplate, type OrgPerson,
+  applyEmployeeFacts, buildFromProject, ghostSlots, isGhost, blankPerson, defaultOrgChart, mergeMembers, layoutOrgChart, orgChartIssue, ORG_CANVAS, signDateText, suggestEmail, toCompanyTemplate, type OrgPerson,
 } from "./orgChart";
 import type { ProjectMember } from "./types";
 
@@ -56,11 +56,27 @@ describe("subcontractor org chart", () => {
   it("ORG_04 fills group leaders with worker counts from the project tree and validates before saving", () => {
     const chart = defaultOrgChart(ids(), project, "2026-11-11");
     const members = [member("c", "commander", null, "Trần Chỉ Huy"), member("l1", "leader", "c", "Phạm Thân Nhi"), member("w1", "worker", "l1"), member("w2", "worker", "l1"), member("l2", "leader", "c", "Lê Tổ"), member("w3", "worker", "l2")];
-    const filled = fillFromMembers(chart, members, ids(), "2026-11-11");
+    const filled = mergeMembers(chart, members, ids(), "2026-11-11");
     const groups = filled.people.filter((person) => person.branch === "group");
     expect(groups.map((person) => [person.titleEn, person.name, person.workerCount])).toEqual([["Group Leader #1", "PHẠM THÂN NHI", 2], ["Group Leader #2", "LÊ TỔ", 1]]);
     expect(filled.people.find((person) => person.section === "site" && person.branch === "main")?.name).toBe("TRẦN CHỈ HUY");
     expect(orgChartIssue(filled)).toBeNull();
     expect(orgChartIssue({ ...filled, people: filled.people.map((person, index) => index === 0 ? { ...person, email: "sai" } : person) })).toMatch(/Email/);
+  });
+
+  it("ORG_05 builds from project data, leaves unknown info blank, all boxes blue, and lays out + slots only while editing", () => {
+    const members = [member("p", "pm", null, "Trần Ngọc Đức"), member("c", "commander", "p", "Lê Chỉ Huy"), member("l", "leader", "c", "Tổ Một"), member("w", "worker", "l")];
+    const chart = buildFromProject(ids(), project, "2026-11-11", null, members);
+    const pm = chart.people.find((person) => person.employeeId === "Ep")!;
+    expect(pm).toMatchObject({ section: "office", branch: "main", titleEn: "Project Manager", name: "TRẦN NGỌC ĐỨC", phone: "", email: "", photo: null, color: "blue" });
+    expect(chart.people.every((person) => person.color === "blue")).toBe(true);
+    expect(chart.people.filter((person) => person.branch === "group").map((person) => [person.name, person.workerCount])).toEqual([["TỔ MỘT", 1]]);
+    expect(applyEmployeeFacts(pm, { phone: "0909", photo: null }, false)).toMatchObject({ phone: "0909", photo: null });
+    expect(applyEmployeeFacts({ ...pm, phone: "0123" }, { phone: "0909" }, false).phone).toBe("0123");
+    const plain = layoutOrgChart(chart.people);
+    const editing = layoutOrgChart([...chart.people, ...ghostSlots(chart.people)]);
+    expect(plain.boxes.some((box) => box.ghost)).toBe(false);
+    expect(editing.boxes.filter((box) => box.ghost).map((box) => box.person.id).every((id) => isGhost({ id }))).toBe(true);
+    expect(editing.boxes.filter((box) => box.ghost)).toHaveLength(6);
   });
 });

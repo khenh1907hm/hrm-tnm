@@ -24,8 +24,8 @@
 .oc-ho-label { position: absolute; right: 7%; color: #c00000; font-weight: 700; font-size: calc(var(--u) * 8.5); }
 .oc-box { position: absolute; display: flex; align-items: stretch; gap: calc(var(--u) * 5); padding: calc(var(--u) * 4); box-sizing: border-box; border: 0; margin: 0; text-align: center;
   font: inherit; cursor: default; overflow: hidden; color: #fff; }
-button.oc-box { cursor: pointer; }
-button.oc-box:hover, .oc-box.on { outline: calc(var(--u) * 3) solid #ffb703; outline-offset: calc(var(--u) * 1.5); }
+.oc-box.editable { cursor: pointer; }
+.oc-box.editable:hover, .oc-box.editable:focus-visible, .oc-box.on { outline: calc(var(--u) * 3) solid #ffb703; outline-offset: calc(var(--u) * 1.5); }
 .oc-box.blue { background: #4f81bd; box-shadow: calc(var(--u) * 3) calc(var(--u) * 3) 0 #9aa9c4; }
 .oc-box.green { background: #4f6228; border: calc(var(--u) * 4) solid #4f81bd; box-shadow: calc(var(--u) * 3) calc(var(--u) * 3) 0 #9aa9c4; }
 .oc-face { height: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: #ffff00; flex: none; }
@@ -64,3 +64,25 @@ button.oc-box:hover, .oc-box.on { outline: calc(var(--u) * 3) solid #ffb703; out
   body.oc-printing .oc-box { outline: none !important; }
 }
 .oc-alert { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); }
+
+/* Sửa trực tiếp trên sơ đồ */
+.oc-ghost { position: absolute; border: calc(var(--u) * 1.6) dashed #8aa4cf; border-radius: calc(var(--u) * 4); background: rgba(79, 129, 189, .07); color: #2f5597;
+  font: inherit; font-size: calc(var(--u) * 10); font-weight: 600; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.oc-ghost:hover, .oc-ghost:focus-visible { background: rgba(79, 129, 189, .18); border-style: solid; }
+.oc-lines line.ghost { stroke: #8aa4cf; stroke-dasharray: 4 4; }
+.oc-remove { position: absolute; top: calc(var(--u) * 2); right: calc(var(--u) * 2); width: calc(var(--u) * 16); height: calc(var(--u) * 16); min-width: 18px; min-height: 18px;
+  border: 0; border-radius: 50%; background: rgba(0, 0, 0, .45); color: #fff; font-size: calc(var(--u) * 12); line-height: 1; cursor: pointer; opacity: 0; display: grid; place-items: center; padding: 0; }
+.oc-box:hover .oc-remove, .oc-box:focus-within .oc-remove, .oc-box.on .oc-remove { opacity: 1; }
+@media (hover: none) { .oc-remove { opacity: .8; } }
+.oc-header { padding-top: 10px; padding-bottom: 10px; }
+.oc-header-toggle { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; width: 100%; border: 0; background: none; padding: 4px 0; font: inherit; color: var(--ink); cursor: pointer; text-align: left; }
+.oc-header-grid { margin-top: 10px; }
+.oc-modal { width: min(760px, 96vw); }
+.oc-modal footer { flex-wrap: wrap; }
+.oc-tool { display: grid; gap: 12px; }
+.oc-project-pick { min-width: min(360px, 100%); }
+@media print { body.oc-printing .oc-remove, body.oc-printing .oc-ghost { display: none !important; } }
+/* Chưa có ảnh: để trống cho dán ảnh tay sau */
+.oc-face.empty { display: block; background: #fff; border: calc(var(--u) * 1) dashed rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .15); }
+.oc-photo-empty { width: 108px; aspect-ratio: 3 / 4; border-radius: 6px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: 12px; background: var(--soft); }
+@media print { body.oc-printing .oc-face.empty { border: 0; background: rgba(255, 255, 255, .15); } }

@@ -7,7 +7,6 @@ import { ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles,
 import { PurchasesPage } from "./purchases/PurchasesPage";
 import { getPurchaseStore } from "./purchases/usePurchaseStore";
 import SkillsClient from "../skills/SkillsClient";
-import { BackgroundRemoverTool } from "./BackgroundRemoverTool";
 import { BeforeAfterTool } from "./BeforeAfterTool";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { EMPLOYEE_VIEWS, parseRoute, projectPath, purchasePath, routePath, VIEW_TITLES } from "./routes";
@@ -16,6 +15,7 @@ import { LIMITED_ROLE_INFO, type LimitedRole } from "./workspaceRole";
 import { hasAccess, type Actor, type ActorRole } from "../../modules/auth/permissions";
 import { ProjectsPage } from "./projects/ProjectsPage";
 import { TimesheetPage } from "./projects/TimesheetPage";
+import { OrgChartTool } from "./projects/OrgChartTab";
 import { useProjectStore } from "./projects/useProjectStore";
 import { useToast } from "./Toast";
 
@@ -55,13 +55,13 @@ function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], read
   return { has, buys: has || buyAccess || found?.staff === true, attends: has || found?.attends === true, known: found !== null };
 }
 
-/** Trang Công cụ: các công cụ làm việc dùng chung. */
-export function ToolsPage() {
+/** Trang Công cụ: các công cụ làm việc dùng chung (kèm Sơ đồ tổ chức nhà thầu để ai cũng in được). */
+export function ToolsPage(props: { orgChart?: Parameters<typeof OrgChartTool>[0] | undefined }) {
   return (
     <section className="tools-page">
       <div className="page-head"><div><h1>Công cụ</h1><p>Các công cụ làm việc dùng chung của công ty.</p></div></div>
+      {props.orgChart && <OrgChartTool {...props.orgChart} />}
       <BeforeAfterTool />
-      <BackgroundRemoverTool />
     </section>
   );
 }
@@ -157,7 +157,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
       <main className="main-content emp-main" onClick={() => setMenuOpen(false)}>
         {view === "skills" && <SkillsClient embedded />}
-        {view === "tools" && <ToolsPage />}
+        {view === "tools" && <ToolsPage orgChart={props.actor ? { store: projectStore.store, ready: projectStore.ready, actor: props.actor, employees: null, setNotice } : undefined} />}
         {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
           onOpen={(projectId) => { const path = projectId ? projectPath(projectId) : routePath("projects"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />)}
         {view === "purchases" && props.actor && <PurchasesPage store={getPurchaseStore(props.mode)} projectStore={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} orderId={route?.purchaseId ?? null} setNotice={setNotice}
