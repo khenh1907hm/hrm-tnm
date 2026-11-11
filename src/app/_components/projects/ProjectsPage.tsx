@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { FolderKanban, Plus, Search } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { normalizeText } from "../../../lib/text";
@@ -193,30 +193,37 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   );
 }
 
-/** Ô tìm và chọn một nhân sự (theo mã hoặc tên). */
+/** Ô chọn một nhân sự: bấm vào là xổ danh sách từ dữ liệu nhân sự, gõ mã hoặc tên để lọc. */
 export function EmployeePicker(props: { label: string; source: EmployeeSource; onPick: (option: EmployeeOption | null) => void; exclude?: ReadonlySet<string> }) {
   const [query, setQuery] = useState("");
-  const [options, setOptions] = useState<EmployeeOption[]>([]);
+  const [options, setOptions] = useState<EmployeeOption[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<EmployeeOption | null>(null);
+  const listId = useId();
   useEffect(() => {
-    if (!props.source || picked) return;
+    if (!props.source || picked || !open) return;
     let active = true;
-    const timer = window.setTimeout(() => void props.source!.search(query).then((list) => { if (active) setOptions(list.filter((item) => !props.exclude?.has(item.id)).slice(0, 8)); }), 200);
+    const timer = window.setTimeout(() => void props.source!.search(query).then((list) => { if (active) setOptions(list.filter((item) => !props.exclude?.has(item.id)).slice(0, 50)); }, () => { if (active) setOptions([]); }), query ? 200 : 0);
     return () => { active = false; window.clearTimeout(timer); };
-  }, [query, props.source, picked, props.exclude]);
+  }, [query, props.source, picked, props.exclude, open]);
   if (!props.source) return <p className="field"><span>{props.label}</span><small className="field-hint">Cần quyền xem nhân sự để chọn người.</small></p>;
+  const choose = (option: EmployeeOption) => { setPicked(option); setOpen(false); props.onPick(option); };
   return (
-    <div className="field">
+    <div className="field emp-picker">
       <span>{props.label}</span>
       {picked ? (
-        <div className="button-row"><span className="pill">{picked.code} · {picked.name}</span><button type="button" className="link-button" onClick={() => { setPicked(null); props.onPick(null); }}>Đổi</button></div>
+        <div className="button-row"><span className="pill">{picked.code} · {picked.name}</span><button type="button" className="link-button" onClick={() => { setPicked(null); setQuery(""); setOpen(true); props.onPick(null); }}>Đổi</button></div>
       ) : (
-        <>
-          <input type="search" placeholder="Gõ mã hoặc tên" value={query} onChange={(event) => setQuery(event.target.value)} />
-          {options.length > 0 && query.trim() !== "" && <ul className="filter-dd-menu" style={{ position: "static", maxHeight: 220, overflow: "auto" }}>
-            {options.map((option) => <li key={option.id}><button type="button" className="filter-dd-item" style={{ width: "100%", textAlign: "left" }} onClick={() => { setPicked(option); props.onPick(option); }}>{option.code} · {option.name} <small className="muted">{option.position}</small></button></li>)}
+        <div className="emp-picker-box" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setOpen(false); }}>
+          <input type="search" role="combobox" aria-expanded={open} aria-controls={listId} placeholder="Bấm để chọn, hoặc gõ mã / tên" value={query}
+            onFocus={() => setOpen(true)} onClick={() => setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); }}
+            onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); if (event.key === "Enter" && options?.[0]) { event.preventDefault(); choose(options[0]); } }} />
+          {open && <ul id={listId} className="filter-dd-menu emp-picker-menu" role="listbox">
+            {options === null ? <li className="muted emp-picker-note">Đang tải danh sách…</li>
+              : !options.length ? <li className="muted emp-picker-note">{query ? "Không tìm thấy nhân sự." : "Chưa có nhân sự."}</li>
+              : options.map((option) => <li key={option.id}><button type="button" role="option" aria-selected={false} className="filter-dd-item" style={{ width: "100%", textAlign: "left" }} onClick={() => choose(option)}>{option.code} · {option.name} <small className="muted">{option.position}</small></button></li>)}
           </ul>}
-        </>
+        </div>
       )}
     </div>
   );

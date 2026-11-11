@@ -6,7 +6,7 @@ import {
   renumberGroups, signDateText, suggestEmail, toCompanyTemplate, type OrgBox, type OrgChart, type OrgChartHeader, type OrgPerson, type OrgSection,
 } from "../../../modules/projects/orgChart";
 import type { ProjectStore } from "../../../modules/projects/store";
-import type { Project, ProjectMember } from "../../../modules/projects/types";
+import { MEMBER_ROLE_LABELS, type Project, type ProjectMember } from "../../../modules/projects/types";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { hasAccess, type Actor } from "../../../modules/auth/permissions";
 import type { TabProps } from "./ProjectDetail";
@@ -90,6 +90,18 @@ const POSITIONS: [string, string][] = [
   ["site:left", "Công trường · nhánh trái"], ["site:right", "Công trường · nhánh phải"], ["site:group", "Quản lý nhóm (hàng dưới)"],
 ];
 
+/** Nguồn chọn người từ danh sách thành viên dự án (chỉ có mã, tên, vai trò). */
+function membersSource(members: readonly ProjectMember[]): EmployeeSource {
+  const seen = new Map<string, ProjectMember>();
+  for (const member of members) if (!seen.has(member.employeeId)) seen.set(member.employeeId, member);
+  const options = [...seen.values()].map((member) => ({ id: member.employeeId, code: member.employeeCode, name: member.displayName, position: MEMBER_ROLE_LABELS[member.role] }));
+  const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
+  return {
+    search: async (query: string) => options.filter((option) => !query.trim() || plain(`${option.code} ${option.name}`).includes(plain(query.trim()))),
+    get: async (employeeId: string) => options.find((option) => option.id === employeeId) ?? null,
+  };
+}
+
 /** Điền tên, số điện thoại, ảnh từ hồ sơ nhân sự cho các ô đã gắn nhân sự. */
 async function factsFor(employees: EmployeeSource, employeeId: string) {
   if (!employees) return null;
@@ -115,7 +127,9 @@ export type OrgChartEditorProps = {
  * nút × để bỏ ô. Lần đầu dựng từ dữ liệu (mẫu chung của công ty + thành viên dự án + hồ sơ nhân sự).
  */
 export function OrgChartEditor(props: OrgChartEditorProps) {
-  const { store, project, members, today, canEdit, employees, setNotice } = props;
+  const { store, project, members, today, canEdit, setNotice } = props;
+  // Không có quyền xem hồ sơ nhân sự (PM, CHT dùng giao diện nhân viên): chọn trong thành viên của dự án
+  const employees = useMemo<EmployeeSource>(() => props.employees ?? (members.length ? membersSource(members) : null), [props.employees, members]);
   const [saved, setSaved] = useState<OrgChart | null | undefined>(undefined);
   const [chart, setChart] = useState<OrgChart | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
