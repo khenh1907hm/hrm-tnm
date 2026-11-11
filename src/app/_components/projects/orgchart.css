@@ -86,3 +86,7 @@
 .oc-face.empty { display: block; background: #fff; border: calc(var(--u) * 1) dashed rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .15); }
 .oc-photo-empty { width: 108px; aspect-ratio: 3 / 4; border-radius: 6px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: 12px; background: var(--soft); }
 @media print { body.oc-printing .oc-face.empty { border: 0; background: rgba(255, 255, 255, .15); } }
+.oc-header-title { margin: 0; font-size: 16px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.oc-tool-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; font-size: 16px; color: var(--ink); cursor: pointer; padding: 16px 18px; }
+.oc-tool-card svg:last-child { margin-left: auto; color: var(--muted); }
+.oc-tool-card:hover { border-color: var(--brand); }

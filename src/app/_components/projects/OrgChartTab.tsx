@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
 import {
-  applyEmployeeFacts, blankPerson, buildFromProject, defaultOrgChart, ghostSlots, isGhost, layoutOrgChart, mergeMembers, orgChartIssue, ORG_CANVAS, ORG_MAX_GROUPS,
+  applyEmployeeFacts, DEFAULT_ORG_HEADER, blankPerson, buildFromProject, defaultOrgChart, ghostSlots, isGhost, layoutOrgChart, mergeMembers, orgChartIssue, ORG_CANVAS, ORG_MAX_GROUPS,
   renumberGroups, signDateText, suggestEmail, toCompanyTemplate, type OrgBox, type OrgChart, type OrgChartHeader, type OrgPerson, type OrgSection,
 } from "../../../modules/projects/orgChart";
 import type { ProjectStore } from "../../../modules/projects/store";
@@ -17,6 +17,8 @@ import "./orgchart.css";
 
 type Notify = TabProps["setNotice"];
 const newId = () => crypto.randomUUID();
+/** Ngoài khách hàng, hạng mục, ngày ký thì mọi thông tin đầu trang luôn theo mặc định công ty. */
+const withFixedHeader = (header: OrgChartHeader): OrgChartHeader => ({ ...DEFAULT_ORG_HEADER, client: header.client, item: header.item, signDate: header.signDate });
 
 /** Thu ảnh về khung 3×4 (180 × 240) JPEG để lưu gọn trong sơ đồ. */
 async function toPortrait(blob: Blob): Promise<string> {
@@ -81,7 +83,6 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ghosts, setGhosts] = useState(true);
-  const [headerOpen, setHeaderOpen] = useState(true);
   const [printing, setPrinting] = useState(false);
   const [unavailable, setUnavailable] = useState(false);
 
@@ -100,8 +101,10 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
     // Chưa có sơ đồ: dựng từ dữ liệu (mẫu chung + thành viên dự án), rồi lấy số điện thoại, ảnh từ hồ sơ
     void Promise.all([project ? store.getOrgChart(project.id) : Promise.resolve(null), store.getOrgTemplate().catch(() => null)]).then(([found, template]) => {
       if (!active) return;
-      setSaved(found);
-      const next = found ?? (project ? buildFromProject(newId, shell, today, template, members) : defaultOrgChart(newId, shell, today, template));
+      const fixed = found ? { ...found, header: withFixedHeader(found.header) } : null;
+      setSaved(fixed);
+      const built = fixed ?? (project ? buildFromProject(newId, shell, today, template, members) : defaultOrgChart(newId, shell, today, template));
+      const next = { ...built, header: withFixedHeader(built.header) };
       setChart(next);
       if (!found) void enrich(next, false);
     }, () => {
@@ -176,16 +179,13 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
     <div className="oc-page">
       {canEdit && (
         <section className="panel pj-section oc-header">
-          <button type="button" className="oc-header-toggle" aria-expanded={headerOpen} onClick={() => setHeaderOpen(!headerOpen)}>
-            {headerOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />} <b>Thông tin chung</b>
-            <small className="muted">{chart.header.contractor} · {chart.header.client || "chưa có khách hàng"} · {signDateText(chart.header.signDate)}</small>
-          </button>
-          {headerOpen && <HeaderForm header={chart.header} onChange={setHeader} />}
+          <h2 className="oc-header-title">Thông tin chung <small className="muted">Nhà thầu, công ty, người ký… luôn theo mặc định.</small></h2>
+          <HeaderForm header={chart.header} onChange={setHeader} />
         </section>
       )}
       <section className="panel pj-section">
         <div className="pj-section-head">
-          <h2><Users className="ico" size={18} aria-hidden="true" /> Sơ đồ tổ chức <small className="muted">(mẫu BH-02-F02)</small></h2>
+          <h2><Users className="ico" size={18} aria-hidden="true" /> Sơ đồ tổ chức dự án <small className="muted">(mẫu BH-02-F02)</small></h2>
           <div className="button-row">
             {canEdit && <button type="button" className="button" onClick={() => setGhosts(!ghosts)} title="Bật / tắt các ô + Thêm trên sơ đồ">{ghosts ? <EyeOff className="ico" size={16} aria-hidden="true" /> : <Eye className="ico" size={16} aria-hidden="true" />} {ghosts ? "Ẩn ô thêm" : "Hiện ô thêm"}</button>}
             {canEdit && project && <button type="button" className="button" onClick={sync} title="Thêm thành viên mới, cập nhật số công nhân, lấy số điện thoại và ảnh từ hồ sơ"><RefreshCw className="ico" size={16} aria-hidden="true" /> Cập nhật từ dữ liệu</button>}
@@ -256,18 +256,26 @@ export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor
     });
     return () => { active = false; };
   }, [store, projects, projectId, actor]);
+  const [open, setOpen] = useState(false);
   const current = projectId ? (loaded?.project.id === projectId ? loaded : null) : { project: null, members: noMembers, canEdit: true };
+  // Ngoài trang Công cụ chỉ hiện tên; bấm vào mới mở form
+  if (!open) return (
+    <button type="button" className="panel tool-card oc-tool-card" onClick={() => setOpen(true)}>
+      <Users className="ico" size={20} aria-hidden="true" /> <b>Sơ đồ tổ chức dự án</b> <ChevronRight size={18} aria-hidden="true" />
+    </button>
+  );
   return (
     <section className="panel tool-card oc-tool">
       <div className="pj-section-head">
-        <h2><Users className="ico" size={18} aria-hidden="true" /> Sơ đồ tổ chức nhà thầu (BH-02-F02)</h2>
-        <label className="field oc-project-pick"><span>Lấy dữ liệu từ dự án</span>
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
-            <option value="">Không theo dự án (chỉ lập và in)</option>
-            {(projects ?? []).map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}
-          </select>
-        </label>
+        <h2><Users className="ico" size={18} aria-hidden="true" /> Sơ đồ tổ chức dự án</h2>
+        <button type="button" className="button" onClick={() => setOpen(false)}><X className="ico" size={16} aria-hidden="true" /> Đóng</button>
       </div>
+      <label className="field oc-project-pick"><span>Lấy dữ liệu từ dự án</span>
+        <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+          <option value="">Không theo dự án (chỉ lập và in)</option>
+          {(projects ?? []).map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}
+        </select>
+      </label>
       {!current ? <div className="loading">Đang tải dữ liệu dự án…</div> : (
         <OrgChartEditor key={current.project?.id ?? "free"} store={store} project={current.project} members={current.members} today={today} canEdit={current.canEdit}
           canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} />
@@ -276,30 +284,14 @@ export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor
   );
 }
 
+/** Chỉ 3 ô cần nhập: dòng chữ xanh ở giữa (nhà máy / khách hàng, hạng mục) và ngày ký. Phần còn lại luôn theo mặc định. */
 function HeaderForm(props: { header: OrgChartHeader; onChange: (patch: Partial<OrgChartHeader>) => void }) {
   const { header, onChange } = props;
-  const text = (key: keyof OrgChartHeader, label: string, extra: { placeholder?: string; area?: boolean; type?: string } = {}) => (
-    <label className="field">
-      <span>{label}</span>
-      {extra.area
-        ? <textarea rows={2} value={String(header[key])} onChange={(event) => onChange({ [key]: event.target.value })} />
-        : <input type={extra.type ?? "text"} placeholder={extra.placeholder} value={String(header[key])} onChange={(event) => onChange({ [key]: event.target.value })} />}
-    </label>
-  );
   return (
     <div className="oc-grid oc-header-grid">
-      {text("contractor", "Nhà thầu phụ (chữ đỏ)")}
-      {text("client", "Nhà máy / khách hàng", { placeholder: "QBB ASIA CO.,LTD. FACTORY" })}
-      {text("item", "Hạng mục (ITEM)", { placeholder: "HVAC CONTROL SYSTEM" })}
-      {text("signDate", "Ngày ký", { type: "date" })}
-      {text("companyName", "Tên công ty (khung cam)")}
-      {text("companyPhone", "Điện thoại công ty")}
-      {text("companyAddress", "Địa chỉ", { area: true })}
-      {text("signerTitle", "Chức danh người ký")}
-      {text("signerName", "Người ký")}
-      {text("formCode", "Mã biểu mẫu (chân trang)")}
-      {text("emailDomain", "Tên miền email gợi ý")}
-      <label className="field oc-check"><input type="checkbox" checked={header.showLogos} onChange={(event) => onChange({ showLogos: event.target.checked })} /> <span>In logo Taikisha và chứng nhận BSI</span></label>
+      <label className="field"><span>Nhà máy / Khách hàng</span><input placeholder="QBB ASIA CO.,LTD. FACTORY" value={header.client} onChange={(event) => onChange({ client: event.target.value.toUpperCase() })} /></label>
+      <label className="field"><span>Hạng mục (ITEM)</span><input placeholder="HVAC CONTROL SYSTEM" value={header.item} onChange={(event) => onChange({ item: event.target.value.toUpperCase() })} /></label>
+      <label className="field"><span>Ngày ký</span><input type="date" value={header.signDate} onChange={(event) => onChange({ signDate: event.target.value })} /></label>
     </div>
   );
 }
