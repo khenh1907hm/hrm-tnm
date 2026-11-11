@@ -175,3 +175,18 @@ Mỗi mã quy tắc liên kết với tối thiểu một test có tên chứa m
 | PRC-33 | Đề nghị của đơn dự án ký lần lượt Phụ trách → P. Kỹ thuật → P. Vật tư → Lãnh đạo rồi Kế toán chi; trả về thì khoản bị từ chối, lập lại đề nghị mới. Đơn văn phòng giữ sếp duyệt một bước. | Đã chốt | `PRC_33` |
 | PRC-34 | Đơn dự án sau khi Lãnh đạo duyệt: Hành chánh phát hành PO chính thức (số PO-<mã dự án>-001, ký luôn bước Hành chánh), PO chỉ hiệu lực khi NCC ký bản sao gửi lại; chưa có NCC ký nhận thì chưa đề nghị tạm ứng, chưa đặt hàng được. | Đã chốt | `PRC_34` |
 | PRC-35 | Nhận hàng của đơn dự án cần số biên bản giao nhận và xác nhận biên bản đã có chữ ký của cả hai bên (rủi ro chuyển sang bên mua khi có xác nhận bằng văn bản của hai bên). | Đã chốt | `PRC_35` |
+| PRC-40 | Báo cáo giải thích (P-COST-05) theo mã: A = ngân sách gốc, B = đã đặt, C = cần đặt, D = B + C, E = D − A; mỗi mã một dòng; gửi ký cần ít nhất một dòng, diễn giải ≥ 10 ký tự, công việc bảo hành có ngày hoàn thành; dự án phải có ngân sách đã duyệt. | Đã chốt | `PRC_40` |
+| PRC-41 | P-COST-05 ký Phụ trách → P. Kỹ thuật → P. Vật tư → Kế toán (HC-KT) → Lãnh đạo; Lãnh đạo ký thì ngân sách đang dùng của mỗi mã có E > 0 được cộng thêm E (4 khoản ngân sách tính lại), đơn bị chặn vì vượt gửi duyệt lại được. Trả về thì không đổi ngân sách. | Đã chốt | `PRC_41` |
+| PRC-50 | Phiếu yêu cầu vật tư (P-COST-08): mỗi dòng có tên (≥ 2 ký tự), số lượng > 0; gửi ký cần ít nhất một dòng và đơn vị tính; ký Phòng Vật tư, Kho → P. Kỹ thuật → Lãnh đạo. | Đã chốt | `PRC_50` |
+| PRC-52 | Phiếu đã duyệt mới hỏi giá; mỗi báo giá là đơn giá theo từng dòng; bảng so sánh tô giá thấp nhất từng dòng; từ 50 triệu trở lên mà chỉ có một báo giá thì cảnh báo. | Giả định | `PRC_52` |
+| PRC-53 | Chọn một báo giá → đơn đặt hàng nháp, mỗi mã ngân sách một đơn, chỉ các dòng có giá; dòng có giá chưa có mã thì không lên đơn được; báo giá đã dùng không sửa / xóa; phiếu chuyển Đã lên đơn. | Đã chốt | `PRC_53` |
+| PRC-60 | Xác nhận dự án (P-COST-01): mỗi lần sửa hợp đồng là một lần mới; gửi ký cần giá trị xác nhận > 0, tên khách; xác nhận chính thức cần số PO / HĐ của khách hoặc báo giá có ký xác nhận. Ký Phụ trách → P. Kỹ thuật → VT-Kho → Lãnh đạo → Kế toán → Hành chánh; Lãnh đạo ký là duyệt, lần cũ chuyển Đã thay. | Đã chốt | `PRC_60` |
+| PRC-70 | Số tiền bằng chữ trên PO đọc theo tiếng Việt (mươi / mười, lăm, mốt, linh, không trăm, tỷ). | Đã chốt | `PRC_70` |
+| PRC-71 | Xuất P-COST-03 bằng chính file mẫu: mỗi mã vào đúng dòng của mẫu, xóa số mẫu, giữ công thức (tính lại khi mở), ô ký ghi người ký và ngày ký trên web. | Đã chốt | `PRC_71` |
+| PRC-72 | Xuất P-CC-07: ngày mục tiêu và người ký 6 bộ phận, giá trị bằng chữ, phần xác nhận đặt hàng A–E, kèm sheet danh mục hàng. | Đã chốt | `PRC_72` |
+| PRC-73 | Xuất P-CC-08: số PO, ngày phát hành, giữ logo công ty, kèm danh mục hàng và điều khoản PO. | Đã chốt | `PRC_73` |
+| PRC-74 | Xuất P-CF-03: dòng thanh toán theo PO + hóa đơn (trước thuế, VAT), lịch sử các khoản đã chi của PO. | Đã chốt | `PRC_74` |
+| PRC-75 | Xuất P-COST-05: loại báo cáo, bảng A–E có công thức, diễn giải, hồ sơ kèm Có / Không. | Đã chốt | `PRC_75` |
+| PRC-76 | Xuất P-COST-01: xác nhận / xác nhận tạm, giá trị, điều khoản thanh toán, đánh dấu hồ sơ theo trường hợp. | Đã chốt | `PRC_76` |
+| PRC-77 | P-COST-08 dựng mẫu mới (file .xls gốc có virus macro), kèm sheet bảng so sánh báo giá khi có. | Đã chốt | `PRC_77` |
+| PRC-78 | Nhập ngân sách từ file Excel P-COST-03 cũ (kể cả file đã xuất từ web) vào lần nháp; mã ngoài danh mục bỏ qua; file không có mã nào thì báo lỗi. | Đã chốt | `PRC_78` |

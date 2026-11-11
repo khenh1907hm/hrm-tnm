@@ -16,6 +16,8 @@ import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { BudgetSheetTab } from "./BudgetSheetTab";
+import { ContractTab } from "./ContractTab";
+import { MaterialsTab } from "./MaterialsTab";
 import { DailyReportTab } from "./DailyReportTab";
 import { OverviewTab } from "./OverviewTab";
 import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from "./projectShared";
@@ -66,13 +68,23 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "budget" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["budget", "Ngân sách"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["purchases", "Đặt hàng"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Hợp đồng"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+/** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
+export const TAB_SLUGS: Record<Tab, string> = {
+  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", materials: "yeu-cau-vat-tu", purchases: "dat-hang", members: "so-do", daily: "bao-cao-ngay",
+  timesheets: "cham-cong", checks: "cham-cong-gps", costs: "chi-phi", reports: "bao-cao",
+};
+const tabFromUrl = (): Tab => {
+  if (typeof window === "undefined") return "overview";
+  const slug = new URLSearchParams(window.location.search).get("muc");
+  return (Object.entries(TAB_SLUGS).find(([, value]) => value === slug)?.[0] as Tab | undefined) ?? "overview";
+};
 
 export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employees: EmployeeSource; project: Project; setNotice: Notify; onBack: () => void; onEdit: () => void; onChanged: () => void; children?: ReactNode }) {
   const { store, project, actor, setNotice } = props;
   const [data, setData] = useState<ProjectData | null>(null);
-  const [tab, setTab] = useState<Tab>("overview");
+  const [tab, setTab] = useState<Tab>(tabFromUrl);
 
   const reload = useCallback(async () => {
     try { setData(await fetchProjectData(store, project)); } catch (error) { setNotice(errorMessage(error), "error"); }
@@ -85,7 +97,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   }, [store, project, setNotice]);
 
   const viewer = useMemo(() => data ? viewerFor(actor, data.myEmployeeId, project, data.members) : null, [actor, data, project]);
-  const visibleTabs = TABS.filter(([key]) => ((key !== "costs" && key !== "budget") || viewer?.canSeeMoney) && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
+  const visibleTabs = TABS.filter(([key]) => ((key !== "costs" && key !== "budget" && key !== "contract") || viewer?.canSeeMoney) && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
   return (
@@ -113,6 +125,8 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
         if (tab === "overview") return <OverviewTab {...tabProps} />;
         if (tab === "budget") return <BudgetSheetTab {...tabProps} />;
+        if (tab === "contract") return <ContractTab {...tabProps} />;
+        if (tab === "materials") return <MaterialsTab {...tabProps} />;
         if (tab === "members") return <OrgChartTab {...tabProps} />;
         if (tab === "daily") return <DailyReportTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;

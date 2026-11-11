@@ -142,7 +142,7 @@ export function paymentSummary(order: Pick<PurchaseOrder, "totalEstimate" | "tot
 }
 
 export const EVENT_LABELS: Record<string, string> = {
-  submit: "Lập đơn, gửi duyệt", approve: "Duyệt đơn", reject: "Trả về / từ chối đơn",
+  create: "Lập đơn từ phiếu yêu cầu vật tư", submit: "Lập đơn, gửi duyệt", approve: "Duyệt đơn", reject: "Trả về / từ chối đơn",
   issue_po: "Hành chánh phát hành PO", supplier_accept: "NCC ký xác nhận PO",
   "payment_sign:pic": "Phụ trách ký đề nghị thanh toán", "payment_sign:technical": "P. Kỹ thuật ký đề nghị thanh toán", "payment_sign:material": "P. Vật tư ký đề nghị thanh toán",
   "sign:pic": "Phụ trách ký", "sign:technical": "P. Kỹ thuật ký", "sign:material": "P. Vật tư ký", "sign:accounting": "Kế toán ký", "sign:leader": "Lãnh đạo ký", "sign:admin_office": "Hành chánh ký nhận", order: "Đặt hàng", track: "Cập nhật theo dõi",

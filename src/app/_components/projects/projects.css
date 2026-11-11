@@ -99,3 +99,25 @@
 .bs-table td:nth-child(2) { min-width: 200px; }
 .bs-group td { background: var(--table-head, var(--soft)); font-weight: 700; }
 .bs-sub td { font-weight: 600; border-top: 1px solid var(--line); }
+
+/* Biểu mẫu mua hàng: xuất Excel theo mẫu, báo cáo giải thích, yêu cầu vật tư, xác nhận dự án */
+.form-export { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.po-forms { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line, #e2e8f0); }
+.po-form-item { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.bs-head .field.wide { grid-column: span 2; }
+.exp-blocked { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft, #fff7ed); margin: 8px 0; }
+.exp-form, .mr-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line, #e2e8f0); border-radius: 10px; margin: 10px 0; }
+.exp-attach { display: flex; flex-wrap: wrap; gap: 6px 18px; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; padding: 8px 12px; }
+.exp-attach label { display: inline-flex; gap: 6px; align-items: center; }
+.exp-open { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.exp-text { white-space: pre-wrap; margin: 0; }
+.ct-sub { font-size: 15px; margin: 14px 0 0; }
+.mr-items { display: flex; flex-direction: column; gap: 10px; }
+.mr-item { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0 12px; align-items: end; border: 1px solid var(--line, #e2e8f0); border-radius: 8px; padding: 8px 12px 12px; }
+.mr-item .field.wide { grid-column: span 2; }
+.mr-item legend { font-weight: 600; padding: 0 4px; }
+.mr-compare td.mr-best { background: #dcfce7; }
+@media (max-width: 640px) {
+  .bs-head .field.wide, .mr-item .field.wide { grid-column: auto; }
+  .mr-item { grid-template-columns: 1fr 1fr; }
+}

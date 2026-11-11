@@ -6,14 +6,19 @@ import type { PurchaseApprover, PurchaseEvent, PurchaseOrder, PurchasePayment, P
 import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type DepartmentMembers } from "../../modules/purchases/approval";
 import { activeSheet, budgetNumber, categoryAmounts, DEFAULT_COST_CODES, sheetIssue, type BudgetSheet } from "../../modules/purchases/budget";
 import { BUDGET_CATEGORIES } from "../../modules/projects/types";
+import { budgetIncrements, explanatoryIssue, explanatoryNumber, type ExplanatoryReport } from "../../modules/purchases/explanatory";
+import { materialIssue, materialNumber, ordersFromQuote, type MaterialQuote, type MaterialRequest } from "../../modules/purchases/materials";
+import { contractIssue, noContractAttachments, type ProjectContract } from "../../modules/purchases/contract";
 
 type Data = {
   orders: PurchaseOrder[]; payments: PurchasePayment[]; events: PurchaseEvent[]; approvers: PurchaseApprover[]; seq: number;
   sheets: BudgetSheet[]; steps: ApprovalStep[]; departments: DepartmentMembers; names: Record<string, string>;
+  explanatory: ExplanatoryReport[]; materials: MaterialRequest[]; quotes: MaterialQuote[]; contracts: ProjectContract[];
 };
 /** Demo: mỗi bộ phận có một người mẫu để thấy đủ chuỗi ký; người dùng demo là Admin nên ký thay được mọi bước. */
 const empty = (): Data => ({
   orders: [], payments: [], events: [], approvers: [{ employeeId: "demo-boss", name: "Nguyễn Gia Luân", hasAccount: true }], seq: 0, sheets: [], steps: [],
+  explanatory: [], materials: [], quotes: [], contracts: [],
   departments: { leader: ["demo-boss"], technical: ["demo-kt"], material: ["demo-vt"], accounting: ["demo-ke"], admin_office: ["demo-hc"] },
   names: { "demo-boss": "Nguyễn Gia Luân", "demo-kt": "Trưởng P. Kỹ thuật (mẫu)", "demo-vt": "Trưởng P. Vật tư (mẫu)", "demo-ke": "Kế toán (mẫu)", "demo-hc": "Hành chánh (mẫu)" },
 });
@@ -66,6 +71,27 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const amounts = categoryAmounts(sheet.lines);
       const current = await options.projects.getBudgets(sheet.projectId).catch(() => null) ?? [];
       await options.projects.saveBudgets(sheet.projectId, BUDGET_CATEGORIES.map((category) => ({ ...(current.find((item) => item.category === category) ?? { warnPct: 80, plannedHours: null }), category, amount: amounts[category] })), `Duyệt ngân sách theo mã ${sheet.number}`);
+    }
+  };
+
+  const projectCode = async (projectId: string) => (await options.projects?.listProjects().catch(() => []))?.find((project) => project.id === projectId)?.code ?? "DA";
+  const reportOf = (id: string) => data.explanatory.find((item) => item.id === id) ?? fail("EXP_NOT_FOUND");
+  const requestOf = (id: string) => data.materials.find((item) => item.id === id) ?? fail("MR_NOT_FOUND");
+  const contractOf = (id: string) => data.contracts.find((item) => item.id === id) ?? fail("CONTRACT_NOT_FOUND");
+  const editableStatus = (status: string) => status === "draft" || status === "rejected";
+  /** PRC-41: Lãnh đạo duyệt P-COST-05 → cộng E vào mã của ngân sách đang dùng, tính lại 4 khoản. */
+  const applyExplanatory = async (report: ExplanatoryReport) => {
+    const sheet = activeSheet(projectSheets(report.projectId)) ?? fail("PO_NO_BUDGET");
+    for (const { code, amount } of budgetIncrements(report.lines)) {
+      const line = sheet.lines.find((item) => item.code === code);
+      if (line) line.budget += amount;
+      else sheet.lines.push({ code, nett: 0, budget: amount, supplier: "", contingency: 0, remark: `Tăng theo ${report.number}` });
+    }
+    sheet.lines.sort((a, b) => a.code.localeCompare(b.code));
+    if (options.projects) {
+      const amounts = categoryAmounts(sheet.lines);
+      const current = await options.projects.getBudgets(sheet.projectId).catch(() => null) ?? [];
+      await options.projects.saveBudgets(sheet.projectId, BUDGET_CATEGORIES.map((category) => ({ ...(current.find((item) => item.category === category) ?? { warnPct: 80, plannedHours: null }), category, amount: amounts[category] })), `Duyệt báo cáo giải thích ${report.number}`);
     }
   };
 
@@ -265,6 +291,25 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
           log(order.id, "approve", note);
         } else if (approve) log(order.id, `sign:${step.role}`, note);
         else { Object.assign(order, { status: "rejected", decisionNote: note.trim() }); log(order.id, "reject", note); }
+      } else if (step.docType === "explanatory") {
+        const report = reportOf(step.docId);
+        if (report.status !== "submitted") fail("EXP_BAD_STATUS");
+        if (!approve) report.status = "rejected";
+        else if (step.role === "leader") { await applyExplanatory(report); Object.assign(report, { status: "approved", approvedAt: now() }); }
+      } else if (step.docType === "material") {
+        const request = requestOf(step.docId);
+        if (request.status !== "submitted") fail("MR_BAD_STATUS");
+        if (!approve) request.status = "rejected";
+        else if (step.role === "leader") Object.assign(request, { status: "approved", approvedAt: now() });
+      } else if (step.docType === "contract") {
+        // Kế toán, Hành chánh ký sau Lãnh đạo (lên số dự án, lưu hồ sơ) khi xác nhận đã được duyệt
+        const contract = contractOf(step.docId);
+        if (contract.status !== "submitted" && contract.status !== "approved") fail("CONTRACT_BAD_STATUS");
+        if (!approve) contract.status = "rejected";
+        else if (step.role === "leader") {
+          for (const other of data.contracts) if (other.projectId === contract.projectId && other.status === "approved") other.status = "superseded";
+          Object.assign(contract, { status: "approved", approvedAt: now() });
+        }
       } else {
         const sheet = sheetOf(step.docId);
         if (sheet.status !== "submitted") fail("BUDGET_BAD_STATUS");
@@ -285,7 +330,19 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
         const payment = step.docType === "payment" ? data.payments.find((item) => item.id === step.docId) : undefined;
         const order = step.docType === "purchase" ? data.orders.find((item) => item.id === step.docId) : payment ? data.orders.find((item) => item.id === payment.orderId) : undefined;
         const sheet = step.docType === "budget" ? data.sheets.find((item) => item.id === step.docId) : undefined;
-        const projectId = order?.projectId ?? sheet?.projectId ?? null;
+        const report = step.docType === "explanatory" ? data.explanatory.find((item) => item.id === step.docId) : undefined;
+        const request = step.docType === "material" ? data.materials.find((item) => item.id === step.docId) : undefined;
+        const contract = step.docType === "contract" ? data.contracts.find((item) => item.id === step.docId) : undefined;
+        const projectId = order?.projectId ?? sheet?.projectId ?? report?.projectId ?? request?.projectId ?? contract?.projectId ?? null;
+        if (report || request || contract) {
+          out.push({
+            stepId: step.id, docType: step.docType, docId: step.docId, projectId, projectCode: projects.find((project) => project.id === projectId)?.code ?? "",
+            title: report ? `${report.number} · ${report.explanation.slice(0, 60)}` : request ? `${request.number} · ${request.items.length} dòng vật tư` : `Xác nhận dự án lần ${contract!.revision}`,
+            amount: report ? Math.max(0, report.lines.reduce((sum, line) => sum + line.orderedB + line.neededC - line.budgetA, 0)) : contract ? contract.confirmedValue : 0,
+            role: step.role, targetDate: step.targetDate,
+          });
+          continue;
+        }
         out.push({
           stepId: step.id, docType: step.docType, docId: step.docId, projectId, projectCode: projects.find((project) => project.id === projectId)?.code ?? "",
           title: payment && order ? `${payment.rfpNo} · ${order.code} · ${order.title}` : order ? `${order.code} · ${order.title}` : `Ngân sách ${sheet?.number ?? ""}`,
@@ -297,6 +354,121 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
     },
     async departments() { return DEPARTMENTS.flatMap((department) => data.departments[department].map((employeeId) => ({ department, employeeId, name: data.names[employeeId] ?? employeeId }))); },
     async setDepartments(members) { data.departments = clone(members); return done(); },
+    async listExplanatory(projectId) { return clone(data.explanatory.filter((item) => item.projectId === projectId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+    async saveExplanatory(draft) {
+      const issue = explanatoryIssue(draft, false); if (issue) fail(issue);
+      if (draft.id) {
+        const report = reportOf(draft.id); if (!editableStatus(report.status)) fail("EXP_BAD_STATUS");
+        Object.assign(report, { kind: draft.kind, warrantyDoneOn: draft.warrantyDoneOn, explanation: draft.explanation.trim(), attachments: clone(draft.attachments), orderId: draft.orderId, lines: clone(draft.lines) });
+        persist(); return report.id;
+      }
+      const seq = data.explanatory.filter((item) => item.projectId === draft.projectId).length + 1;
+      const report: ExplanatoryReport = {
+        id: newId(), projectId: draft.projectId, number: explanatoryNumber(await projectCode(draft.projectId), seq), kind: draft.kind, warrantyDoneOn: draft.warrantyDoneOn,
+        explanation: draft.explanation.trim(), attachments: clone(draft.attachments), status: "draft", orderId: draft.orderId, createdByName: "Admin demo", createdAt: now(), submittedAt: null, approvedAt: null, lines: clone(draft.lines),
+      };
+      data.explanatory.push(report); persist(); return report.id;
+    },
+    async submitExplanatory(id) {
+      const report = reportOf(id); if (!editableStatus(report.status)) fail("EXP_BAD_STATUS");
+      const issue = explanatoryIssue(report, true); if (issue) fail(issue);
+      if (!activeSheet(projectSheets(report.projectId))) fail("PO_NO_BUDGET");
+      Object.assign(report, { status: "submitted", submittedAt: now() }); startChain("explanatory", id); return done();
+    },
+    async deleteExplanatory(id) {
+      const report = reportOf(id); if (!editableStatus(report.status)) fail("EXP_BAD_STATUS");
+      data.explanatory = data.explanatory.filter((item) => item.id !== id); data.steps = data.steps.filter((step) => !(step.docType === "explanatory" && step.docId === id)); return done();
+    },
+
+    async listMaterialRequests(projectId) { return clone(data.materials.filter((item) => item.projectId === projectId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+    async saveMaterialRequest(draft) {
+      const issue = materialIssue(draft, false); if (issue) fail(issue);
+      const items = draft.items.map((item) => ({ ...item, id: item.id && !item.id.startsWith("tmp-") ? item.id : newId(), name: item.name.trim(), spec: item.spec.trim(), maker: item.maker.trim(), unit: item.unit.trim(), note: item.note.trim() }));
+      if (draft.id) {
+        const request = requestOf(draft.id); if (!editableStatus(request.status)) fail("MR_BAD_STATUS");
+        Object.assign(request, { requestedOn: draft.requestedOn, note: draft.note.trim(), items }); persist(); return request.id;
+      }
+      const seq = data.materials.filter((item) => item.projectId === draft.projectId).length + 1;
+      const request: MaterialRequest = {
+        id: newId(), projectId: draft.projectId, number: materialNumber(await projectCode(draft.projectId), seq), requesterName: "Admin demo", requestedOn: draft.requestedOn,
+        status: "draft", note: draft.note.trim(), items, createdAt: now(), submittedAt: null, approvedAt: null, orderIds: [],
+      };
+      data.materials.push(request); persist(); return request.id;
+    },
+    async submitMaterialRequest(id) {
+      const request = requestOf(id); if (!editableStatus(request.status)) fail("MR_BAD_STATUS");
+      const issue = materialIssue(request, true); if (issue) fail(issue);
+      Object.assign(request, { status: "submitted", submittedAt: now() }); startChain("material", id); return done();
+    },
+    async deleteMaterialRequest(id) {
+      const request = requestOf(id); if (request.status !== "draft") fail("MR_BAD_STATUS");
+      data.materials = data.materials.filter((item) => item.id !== id); data.quotes = data.quotes.filter((quote) => quote.requestId !== id); return done();
+    },
+    async closeMaterialRequest(id, note) {
+      const request = requestOf(id); reason(note); if (!["approved", "ordered"].includes(request.status)) fail("MR_BAD_STATUS");
+      Object.assign(request, { status: "closed", note: [request.note, `Đóng: ${note.trim()}`].filter(Boolean).join(" · ") }); return done();
+    },
+    async setMaterialCodes(id, codes) {
+      const request = requestOf(id); if (request.status === "closed" || request.status === "submitted") fail("MR_BAD_STATUS");
+      const items = request.items.map((item) => item.id in codes ? { ...item, budgetCode: codes[item.id] || null } : item);
+      const issue = materialIssue({ items }, false); if (issue) fail(issue);
+      request.items = items; return done();
+    },
+    async listQuotes(requestId) { return clone(data.quotes.filter((quote) => quote.requestId === requestId)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)); },
+    async saveQuote(draft) {
+      const request = requestOf(draft.requestId); if (!["approved", "ordered"].includes(request.status)) fail("MR_NOT_APPROVED");
+      if (draft.supplier.trim().length < 2) fail("PO_SUPPLIER_REQUIRED");
+      if (Object.values(draft.prices).some((price) => !Number.isFinite(price) || price < 0)) fail("BUDGET_BAD_AMOUNT");
+      const body = { ...clone(draft), supplier: draft.supplier.trim(), supplierContact: draft.supplierContact.trim(), quoteRef: draft.quoteRef.trim(), paymentTerms: draft.paymentTerms.trim(), note: draft.note.trim() };
+      if (draft.id) { const quote = data.quotes.find((item) => item.id === draft.id) ?? fail("MR_QUOTE_NOT_FOUND"); if (quote.selected) fail("MR_QUOTE_USED"); Object.assign(quote, body); persist(); return quote.id; }
+      const quote: MaterialQuote = { ...body, id: newId(), selected: false, createdAt: now() };
+      data.quotes.push(quote); persist(); return quote.id;
+    },
+    async deleteQuote(id) {
+      const quote = data.quotes.find((item) => item.id === id) ?? fail("MR_QUOTE_NOT_FOUND"); if (quote.selected) fail("MR_QUOTE_USED");
+      data.quotes = data.quotes.filter((item) => item.id !== id); return done();
+    },
+    async ordersFromQuote(requestId, quoteId) {
+      const request = requestOf(requestId); if (!["approved", "ordered"].includes(request.status)) fail("MR_NOT_APPROVED");
+      const quote = data.quotes.find((item) => item.id === quoteId && item.requestId === requestId) ?? fail("MR_QUOTE_NOT_FOUND");
+      if (quote.selected) fail("MR_QUOTE_USED");
+      const drafts = ordersFromQuote(request, quote);
+      if (!Array.isArray(drafts)) return fail(drafts.error);
+      const ids: string[] = [];
+      for (const draft of drafts) ids.push((await this.saveDraft(draft)).id);
+      quote.selected = true;
+      Object.assign(request, { status: "ordered", orderIds: [...request.orderIds, ...ids] });
+      persist();
+      return ids;
+    },
+
+    async listContracts(projectId) { return clone(data.contracts.filter((item) => item.projectId === projectId)).sort((a, b) => b.revision - a.revision); },
+    async newContract(projectId) {
+      const list = data.contracts.filter((item) => item.projectId === projectId);
+      if (list.some((item) => ["draft", "submitted", "rejected"].includes(item.status))) fail("CONTRACT_OPEN_EXISTS");
+      const prev = [...list].sort((a, b) => b.revision - a.revision)[0];
+      const project = (await options.projects?.listProjects().catch(() => []))?.find((item) => item.id === projectId);
+      const contract: ProjectContract = prev ? { ...clone(prev), id: newId(), revision: prev.revision + 1, status: "draft", createdAt: now(), submittedAt: null, approvedAt: null, issuedOn: todayVN(clock) } : {
+        id: newId(), projectId, revision: 1, status: "draft", confirmation: "tentative", issuedOn: todayVN(clock), description: project?.name ?? "", quoteNo: "", quoteDate: null, quoteValue: 0, confirmedValue: 0,
+        customerDocNo: "", customerDocDate: null, paymentTerms: "", customerName: "", ownerName: "", startOn: project?.plannedStart ?? null, endOn: project?.plannedEnd ?? null,
+        attachments: noContractAttachments(), note: "", createdAt: now(), submittedAt: null, approvedAt: null,
+      };
+      data.contracts.push(contract); persist(); return contract.id;
+    },
+    async saveContract(id, draft) {
+      const contract = contractOf(id); if (!editableStatus(contract.status)) fail("CONTRACT_BAD_STATUS");
+      const issue = contractIssue(draft, false); if (issue) fail(issue);
+      Object.assign(contract, clone(draft)); return done();
+    },
+    async submitContract(id) {
+      const contract = contractOf(id); if (!editableStatus(contract.status)) fail("CONTRACT_BAD_STATUS");
+      const issue = contractIssue(contract, true); if (issue) fail(issue);
+      Object.assign(contract, { status: "submitted", submittedAt: now() }); startChain("contract", id); return done();
+    },
+    async deleteContract(id) {
+      const contract = contractOf(id); if (!editableStatus(contract.status)) fail("CONTRACT_BAD_STATUS");
+      data.contracts = data.contracts.filter((item) => item.id !== id); data.steps = data.steps.filter((step) => !(step.docType === "contract" && step.docId === id)); return done();
+    },
     async cancel(id, note) {
       const order = orderOf(id); reason(note); if (order.status === "completed" || order.status === "cancelled") fail("PO_BAD_STATUS");
       for (const payment of data.payments) if (payment.orderId === id && (payment.status === "requested" || payment.status === "approved")) Object.assign(payment, { status: "rejected", decisionNote: "Đơn bị hủy" });

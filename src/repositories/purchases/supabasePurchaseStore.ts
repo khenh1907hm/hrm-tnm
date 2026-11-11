@@ -3,6 +3,9 @@ import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseEvent, PurchaseItem, PurchaseOrder, PurchasePayment } from "../../modules/purchases/types";
 import { groupOf, type BudgetSheet, type CostCode } from "../../modules/purchases/budget";
 import type { ApprovalStep, Department } from "../../modules/purchases/approval";
+import type { ExplanatoryReport } from "../../modules/purchases/explanatory";
+import type { MaterialQuote, MaterialRequest } from "../../modules/purchases/materials";
+import type { ProjectContract } from "../../modules/purchases/contract";
 
 type Row = Record<string, unknown>;
 const num = (value: unknown) => value === null || value === undefined ? 0 : Number(value);
@@ -37,6 +40,34 @@ const sheetFromRow = (row: Row): BudgetSheet => ({
 const paymentFromRow = (row: Row): PurchasePayment => ({ id: str(row.id), orderId: str(row.order_id), kind: row.kind as PurchasePayment["kind"], amount: num(row.amount), payee: str(row.payee), note: str(row.note), status: row.status as PurchasePayment["status"], requestedAt: str(row.requested_at), approvedAt: strOrNull(row.approved_at), paidAt: strOrNull(row.paid_at), paidMethod: str(row.paid_method), decisionNote: str(row.decision_note),
   rfpNo: str(row.rfp_no), invoiceNo: str(row.invoice_no), invoiceDate: strOrNull(row.invoice_date), vatAmount: num(row.vat_amount), usesChain: Boolean(row.uses_chain) });
 const ORDER_COLUMNS = "*, purchase_items(*)";
+const bool = (value: unknown) => value === true || value === "true";
+const reportFromRow = (row: Row): ExplanatoryReport => {
+  const attachments = (row.attachments ?? {}) as Record<string, unknown>;
+  return {
+    id: str(row.id), projectId: str(row.project_id), number: str(row.number), kind: row.kind as ExplanatoryReport["kind"], warrantyDoneOn: strOrNull(row.warranty_done_on), explanation: str(row.explanation),
+    attachments: { customerRequest: bool(attachments.customerRequest), overQuote: bool(attachments.overQuote), incident: bool(attachments.incident), drawing: bool(attachments.drawing) },
+    status: row.status as ExplanatoryReport["status"], orderId: strOrNull(row.order_id), createdByName: str(row.created_by_name), createdAt: str(row.created_at), submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at),
+    lines: ((row.explanatory_report_lines ?? []) as Row[]).map((line) => ({ code: str(line.code), budgetA: num(line.budget_a), orderedB: num(line.ordered_b), neededC: num(line.needed_c) })).sort((a, b) => a.code.localeCompare(b.code)),
+  };
+};
+const requestFromRow = (row: Row): MaterialRequest => ({
+  id: str(row.id), projectId: str(row.project_id), number: str(row.number), requesterName: str(row.requester_name), requestedOn: str(row.requested_on), status: row.status as MaterialRequest["status"], note: str(row.note),
+  createdAt: str(row.created_at), submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at),
+  items: ((row.material_request_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map((item) => ({
+    id: str(item.id), name: str(item.name), spec: str(item.spec), maker: str(item.maker), unit: str(item.unit), quantity: num(item.quantity), neededOn: strOrNull(item.needed_on), note: str(item.note), budgetCode: strOrNull(item.budget_code),
+  })),
+  orderIds: ((row.purchase_orders ?? []) as Row[]).map((order) => str(order.id)),
+});
+const contractFromRow = (row: Row): ProjectContract => {
+  const attachments = (row.attachments ?? {}) as Record<string, unknown>;
+  return {
+    id: str(row.id), projectId: str(row.project_id), revision: num(row.revision), status: row.status as ProjectContract["status"], confirmation: row.confirmation as ProjectContract["confirmation"],
+    issuedOn: str(row.issued_on), description: str(row.description), quoteNo: str(row.quote_no), quoteDate: strOrNull(row.quote_date), quoteValue: num(row.quote_value), confirmedValue: num(row.confirmed_value),
+    customerDocNo: str(row.customer_doc_no), customerDocDate: strOrNull(row.customer_doc_date), paymentTerms: str(row.payment_terms), customerName: str(row.customer_name), ownerName: str(row.owner_name),
+    startOn: strOrNull(row.start_on), endOn: strOrNull(row.end_on), note: str(row.note), createdAt: str(row.created_at), submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at),
+    attachments: { signedQuoteOrPo: bool(attachments.signedQuoteOrPo), stampedQuote: bool(attachments.stampedQuote), customerInstruction: bool(attachments.customerInstruction), masterSchedule: bool(attachments.masterSchedule), drawings: bool(attachments.drawings) },
+  };
+};
 
 /** Store đặt hàng chế độ thật: đọc qua RLS, mọi bước chuyển trạng thái gọi hàm purchase_* ở máy chủ. */
 export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseStore {
@@ -150,5 +181,60 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
       return (((await rpc("procurement_departments", {})) ?? []) as Row[]).map((row) => ({ department: row.department as Department, employeeId: str(row.employee_id), name: str(row.name) }));
     },
     async setDepartments(members) { await check(client.from("procurement_settings").update({ departments: members, updated_at: new Date().toISOString() }).eq("id", 1)); },
+
+    async listExplanatory(projectId) {
+      const { data, error } = await client.from("explanatory_reports").select("*, explanatory_report_lines(*)").eq("project_id", projectId).order("created_at", { ascending: false });
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map(reportFromRow);
+    },
+    async saveExplanatory(draft) {
+      return str(await rpc("explanatory_save", { p_id: draft.id ?? null, p_project: draft.projectId, p_data: { kind: draft.kind, warrantyDoneOn: draft.warrantyDoneOn ?? "", explanation: draft.explanation, attachments: draft.attachments, orderId: draft.orderId ?? "", lines: draft.lines } }));
+    },
+    async submitExplanatory(id) { await rpc("explanatory_submit", { p_id: id }); },
+    async deleteExplanatory(id) { await rpc("explanatory_delete", { p_id: id }); },
+
+    async listMaterialRequests(projectId) {
+      const { data, error } = await client.from("material_requests").select("*, material_request_items(*), purchase_orders(id)").eq("project_id", projectId).order("created_at", { ascending: false });
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map(requestFromRow);
+    },
+    async saveMaterialRequest(draft) {
+      return str(await rpc("material_request_save", { p_id: draft.id ?? null, p_project: draft.projectId, p_data: {
+        requestedOn: draft.requestedOn, note: draft.note,
+        items: draft.items.map((item) => ({ id: /^[0-9a-f-]{36}$/i.test(item.id) ? item.id : "", name: item.name, spec: item.spec, maker: item.maker, unit: item.unit, quantity: item.quantity, neededOn: item.neededOn ?? "", note: item.note, budgetCode: item.budgetCode ?? "" })),
+      } }));
+    },
+    async submitMaterialRequest(id) { await rpc("material_request_submit", { p_id: id }); },
+    async deleteMaterialRequest(id) { await rpc("material_request_delete", { p_id: id }); },
+    async closeMaterialRequest(id, note) { await rpc("material_request_close", { p_id: id, p_note: note }); },
+    async setMaterialCodes(id, codes) { await rpc("material_request_codes", { p_id: id, p_codes: Object.fromEntries(Object.entries(codes).map(([key, value]) => [key, value ?? ""])) }); },
+    async listQuotes(requestId) {
+      const { data, error } = await client.from("material_quotes").select("*").eq("request_id", requestId).order("created_at");
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map((row): MaterialQuote => ({
+        id: str(row.id), requestId: str(row.request_id), supplier: str(row.supplier), supplierContact: str(row.supplier_contact), quoteRef: str(row.quote_ref), quoteDate: strOrNull(row.quote_date),
+        deliveryDays: row.delivery_days === null || row.delivery_days === undefined ? null : num(row.delivery_days), paymentTerms: str(row.payment_terms), note: str(row.note),
+        prices: Object.fromEntries(Object.entries((row.prices ?? {}) as Record<string, unknown>).map(([key, value]) => [key, num(value)])), selected: Boolean(row.selected), createdAt: str(row.created_at),
+      }));
+    },
+    async saveQuote(draft) {
+      return str(await rpc("material_quote_save", { p_id: draft.id ?? null, p_request: draft.requestId, p_data: {
+        supplier: draft.supplier, supplierContact: draft.supplierContact, quoteRef: draft.quoteRef, quoteDate: draft.quoteDate ?? "", deliveryDays: draft.deliveryDays ?? "", paymentTerms: draft.paymentTerms, note: draft.note, prices: draft.prices,
+      } }));
+    },
+    async deleteQuote(id) { await rpc("material_quote_delete", { p_id: id }); },
+    async ordersFromQuote(requestId, quoteId) { return (((await rpc("material_quote_to_orders", { p_request: requestId, p_quote: quoteId })) ?? []) as unknown[]).map(str); },
+
+    async listContracts(projectId) {
+      const { data, error } = await client.from("project_contracts").select("*").eq("project_id", projectId).order("revision", { ascending: false });
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map(contractFromRow);
+    },
+    async newContract(projectId) { return str(await rpc("contract_new", { p_project: projectId })); },
+    async saveContract(id, draft) {
+      await rpc("contract_save", { p_id: id, p_data: { ...draft, quoteDate: draft.quoteDate ?? "", customerDocDate: draft.customerDocDate ?? "", startOn: draft.startOn ?? "", endOn: draft.endOn ?? "" } });
+    },
+    async submitContract(id) { await rpc("contract_submit", { p_id: id }); },
+    async deleteContract(id) { await rpc("contract_delete", { p_id: id }); },
   };
 }

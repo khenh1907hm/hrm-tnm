@@ -44,7 +44,9 @@ yarn-error.log*
 next-env.d.ts
 
 # Mẫu hồ sơ khách hàng (có logo, chữ ký, con dấu) — không đưa lên git
-/public/templates/
+/public/templates/*
+# Biểu mẫu quy trình mua hàng (P-COST, P-CC, P-CF) của công ty: cần có trên máy chủ để xuất Excel
+!/public/templates/quy-trinh/
 
 # Ghi chú triển khai chỉ lưu trên máy
 *.local.md

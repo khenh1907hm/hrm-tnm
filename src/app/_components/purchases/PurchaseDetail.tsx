@@ -14,6 +14,7 @@ import { errorMessage, moneyInput, parseMoney, projectText } from "../projects/p
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { ApprovalChain } from "./ApprovalChain";
 import { BudgetCheckBox } from "./BudgetCheckBox";
+import { FormExportButtons } from "./FormExport";
 import { budgetCheck } from "../../../modules/purchases/budget";
 
 export const STATUS_TONE: Record<PurchaseOrder["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", ordered: "warn", received: "ok", completed: "ok", cancelled: "" };
@@ -53,6 +54,15 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const actions = allowedActions(order, me, payments);
   const steps = stepStates(order, payments);
   const summary = paymentSummary(order, payments);
+  /** Dữ liệu chung cho P-CC-07 / P-CC-08 / P-CF-03: dự án, số ngân sách đang dùng, chuỗi ký. */
+  const orderFormInput = async () => {
+    const check = order.projectId && order.budgetCode ? await store.checkBudget(order.projectId, order.budgetCode, order.id).catch(() => null) : null;
+    return {
+      order, budgetNumber: check?.sheetNumber ?? "", hasComparison: /YCVT-/.test(order.note),
+      project: { code: project?.code ?? order.department ?? "", name: project?.name ?? (order.kind === "office" ? "Văn phòng" : ""), site: project?.site ?? "" },
+      steps: order.usesChain && order.status !== "draft" ? await store.listSteps("purchase", order.id) : [],
+    };
+  };
   const requestKinds = ([["advance", "requestAdvance"], ["prepayment", "requestPrepayment"], ["final", "requestFinal"]] as const).filter(([, action]) => actions.has(action)).map(([kind]) => kind);
 
   return (
@@ -95,6 +105,11 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note, record) => act(() => store.receive(order.id, lines, note, record), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
         {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
         {order.poNo && <p className="po-terms-line">PO chính thức: <b>{order.poNo}</b> · phát hành {order.poIssuedAt ? dateTime(order.poIssuedAt) : "—"} · {order.supplierAcceptedAt ? <span className="pill ok">NCC đã ký nhận {dateTime(order.supplierAcceptedAt)}</span> : <span className="pill warn">Chờ NCC ký nhận</span>}{order.supplierAcceptNote ? ` · ${order.supplierAcceptNote}` : ""}{order.receiptRecordNo ? ` · Biên bản giao nhận ${order.receiptRecordNo}` : ""}</p>}
+        <div className="po-forms">
+          <span className="muted">Biểu mẫu:</span>
+          <span className="po-form-item">Đơn nháp <FormExportButtons code="P-CC-07" fileBase={`${order.code} ${order.title}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseDraft(template!, await orderFormInput())} /></span>
+          {order.poNo && <span className="po-form-item">PO gửi NCC ký <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} /></span>}
+        </div>
       </section>
 
       {order.usesChain && order.budgetCode && order.budgetA !== null && order.budgetB !== null && (
@@ -154,6 +169,11 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
                       <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối khoản chi:"); if (why) void act(() => store.decidePayment(payment.id, false, why), "Đã từ chối khoản chi."); }}>Từ chối</button>
                     </>}
                     {payment.status === "approved" && props.roles.isPayer && <button type="button" className="button primary" onClick={() => { const method = window.prompt("Hình thức chi (vd: Chuyển khoản Vietcombank, Tiền mặt):", "Chuyển khoản"); if (method !== null) void act(() => store.pay(payment.id, method, ""), "Đã thực hiện chi."); }}>Thực hiện chi</button>}
+                    {payment.status !== "rejected" && <FormExportButtons compact code="P-CF-03" fileBase={`${payment.rfpNo || order.code} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => {
+                      const base = await orderFormInput();
+                      const history = payments.filter((item) => item.id !== payment.id && item.status === "paid" && (item.paidAt ?? "") <= (payment.paidAt ?? "9999")).sort((a, b) => (a.paidAt ?? "").localeCompare(b.paidAt ?? ""));
+                      return forms.fillPaymentRequest(template!, { payment, order, project: base.project, budgetNumber: base.budgetNumber, history, steps: payment.usesChain ? await store.listSteps("payment", payment.id) : [] });
+                    }} />}
                   </td>
                 </tr>
               ))}</tbody>

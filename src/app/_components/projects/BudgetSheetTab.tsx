@@ -1,6 +1,9 @@
 "use client";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { FilePlus2, Save, Send, Trash2 } from "lucide-react";
+import { FilePlus2, FileUp, Save, Send, Trash2 } from "lucide-react";
+import type { ProjectContract } from "../../../modules/purchases/contract";
+import { FormExportButtons } from "../purchases/FormExport";
+import { ExplanatoryPanel } from "./ExplanatoryPanel";
 import { formatVnd } from "../../../modules/projects/cost";
 import {
   BUDGET_SHEET_STATUS_LABELS, CONFIRMATION_LABELS, COST_GROUP_LABELS, COST_GROUPS, sheetIssue, sheetTotals,
@@ -28,10 +31,11 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const projectId = data.project.id;
-  const fetchAll = useCallback(() => Promise.all([store.listBudgetSheets(projectId), store.costCodes()]), [store, projectId]);
+  const [contract, setContract] = useState<ProjectContract | null>(null);
+  const fetchAll = useCallback(() => Promise.all([store.listBudgetSheets(projectId), store.costCodes(), store.listContracts(projectId).catch(() => [])]), [store, projectId]);
   useEffect(() => {
     let active = true;
-    void fetchAll().then(([list, catalog]) => { if (active) { setSheets(list); setCodes(catalog); } }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setSheets([]); } });
+    void fetchAll().then(([list, catalog, contracts]) => { if (active) { setSheets(list); setCodes(catalog); setContract(contracts.find((item) => item.status === "approved") ?? null); } }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setSheets([]); } });
     return () => { active = false; };
   }, [fetchAll, setNotice, attempt]);
 
@@ -79,8 +83,34 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
             {editable && <button type="button" className="button" disabled={busy || !dirty} onClick={() => void save()}><Save className="ico" size={16} aria-hidden="true" /> Lưu</button>}
             {editable && <button type="button" className="button primary" disabled={busy} onClick={() => void save(() => store.submitBudgetSheet(working!.id))}><Send className="ico" size={16} aria-hidden="true" /> Lưu và gửi ký</button>}
             {editable && <button type="button" className="button danger" disabled={busy} onClick={() => { if (window.confirm("Xóa lần ngân sách nháp này?")) void run(async () => { await store.deleteBudgetSheet(working!.id); setSelected(null); }, "Đã xóa nháp."); }}><Trash2 className="ico" size={16} aria-hidden="true" /> Xóa nháp</button>}
+            {editable && (
+              <label className="button" title="Đọc file ngân sách Excel cũ theo mẫu P-COST-03 vào lần nháp này (chưa lưu, xem lại rồi bấm Lưu)">
+                <FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel
+                <input type="file" accept=".xlsx" hidden onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file || !working) return;
+                  void (async () => {
+                    try {
+                      const { parseBudgetWorkbook } = await import("../../../modules/procurement-forms/forms");
+                      const imported = await parseBudgetWorkbook(await file.arrayBuffer(), codes);
+                      setDraft({ id: working.id, header: { ...working.header, quoteNo: imported.quoteNo || working.header.quoteNo, exchangeRate: imported.exchangeRate, offerPrice: imported.offerPrice || working.header.offerPrice, contractValue: imported.contractValue || working.header.contractValue }, lines: imported.lines });
+                      setNotice(`Đã đọc ${imported.lines.length} mã từ ${file.name}. Xem lại rồi bấm Lưu.`, "success");
+                    } catch (error) { setNotice(errorMessage(error), "error"); }
+                  })();
+                }} />
+              </label>
+            )}
+            {current && working && <FormExportButtons code="P-COST-03" fileBase={current.number} setNotice={setNotice} build={async (forms, template) => forms.fillBudgetSheet(template!, {
+              sheet: { ...current, ...working.header, lines: working.lines }, codes,
+              project: { code: data.project.code, name: data.project.name, site: data.project.site, plannedStart: data.project.plannedStart, plannedEnd: data.project.plannedEnd },
+              steps: current.status === "draft" ? [] : await store.listSteps("budget", current.id),
+            })} />}
           </div>
         </div>
+        {editable && working && contract && contract.confirmedValue !== working.header.contractValue && (
+          <p className="muted">Xác nhận dự án (P-COST-01) lần {contract.revision} đã duyệt: giá trị hợp đồng {formatVnd(contract.confirmedValue)}. <button type="button" className="link-button" onClick={() => setHeader({ contractValue: contract.confirmedValue, quoteNo: working.header.quoteNo || contract.quoteNo, offerPrice: working.header.offerPrice || contract.quoteValue, confirmation: contract.confirmation })}>Lấy theo xác nhận dự án</button></p>
+        )}
         {!sheets.length
           ? <p className="muted">Dự án chưa có ngân sách theo mã. {canEdit ? "Bấm Lập ngân sách để bắt đầu. Đơn đặt hàng của dự án chỉ gửi duyệt được khi đã có ngân sách được Lãnh đạo duyệt." : "PM, CHT hoặc P. Kỹ thuật lập ngân sách."}</p>
           : (
@@ -151,6 +181,7 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
       </section>
       {current && current.status !== "draft" && <ApprovalChain store={store} docType="budget" docId={current.id} refreshKey={attempt} title={`Chuỗi ký ngân sách ${current.number}`} onChanged={() => { refresh(); void reload(); }} setNotice={setNotice} />}
       {current?.status === "rejected" && <p className="warn-text">Ngân sách bị trả về: sửa rồi bấm Lưu và gửi ký lại.</p>}
+      <ExplanatoryPanel store={store} project={data.project} codes={codes} canEdit={canEdit || viewer.isPm} setNotice={setNotice} refreshKey={attempt} onApproved={() => { refresh(); void reload(); }} />
     </div>
   );
 }

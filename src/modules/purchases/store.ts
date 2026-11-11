@@ -1,5 +1,8 @@
 import type { ApprovalDocType, ApprovalStep, Department, DepartmentMembers } from "./approval";
 import type { BudgetLine, BudgetSheet, BudgetSheetHeader, CostCode } from "./budget";
+import type { ContractDraft, ProjectContract } from "./contract";
+import type { ExplanatoryDraft, ExplanatoryReport } from "./explanatory";
+import type { MaterialQuote, MaterialQuoteDraft, MaterialRequest, MaterialRequestDraft } from "./materials";
 import type { PaymentRequestInput, ReceiptRecord, PurchaseApprover, PurchaseDraft, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseRoles, ReceiveLine } from "./types";
 
 /**
@@ -52,9 +55,39 @@ export interface PurchaseStore {
   myApprovals(): Promise<PendingApproval[]>;
   departments(): Promise<{ department: Department; employeeId: string; name: string }[]>;
   setDepartments(members: DepartmentMembers): Promise<void>;
+
+  /* Báo cáo giải thích P-COST-05: Lãnh đạo duyệt thì ngân sách các mã có E > 0 được cộng thêm E. */
+  listExplanatory(projectId: string): Promise<ExplanatoryReport[]>;
+  saveExplanatory(draft: ExplanatoryDraft): Promise<string>;
+  submitExplanatory(id: string): Promise<void>;
+  deleteExplanatory(id: string): Promise<void>;
+
+  /* Yêu cầu vật tư P-COST-08, hỏi giá, bảng so sánh, lên đơn nháp. */
+  listMaterialRequests(projectId: string): Promise<MaterialRequest[]>;
+  saveMaterialRequest(draft: MaterialRequestDraft): Promise<string>;
+  submitMaterialRequest(id: string): Promise<void>;
+  deleteMaterialRequest(id: string): Promise<void>;
+  closeMaterialRequest(id: string, note: string): Promise<void>;
+  /** Mã ngân sách từng dòng (P. Vật tư điền khi hỏi giá, phiếu đã duyệt). */
+  setMaterialCodes(id: string, codes: Record<string, string | null>): Promise<void>;
+  listQuotes(requestId: string): Promise<MaterialQuote[]>;
+  saveQuote(draft: MaterialQuoteDraft): Promise<string>;
+  deleteQuote(id: string): Promise<void>;
+  /** Chọn báo giá và lập đơn đặt hàng nháp (mỗi mã ngân sách một đơn); trả về id các đơn. */
+  ordersFromQuote(requestId: string, quoteId: string): Promise<string[]>;
+
+  /* Xác nhận dự án P-COST-01 (mỗi lần sửa hợp đồng là một lần mới). */
+  listContracts(projectId: string): Promise<ProjectContract[]>;
+  newContract(projectId: string): Promise<string>;
+  saveContract(id: string, draft: ContractDraft): Promise<void>;
+  submitContract(id: string): Promise<void>;
+  deleteContract(id: string): Promise<void>;
 }
 
 /** Một phiếu đang chờ người đăng nhập ký. */
 export type PendingApproval = { stepId: string; docType: ApprovalDocType; docId: string; projectId: string | null; projectCode: string; title: string; amount: number; role: ApprovalStep["role"]; targetDate: string;
   /** Đề nghị thanh toán: đơn hàng chứa khoản đó (để mở). */
   orderId?: string };
+
+/** Mục của dự án mở được theo đường dẫn ?muc=… (tab). */
+export const DOC_PROJECT_TAB: Partial<Record<ApprovalDocType, string>> = { budget: "ngan-sach", explanatory: "ngan-sach", material: "yeu-cau-vat-tu", contract: "hop-dong" };

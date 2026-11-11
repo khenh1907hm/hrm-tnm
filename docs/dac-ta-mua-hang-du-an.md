@@ -7,7 +7,7 @@
 | Phiên bản tài liệu | 0.1, ngày 11/11/2026 |
 | Nguồn | Thư mục `Document_TNM/Quy trình`: tổng quan quy trình (00), P-COST-01, P-COST-03, P-COST-08, P-CC-07, P-CC-08 (kèm điều khoản PO), P-CF-03, P-COST-05 |
 | Mục đích | Làm lại phần mua hàng dự án cho đúng quy trình công ty, thay luồng "lập đơn → sếp duyệt → tạm ứng" hiện tại |
-| Trạng thái | Bản nháp sau khi đọc biểu mẫu, chưa có code |
+| Trạng thái | Đã làm giai đoạn A, B, C (migration 20261117 → 20261121); xuất Excel / PDF đúng mẫu công ty (public/templates/quy-trinh), nhập ngân sách từ file P-COST-03 cũ |
 
 Cách đọc giống [đặc tả quản lý dự án](dac-ta-quan-ly-du-an.md):
 

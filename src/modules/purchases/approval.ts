@@ -8,13 +8,23 @@ export const DEPARTMENTS: readonly Department[] = ["leader", "technical", "mater
 export const ROLE_LABELS: Record<ApprovalRole, string> = {
   pic: "Phụ trách", technical: "P. Kỹ thuật", material: "P. Vật tư", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
 };
-export type ApprovalDocType = "budget" | "purchase" | "payment";
+export type ApprovalDocType = "budget" | "purchase" | "payment" | "explanatory" | "material" | "contract";
+export const DOC_TYPE_LABELS: Record<ApprovalDocType, string> = {
+  budget: "Ngân sách (P-COST-03)", purchase: "Đơn đặt hàng (P-CC-07)", payment: "Đề nghị tạm ứng / thanh toán (P-CF-03)",
+  explanatory: "Báo cáo giải thích (P-COST-05)", material: "Yêu cầu vật tư (P-COST-08)", contract: "Xác nhận dự án (P-COST-01)",
+};
 /** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 6 người (Lãnh đạo duyệt, Hành chánh nhận để phát hành PO). */
 export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {
   budget: ["pic", "technical", "leader"],
   purchase: ["pic", "technical", "material", "accounting", "leader", "admin_office"],
   /** Đề nghị tạm ứng / thanh toán (P-CF-03): Lãnh đạo ký xong thì Kế toán chi. */
   payment: ["pic", "technical", "material", "leader"],
+  /** P-COST-05: ô ký Phụ trách → P. Kỹ thuật → P. Vật tư → P. HC-KT (Kế toán) → LĐ. */
+  explanatory: ["pic", "technical", "material", "accounting", "leader"],
+  /** P-COST-08: người yêu cầu lập → Phòng Vật tư, Kho → P. Kỹ thuật → Lãnh đạo. */
+  material: ["material", "technical", "leader"],
+  /** P-COST-01: Phụ trách → P. Kỹ thuật → VT-Kho → Lãnh đạo → Kế toán (lên số dự án, kiểm tra HĐ) → Hành chánh. */
+  contract: ["pic", "technical", "material", "leader", "accounting", "admin_office"],
 };
 /**
  * Ngày mục tiêu theo mẫu (ngày làm việc thứ mấy kể từ ngày gửi), không cộng dồn từng bước:
@@ -26,6 +36,9 @@ export const TARGET_DAY: Record<ApprovalDocType, Partial<Record<ApprovalRole, nu
   budget: { pic: 1, technical: 1, leader: 2 },
   purchase: { pic: 1, technical: 1, material: 2, accounting: 3, leader: 3, admin_office: 3 },
   payment: { pic: 1, technical: 1, material: 1, leader: 2 },
+  explanatory: { pic: 1, technical: 1, material: 1, accounting: 2, leader: 2 },
+  material: { material: 1, technical: 1, leader: 1 },
+  contract: { pic: 1, technical: 1, material: 1, leader: 1, accounting: 1, admin_office: 1 },
 };
 
 /** Ngày làm việc thứ n sau ngày gửi. */
