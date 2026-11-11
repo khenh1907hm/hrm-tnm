@@ -1,4 +1,5 @@
 import type { OrgChart } from "./orgChart";
+import type { DailyReport, DailyReportInput, DailyReportSaved } from "./dailyReport";
 import type {
   Holiday, LaborRate, LaborSettings, MemberRate, PeriodLock, Project, ProjectBudget, ProjectExpense, ProjectFinance, ProjectInput, ProjectMember,
   Subcontract, SubcontractPayment, Timesheet, TimesheetCost,
@@ -74,6 +75,11 @@ export interface ProjectStore {
   /** Mẫu chung của công ty (tiêu đề + khối Văn phòng) để sơ đồ mới của mọi dự án dùng lại. */
   getOrgTemplate(): Promise<OrgChart | null>;
   saveOrgTemplate(template: OrgChart): Promise<void>;
+  /** Báo cáo ngày (BC ngày): chỉ dữ liệu, mới nhất trước. */
+  listDailyReports(projectId: string): Promise<DailyReport[]>;
+  /** Lưu (ghi đè theo ngày), trả về lũy kế công / giờ TC để điền mẫu. */
+  saveDailyReport(projectId: string, input: DailyReportInput): Promise<DailyReportSaved>;
+  markDailyReportSent(id: string, error: string): Promise<void>;
   /** Nhân sự đang làm để chọn vào sơ đồ (mã, tên, chức vụ, số điện thoại) cho người không xem được hồ sơ nhân sự. */
   orgChartPeople(query: string, employeeId?: string): Promise<{ id: string; code: string; name: string; position: string; phone: string }[]>;
 

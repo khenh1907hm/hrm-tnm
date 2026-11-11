@@ -16,6 +16,7 @@ import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { BudgetSheetTab } from "./BudgetSheetTab";
+import { DailyReportTab } from "./DailyReportTab";
 import { OverviewTab } from "./OverviewTab";
 import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from "./projectShared";
 import { formatDateVn } from "./ProjectsPage";
@@ -65,8 +66,8 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "budget" | "members" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["budget", "Ngân sách"], ["members", "Sơ đồ & thành viên"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["purchases", "Đặt hàng"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "budget" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["budget", "Ngân sách"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["purchases", "Đặt hàng"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
 
 export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employees: EmployeeSource; project: Project; setNotice: Notify; onBack: () => void; onEdit: () => void; onChanged: () => void; children?: ReactNode }) {
   const { store, project, actor, setNotice } = props;
@@ -84,7 +85,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   }, [store, project, setNotice]);
 
   const viewer = useMemo(() => data ? viewerFor(actor, data.myEmployeeId, project, data.members) : null, [actor, data, project]);
-  const visibleTabs = TABS.filter(([key]) => (key !== "costs" && key !== "budget") || viewer?.canSeeMoney);
+  const visibleTabs = TABS.filter(([key]) => ((key !== "costs" && key !== "budget") || viewer?.canSeeMoney) && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
   return (
@@ -113,6 +114,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "overview") return <OverviewTab {...tabProps} />;
         if (tab === "budget") return <BudgetSheetTab {...tabProps} />;
         if (tab === "members") return <OrgChartTab {...tabProps} />;
+        if (tab === "daily") return <DailyReportTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "costs") return <CostsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;

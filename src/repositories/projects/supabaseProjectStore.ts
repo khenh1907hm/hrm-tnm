@@ -1,4 +1,5 @@
 import { DEFAULT_ORG_HEADER, type OrgChart } from "../../modules/projects/orgChart";
+import type { DailyReport } from "../../modules/projects/dailyReport";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectStore } from "../../modules/projects/store";
 import type { AttendanceCheck, AttendanceContext, GpsFix } from "../../modules/projects/attendance";
@@ -111,6 +112,30 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
       const { data, error } = await client.rpc("org_chart_people", { p_query: query, p_id: employeeId ?? null });
       if (error) raise(error);
       return ((data ?? []) as Row[]).map((row) => ({ id: str(row.id), code: str(row.code), name: str(row.name), position: str(row.position), phone: str(row.phone) }));
+    },
+    async listDailyReports(projectId) {
+      const { data, error } = await client.from("project_daily_reports").select("*").eq("project_id", projectId).order("report_date", { ascending: false }).limit(60);
+      if (error) raise(error);
+      return ((data ?? []) as Row[]).map((row) => ({
+        id: str(row.id), projectId: str(row.project_id), date: str(row.report_date), total: row.total === null ? null : num(row.total), present: row.present === null ? null : num(row.present),
+        absent: row.absent === null ? null : num(row.absent), absentNames: ((row.absent_names ?? []) as string[]).map(String), otCount: num(row.ot_count), otHours: num(row.ot_hours),
+        tasks: Array.isArray(row.tasks) ? row.tasks as DailyReport["tasks"] : [], photoCount: num(row.photo_count), createdByName: str(row.created_by_name),
+        sentAt: row.sent_at ? str(row.sent_at) : null, sentError: str(row.sent_error),
+      }));
+    },
+    async saveDailyReport(projectId, input) {
+      const { data, error } = await client.rpc("daily_report_save", {
+        p_project: projectId, p_date: input.date, p_total: input.total, p_present: input.present, p_absent: input.absent, p_absent_names: input.absentNames,
+        p_ot_count: input.otCount, p_ot_hours: input.otHours, p_tasks: input.tasks, p_photo_count: input.photoCount, p_model: input.model,
+      });
+      if (error) raise(error);
+      const row = ((data ?? []) as Row[])[0];
+      if (!row) throw new Error("DR_NOT_FOUND");
+      return { id: str(row.id), projectCode: str(row.project_code), projectName: str(row.project_name), cumulativeWorkdays: num(row.cumulative_workdays), cumulativeOtHours: num(row.cumulative_ot_hours) };
+    },
+    async markDailyReportSent(id, error) {
+      const { error: problem } = await client.rpc("daily_report_mark_sent", { p_id: id, p_error: error });
+      if (problem) raise(problem);
     },
     async saveOrgTemplate(template) { await run(client.from("org_chart_template").upsert({ id: 1, doc: template })); },
     async saveFinance(projectId, finance) { await run(client.from("project_finance").upsert({ project_id: projectId, capital: finance.capital, note: finance.note })); },

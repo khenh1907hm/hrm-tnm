@@ -1,4 +1,5 @@
 import type { OrgChart } from "../../modules/projects/orgChart";
+import type { DailyReport } from "../../modules/projects/dailyReport";
 import { todayVN, systemClock, type Clock } from "../../lib/clock";
 import { computeTimesheetCosts } from "../../modules/projects/cost";
 import { monthOf } from "../../modules/projects/calendar";
@@ -29,6 +30,7 @@ export type ProjectData = {
   finances: (ProjectFinance & { projectId: string })[];
   orgCharts?: (OrgChart & { projectId: string })[];
   orgTemplate?: OrgChart | null;
+  dailyReports?: DailyReport[];
   checks: AttendanceCheck[];
   requests: AttendanceRequest[];
 };
@@ -88,6 +90,25 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
     async getOrgTemplate() { return data.orgTemplate ? clone(data.orgTemplate) : null; },
     // Demo: chọn người qua nguồn nhân sự của trang (không có hàm máy chủ)
     async orgChartPeople() { return []; },
+    async listDailyReports(projectId) { return clone((data.dailyReports ?? []).filter((item) => item.projectId === projectId)).sort((a, b) => b.date.localeCompare(a.date)); },
+    async saveDailyReport(projectId, input) {
+      const project = data.projects.find((item) => item.id === projectId) ?? fail("PROJECT_NOT_FOUND");
+      if (!input.tasks.length) fail("DR_TASKS_REQUIRED");
+      const existing = (data.dailyReports ?? []).find((item) => item.projectId === projectId && item.date === input.date);
+      const report: DailyReport = {
+        id: existing?.id ?? newId(), projectId, date: input.date, total: input.total, present: input.present, absent: input.absent, absentNames: [...input.absentNames],
+        otCount: input.otCount, otHours: input.otHours, tasks: clone(input.tasks), photoCount: input.photoCount, createdByName: "Admin demo", sentAt: null, sentError: "",
+      };
+      data.dailyReports = [...(data.dailyReports ?? []).filter((item) => item.id !== report.id), report];
+      persist();
+      const upTo = data.dailyReports.filter((item) => item.projectId === projectId && item.date <= input.date);
+      return { id: report.id, projectCode: project.code, projectName: project.name, cumulativeWorkdays: upTo.reduce((sum, item) => sum + (item.present ?? 0), 0), cumulativeOtHours: upTo.reduce((sum, item) => sum + item.otHours, 0) };
+    },
+    async markDailyReportSent(id, error) {
+      const report = (data.dailyReports ?? []).find((item) => item.id === id) ?? fail("DR_NOT_FOUND");
+      Object.assign(report, { sentAt: error.trim() ? null : clock.now(), sentError: error.trim() });
+      persist();
+    },
     async saveOrgTemplate(template) { data.orgTemplate = clone(template); persist(); },
     async saveFinance(projectId, finance) { data.finances = [...data.finances.filter((item) => item.projectId !== projectId), { ...finance, projectId }]; persist(); },
 
