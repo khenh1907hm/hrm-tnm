@@ -5,16 +5,17 @@
 .oc-frame { container-type: inline-size; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
 .oc-sheet { --u: 0.1cqw; position: relative; width: 100%; aspect-ratio: 1000 / 707; background: #fff; color: #111; font-family: Calibri, Arial, sans-serif; overflow: hidden;
   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.oc-logo-left { position: absolute; left: 4.6%; top: 4.5%; width: 12.5%; }
-.oc-logo-right { position: absolute; right: 2.4%; top: 5.4%; width: 15%; }
+.oc-logo-left { position: absolute; left: 4.5%; top: 4.2%; width: 13%; }
+.oc-logo-right { position: absolute; right: 6.7%; top: 4.8%; width: 10.5%; }
 .oc-title { position: absolute; left: 25%; right: 25%; top: 4.2%; display: grid; justify-items: center; text-align: center; gap: calc(var(--u) * 2); }
-.oc-title > span { font-size: calc(var(--u) * 15); font-family: Arial, sans-serif; }
-.oc-contractor { color: #e00000; font-style: italic; font-size: calc(var(--u) * 16); font-family: Arial, sans-serif; }
+.oc-title > span { font-size: calc(var(--u) * 16.5); font-family: Calibri, Arial, sans-serif; }
+.oc-contractor { color: #ff0000; font-style: italic; font-weight: 400; font-size: calc(var(--u) * 16.5); font-family: Calibri, Arial, sans-serif; }
 .oc-client { color: #1f3bd6; font-weight: 700; font-size: calc(var(--u) * 11.5); margin-top: calc(var(--u) * 4); }
 .oc-client + .oc-client { margin-top: calc(var(--u) * 1); }
-.oc-company { position: absolute; left: 4.6%; top: 13.5%; width: 26.6%; height: 28.5%; border: calc(var(--u) * 1.6) solid #f4a460; padding: calc(var(--u) * 6) calc(var(--u) * 7);
+.oc-company { position: absolute; left: 5.6%; top: 15.3%; width: 33%; height: 30%; border: calc(var(--u) * 1.6) solid #f4a460; padding: calc(var(--u) * 6) calc(var(--u) * 7);
   display: flex; flex-direction: column; font-size: calc(var(--u) * 11); line-height: 1.35; box-sizing: border-box; }
-.oc-company > b:first-child { font-size: calc(var(--u) * 13); }
+.oc-company-head { text-decoration: underline; font-size: calc(var(--u) * 12); margin-bottom: calc(var(--u) * 8); }
+.oc-company-name b { font-weight: 700; }
 .oc-address { white-space: pre-line; }
 .oc-sign { margin-top: calc(var(--u) * 12); align-self: flex-end; margin-right: 12%; text-align: center; }
 .oc-signer { margin-top: auto; align-self: flex-end; margin-right: 18%; font-size: calc(var(--u) * 11); }
@@ -26,9 +27,9 @@
   font: inherit; cursor: default; overflow: hidden; color: #fff; }
 .oc-box.editable { cursor: pointer; }
 .oc-box.editable:hover, .oc-box.editable:focus-visible, .oc-box.on { outline: calc(var(--u) * 3) solid #ffb703; outline-offset: calc(var(--u) * 1.5); }
-.oc-box.blue { background: #4f81bd; box-shadow: calc(var(--u) * 3) calc(var(--u) * 3) 0 #9aa9c4; }
+.oc-box.blue { background: #4f81bd; }
 .oc-box.green { background: #4f6228; border: calc(var(--u) * 4) solid #4f81bd; box-shadow: calc(var(--u) * 3) calc(var(--u) * 3) 0 #9aa9c4; }
-.oc-face { height: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: #ffff00; flex: none; }
+.oc-face { height: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: #fff; flex: none; box-sizing: border-box; border: calc(var(--u) * 1.5) solid #fff; }
 .oc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; font-size: calc(var(--u) * 9 * var(--s, 1)); line-height: 1.32; }
 .oc-text > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .oc-box.green .oc-vi, .oc-box.green .oc-name { color: #ffff00; }
@@ -55,14 +56,6 @@
 .oc-inline input { flex: 1; min-width: 0; }
 .oc-check { flex-direction: row; align-items: center; gap: 8px; }
 
-/* In: chỉ trang sơ đồ, A4 ngang, giữ màu */
-@page orgchart { size: A4 landscape; margin: 6mm; }
-@media print {
-  body.oc-printing * { visibility: hidden !important; }
-  body.oc-printing .oc-frame, body.oc-printing .oc-frame * { visibility: visible !important; }
-  body.oc-printing .oc-frame { page: orgchart; position: fixed; left: 0; top: 0; width: 285mm; border: 0; border-radius: 0; }
-  body.oc-printing .oc-box { outline: none !important; }
-}
 .oc-alert { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); }
 
 /* Sửa trực tiếp trên sơ đồ */
@@ -81,12 +74,23 @@
 .oc-modal footer { flex-wrap: wrap; }
 .oc-tool { display: grid; gap: 12px; }
 .oc-project-pick { min-width: min(360px, 100%); }
-@media print { body.oc-printing .oc-remove, body.oc-printing .oc-ghost { display: none !important; } }
 /* Chưa có ảnh: để trống cho dán ảnh tay sau */
 .oc-face.empty { display: block; background: #fff; border: calc(var(--u) * 1) dashed rgba(255, 255, 255, .7); background: rgba(255, 255, 255, .15); }
 .oc-photo-empty { width: 108px; aspect-ratio: 3 / 4; border-radius: 6px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: 12px; background: var(--soft); }
-@media print { body.oc-printing .oc-face.empty { border: 0; background: rgba(255, 255, 255, .15); } }
 .oc-header-title { margin: 0; font-size: 16px; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
 .oc-tool-card { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; font-size: 16px; color: var(--ink); cursor: pointer; padding: 16px 18px; }
 .oc-tool-card svg:last-child { margin-left: auto; color: var(--muted); }
 .oc-tool-card:hover { border-color: var(--brand); }
+
+/* Theo mẫu Excel: chữ trong ô thẳng, không in nghiêng, tên không đậm */
+.oc-box .oc-vi { font-style: normal; }
+.oc-box .oc-name { font-weight: 400; }
+.oc-company { font-size: calc(var(--u) * 11.5); }
+/* Cỡ chữ và khung theo bản in mẫu Excel (A3) */
+.oc-text { font-size: calc(var(--u) * 10.4 * var(--s, 1)); line-height: 1.3; }
+.oc-mail { font-size: .9em; }
+.oc-company { height: auto; font-size: calc(var(--u) * 10.5); line-height: 1.32; padding: calc(var(--u) * 5) calc(var(--u) * 7) calc(var(--u) * 4); }
+.oc-company-head { font-size: calc(var(--u) * 11); margin-bottom: calc(var(--u) * 5); }
+.oc-sign { margin-top: calc(var(--u) * 5); }
+.oc-signer { margin-top: calc(var(--u) * 16); }
+.oc-face.empty { border: calc(var(--u) * 1.5) solid #fff; background: rgba(255, 255, 255, .18); }

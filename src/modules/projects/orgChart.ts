@@ -38,6 +38,8 @@ export type OrgChartHeader = {
   companyName: string;
   companyAddress: string;
   companyPhone: string;
+  companyFax: string;
+  companyEmail: string;
   signDate: string;
   signerTitle: string;
   signerName: string;
@@ -56,12 +58,14 @@ export const DEFAULT_ORG_HEADER: OrgChartHeader = {
   client: "",
   item: "",
   companyName: "CÔNG TY TNHH THIÊN NHẬT MINH",
-  companyAddress: "75 Nguyễn Cửu Đàm, P. Tân Sơn Nhì,\nTp. Hồ Chí Minh, Việt Nam",
+  companyAddress: "75 Nguyễn Cửu Đàm, P. Tân Sơn Nhì, Tp. Hồ Chí Minh, Việt Nam",
   companyPhone: "(028) 3812 6990",
+  companyFax: "",
+  companyEmail: "",
   signDate: "",
   signerTitle: "Giám đốc",
   signerName: "NGUYỄN GIA LUÂN",
-  formCode: "AZ-PG-443-A02 Rev.: 2024.0",
+  formCode: "BH-02-F02:2026.0",
   emailDomain: "thiennhatminh.com",
   showLogos: true,
 };
@@ -186,7 +190,7 @@ export type OrgBox = { person: OrgPerson; x: number; y: number; w: number; h: nu
 export type OrgLine = { x1: number; y1: number; x2: number; y2: number; ghost: boolean };
 export type OrgLayout = { boxes: OrgBox[]; lines: OrgLine[]; headOfficeY: number; scale: number };
 
-const BOX_W = 232;
+const BOX_W = 212;
 const BOX_H = 84;
 const GHOST_H = 34;
 const GAP_Y = 22;
@@ -274,11 +278,13 @@ export function layoutOrgChart(people: readonly OrgPerson[]): OrgLayout {
     siteBottom = box.y + box.h;
     y += box.h + GAP_Y;
   });
-  // Nhánh công trường: ô cuối nằm trên thanh ngang, các ô trước xếp lên trên
-  const stackAbove = (list: OrgPerson[]) => list.length ? list.slice(0, -1).reduce((sum, person) => sum + hOf(person) + GAP_Y, 0) + hOf(list[list.length - 1]!) / 2 : 0;
-  const busY = Math.max(siteBottom + 34, siteTop + Math.max(stackAbove(siteLeft), stackAbove(siteRight)));
+  // Nhánh công trường (như mẫu Excel): xếp dưới ô công trường cuối, nối ngang vào trục, ô thấp nhất cách thanh ngang SIDE_TO_BUS
+  const SIDE_TO_BUS = 22;
+  const stackHeight = (list: OrgPerson[]) => list.reduce((sum, person) => sum + hOf(person) + GAP_Y, 0) - (list.length ? GAP_Y : 0);
+  const sideHeight = Math.max(stackHeight(siteLeft), stackHeight(siteRight));
+  const busY = sideHeight ? Math.max(siteBottom + 40 + sideHeight + SIDE_TO_BUS, siteTop + sideHeight + SIDE_TO_BUS) : siteBottom + 34;
   const siteSide = (list: OrgPerson[], dir: 1 | -1) => {
-    let bottom = busY + (list.length ? hOf(list[list.length - 1]!) / 2 : 0);
+    let bottom = busY - SIDE_TO_BUS;
     [...list].reverse().forEach((person) => {
       const h = hOf(person);
       const x = dir === 1 ? cx + BOX_W / 2 + SIDE_GAP + 20 : Math.max(MARGIN + 50, cx - BOX_W / 2 - SIDE_GAP - 50 - BOX_W);
@@ -296,9 +302,9 @@ export function layoutOrgChart(people: readonly OrgPerson[]): OrgLayout {
   const gap = 16;
   const span = ORG_CANVAS.width - 2 * MARGIN;
   const gw = groups.length ? Math.min(BOX_W - 20, (span - (groups.length - 1) * gap) / groups.length) : 0;
-  let gx = cx - gw / 2;
+  // Hàng quản lý nhóm căn giữa quanh trục (như mẫu Excel), không vượt lề trang
   const rowWidth = groups.length * gw + (groups.length - 1) * gap;
-  if (gx + rowWidth > ORG_CANVAS.width - MARGIN) gx = Math.max(MARGIN, ORG_CANVAS.width - MARGIN - rowWidth);
+  const gx = Math.min(Math.max(MARGIN, cx - rowWidth / 2), ORG_CANVAS.width - MARGIN - rowWidth);
   const groupBoxes = groups.map((person, index) => push(person, gx + index * (gw + gap), groupTop, gw));
 
   // Trục dọc: từ ô văn phòng đầu tới thanh ngang (hoặc ô công trường cuối thật)

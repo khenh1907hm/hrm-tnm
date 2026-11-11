@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
 import {
   applyEmployeeFacts, DEFAULT_ORG_HEADER, blankPerson, buildFromProject, defaultOrgChart, ghostSlots, isGhost, layoutOrgChart, mergeMembers, orgChartIssue, ORG_CANVAS, ORG_MAX_GROUPS,
@@ -19,6 +19,44 @@ type Notify = TabProps["setNotice"];
 const newId = () => crypto.randomUUID();
 /** Ngoài khách hàng, hạng mục, ngày ký thì mọi thông tin đầu trang luôn theo mặc định công ty. */
 const withFixedHeader = (header: OrgChartHeader): OrgChartHeader => ({ ...DEFAULT_ORG_HEADER, client: header.client, item: header.item, signDate: header.signDate });
+
+/** Khổ in theo mẫu Excel BH-02-F02:2026.0: A3 ngang, một trang. */
+const PRINT_CSS = "@page { size: A3 landscape; margin: 6mm; } html, body { margin: 0; background: #fff; }"
+  + " .oc-frame { border: 0 !important; border-radius: 0 !important; width: 400mm !important; margin: 0 auto; }";
+
+/** Trang in riêng chỉ có sơ đồ: chép kiểu (các lớp oc-) và nội dung trang sơ đồ đang hiện. */
+export function printDocumentHtml(frameHtml: string, css: string, origin: string): string {
+  return `<!doctype html><html><head><meta charset="utf-8"><base href="${origin}/"><title>Sơ đồ tổ chức dự án</title><style>${css}\n${PRINT_CSS}</style></head><body>${frameHtml}</body></html>`;
+}
+
+/** In qua khung ẩn để khổ giấy luôn đúng A3 ngang và không lẫn phần khác của trang. */
+function printSheet(frame: Element): HTMLIFrameElement {
+  const css: string[] = [];
+  for (const sheet of Array.from(document.styleSheets)) {
+    let rules: CSSRuleList;
+    try { rules = sheet.cssRules; } catch { continue; }
+    for (const rule of Array.from(rules)) if (rule instanceof CSSStyleRule && rule.selectorText.includes(".oc-")) css.push(rule.cssText);
+  }
+  const iframe = document.createElement("iframe");
+  iframe.className = "oc-print-frame";
+  iframe.setAttribute("aria-hidden", "true");
+  iframe.style.cssText = "position:fixed;left:-10000px;top:0;width:420mm;height:297mm;border:0;";
+  document.body.append(iframe);
+  const doc = iframe.contentDocument;
+  if (!doc) return iframe;
+  doc.open();
+  // Bỏ nút × và ô "+ Thêm" khỏi bản in
+  const clone = frame.cloneNode(true) as Element;
+  clone.querySelectorAll(".oc-remove, .oc-ghost").forEach((node) => node.remove());
+  doc.write(printDocumentHtml(clone.outerHTML, css.join("\n"), window.location.origin));
+  doc.close();
+  const images = Array.from(doc.images);
+  void Promise.all(images.map((image) => image.complete ? null : new Promise((resolve) => { image.onload = resolve; image.onerror = resolve; }))).then(() => {
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+  });
+  return iframe;
+}
 
 /** Thu ảnh về khung 3×4 (180 × 240) JPEG để lưu gọn trong sơ đồ. */
 async function toPortrait(blob: Blob): Promise<string> {
@@ -84,6 +122,7 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
   const [busy, setBusy] = useState(false);
   const [ghosts, setGhosts] = useState(true);
   const [printing, setPrinting] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
   const [unavailable, setUnavailable] = useState(false);
 
   /** Bổ sung số điện thoại, ảnh (và tên khi overwrite) từ hồ sơ nhân sự. */
@@ -116,12 +155,18 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
     return () => { active = false; };
   }, [store, project, today, members, enrich]);
 
+  // In: khi ô "+ Thêm" đã ẩn, chép trang sơ đồ sang khung in riêng (A3 ngang như mẫu Excel) rồi in khung đó
   useEffect(() => {
     if (!printing) return;
-    document.body.classList.add("oc-printing");
-    const done = () => { document.body.classList.remove("oc-printing"); setPrinting(false); window.removeEventListener("afterprint", done); };
-    window.addEventListener("afterprint", done);
-    const timer = window.setTimeout(() => window.print(), 50);
+    const timer = window.setTimeout(() => {
+      const frame = sheetRef.current?.querySelector(".oc-frame");
+      if (!frame) { setPrinting(false); return; }
+      const iframe = printSheet(frame);
+      const finish = () => { iframe.remove(); setPrinting(false); };
+      iframe.contentWindow?.addEventListener("afterprint", finish);
+      // Trình duyệt không báo afterprint: dọn sau một phút
+      window.setTimeout(() => { if (iframe.isConnected) finish(); }, 60_000);
+    }, 80);
     return () => window.clearTimeout(timer);
   }, [printing]);
 
@@ -201,8 +246,10 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
           {!project ? " Bản này không gắn dự án: lập và in, không lưu lại." : ""}
         </p>
         {unavailable && <p className="oc-alert">Máy chủ chưa bật chức năng lưu sơ đồ. Bạn vẫn lập và in PDF được, nhưng chưa lưu lại được.</p>}
-        <OrgSheet chart={chart} ghosts={showGhosts} selected={editing}
-          onSelect={canEdit ? setEditing : undefined} onAdd={canEdit ? addAt : undefined} onRemove={canEdit ? (id) => { if (window.confirm("Bỏ ô này khỏi sơ đồ?")) remove(id); } : undefined} />
+        <div ref={sheetRef}>
+          <OrgSheet chart={chart} ghosts={showGhosts} selected={editing}
+            onSelect={canEdit ? setEditing : undefined} onAdd={canEdit ? addAt : undefined} onRemove={canEdit ? (id) => { if (window.confirm("Bỏ ô này khỏi sơ đồ?")) remove(id); } : undefined} />
+        </div>
       </section>
       {current && canEdit && (
         <PersonModal key={current.id} person={current} header={chart.header} employees={employees} setNotice={setNotice}
@@ -408,10 +455,14 @@ export function OrgSheet(props: { chart: OrgChart; ghosts?: boolean; selected?: 
           {header.client && <i className="oc-client">{header.client}</i>}
           {header.item && <i className="oc-client">ITEM: {header.item}</i>}
         </div>
+        {/* Khung thông tin công ty theo mẫu Excel BH-02-F02:2026.0, thêm chỗ Giám đốc ký, ghi rõ họ tên, đóng dấu, ghi ngày */}
         <div className="oc-company">
-          <b>{header.companyName}</b>
-          <span className="oc-address">{header.companyAddress}</span>
-          <span>Điện thoại: {header.companyPhone}</span>
+          <b className="oc-company-head">COMPANY INFORMATION<br />THÔNG TIN VỀ CÔNG TY</b>
+          <span className="oc-company-name"><b>Company Name/Tên công ty:</b> {header.companyName}</span>
+          <span>Address/Địa chỉ: {header.companyAddress.replace(/\s*\n\s*/g, " ")}</span>
+          <span>Phone/Số điện thoại: {header.companyPhone}</span>
+          <span>Fax/Số fax: {header.companyFax}</span>
+          <span>Email: {header.companyEmail}</span>
           <span className="oc-sign">{signDateText(header.signDate)}<br />{header.signerTitle}</span>
           <b className="oc-signer">{header.signerName}</b>
         </div>
@@ -423,7 +474,7 @@ export function OrgSheet(props: { chart: OrgChart; ghosts?: boolean; selected?: 
         {layout.boxes.map(box)}
         <footer className="oc-foot">
           <span>{header.formCode}</span>
-          <span>{printedAt.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} {printedAt.toLocaleDateString("en-US")}</span>
+          <span>{printedAt.toLocaleTimeString("en-GB", { hour12: false })} {printedAt.toLocaleDateString("en-GB")}</span>
           <span>Page: 1/1</span>
         </footer>
       </div>

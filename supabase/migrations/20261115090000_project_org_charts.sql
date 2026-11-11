@@ -43,9 +43,9 @@ create policy "org_chart_template: sửa" on public.org_chart_template for updat
 insert into public.org_chart_template (id, doc) values (1, jsonb_build_object(
   'header', jsonb_build_object(
     'contractor', 'THIENNHATMINH CO.LTD', 'client', '', 'item', '',
-    'companyName', 'CÔNG TY TNHH THIÊN NHẬT MINH', 'companyAddress', E'75 Nguyễn Cửu Đàm, P. Tân Sơn Nhì,\nTp. Hồ Chí Minh, Việt Nam',
+    'companyName', 'CÔNG TY TNHH THIÊN NHẬT MINH', 'companyAddress', '75 Nguyễn Cửu Đàm, P. Tân Sơn Nhì, Tp. Hồ Chí Minh, Việt Nam', 'companyFax', '', 'companyEmail', '',
     'companyPhone', '(028) 3812 6990', 'signDate', '', 'signerTitle', 'Giám đốc', 'signerName', 'NGUYỄN GIA LUÂN',
-    'formCode', 'AZ-PG-443-A02 Rev.: 2024.0', 'emailDomain', 'thiennhatminh.com', 'showLogos', true),
+    'formCode', 'BH-02-F02:2026.0', 'emailDomain', 'thiennhatminh.com', 'showLogos', true),
   'people', jsonb_build_array(jsonb_build_object(
     'id', 'director', 'section', 'office', 'branch', 'main', 'titleEn', 'Director', 'titleVi', 'Giám đốc',
     'name', 'NGUYỄN GIA LUÂN', 'phone', '0983449446', 'email', 'ng.luan@thiennhatminh.com', 'photo', null,
