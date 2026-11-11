@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
 import {
   applyEmployeeFacts, DEFAULT_ORG_HEADER, blankPerson, buildFromProject, defaultOrgChart, ghostSlots, isGhost, layoutOrgChart, mergeMembers, orgChartIssue, ORG_CANVAS, ORG_MAX_GROUPS,
   renumberGroups, signDateText, suggestEmail, toCompanyTemplate, type OrgBox, type OrgChart, type OrgChartHeader, type OrgPerson, type OrgSection,
@@ -56,6 +56,36 @@ function printSheet(frame: Element): HTMLIFrameElement {
     iframe.contentWindow?.print();
   });
   return iframe;
+}
+
+/** Tải tệp PDF A3 của sơ đồ (vẽ vector bằng pdf-lib, phông Be Vietnam Pro). */
+async function downloadPdf(chart: OrgChart, fileBase: string) {
+  const load = async (path: string, required: boolean) => {
+    const response = await fetch(path);
+    if (!response.ok) { if (required) throw new Error(`Không tải được ${path}.`); return null; }
+    return new Uint8Array(await response.arrayBuffer());
+  };
+  const [{ renderOrgChartPdf }, regular, bold, italic, boldItalic, logoLeft, logoRight] = await Promise.all([
+    import("../../../modules/projects/orgChartPdf"),
+    load("/fonts/BeVietnamPro-Regular.ttf", true), load("/fonts/BeVietnamPro-Bold.ttf", true),
+    load("/fonts/Be_Vietnam_Pro/BeVietnamPro-Italic.ttf", true), load("/fonts/Be_Vietnam_Pro/BeVietnamPro-BoldItalic.ttf", true),
+    load("/org-chart/taikisha.png", false), load("/org-chart/bsi.png", false),
+  ]);
+  const bytes = await renderOrgChartPdf(chart, { regular: regular!, bold: bold!, italic: italic!, boldItalic: boldItalic!, logoLeft, logoRight }, new Date());
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/pdf" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${fileBase}.pdf`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/** Tên tệp không dấu: So-do-to-chuc-<mã dự án>-<ngày ký>. */
+export function orgChartFileName(projectCode: string | null, signDate: string): string {
+  const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").replace(/[^A-Za-z0-9-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  return ["So-do-to-chuc", projectCode ? plain(projectCode) : "", signDate].filter(Boolean).join("-");
 }
 
 /** Thu ảnh về khung 3×4 (180 × 240) JPEG để lưu gọn trong sơ đồ. */
@@ -136,6 +166,7 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
   const [busy, setBusy] = useState(false);
   const [ghosts, setGhosts] = useState(true);
   const [printing, setPrinting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const [unavailable, setUnavailable] = useState(false);
 
@@ -250,7 +281,11 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
             {canEdit && project && <button type="button" className="button" onClick={sync} title="Thêm thành viên mới, cập nhật số công nhân, lấy số điện thoại và ảnh từ hồ sơ"><RefreshCw className="ico" size={16} aria-hidden="true" /> Cập nhật từ dữ liệu</button>}
             {canEdit && dirty && saved && <button type="button" className="button" onClick={() => setChart(structuredClone(saved))}><RotateCcw className="ico" size={16} aria-hidden="true" /> Bỏ thay đổi</button>}
             {props.canSetTemplate && <button type="button" className="button" disabled={busy} onClick={() => void saveTemplate()} title="Tiêu đề và khối Văn phòng dùng cho sơ đồ mới của mọi dự án"><Save className="ico" size={16} aria-hidden="true" /> Lưu làm mẫu chung</button>}
-            <button type="button" className="button" onClick={() => setPrinting(true)}><Printer className="ico" size={16} aria-hidden="true" /> In / Lưu PDF</button>
+            <button type="button" className="button" disabled={downloading} onClick={() => {
+              setDownloading(true);
+              void downloadPdf(chart, orgChartFileName(project?.code ?? null, chart.header.signDate)).then(() => setNotice("Đã tải tệp PDF sơ đồ tổ chức (A3 ngang).", "success"), (error: unknown) => setNotice(errorMessage(error), "error")).finally(() => setDownloading(false));
+            }}><Download className="ico" size={16} aria-hidden="true" /> {downloading ? "Đang tạo PDF…" : "Tải PDF"}</button>
+            <button type="button" className="button" onClick={() => setPrinting(true)}><Printer className="ico" size={16} aria-hidden="true" /> In</button>
             {canEdit && project && <button type="button" className="button primary" disabled={busy || !dirty || unavailable} onClick={() => void save()}><Save className="ico" size={16} aria-hidden="true" /> {busy ? "Đang lưu…" : dirty ? "Lưu sơ đồ" : "Đã lưu"}</button>}
           </div>
         </div>
