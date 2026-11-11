@@ -1,0 +1,66 @@
+/* Sơ đồ tổ chức nhà thầu phụ (BH-02-F02). Trang vẽ theo khung 1000 × 707: 1 đơn vị = 0.1cqw của .oc-frame.
+   Màu của trang in giữ đúng mẫu Taikisha (không theo giao diện tối) vì đây là biểu mẫu gửi khách. */
+.oc-page { gap: 14px; }
+.oc-tip { margin: 0 0 10px; }
+.oc-frame { container-type: inline-size; width: 100%; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.oc-sheet { --u: 0.1cqw; position: relative; width: 100%; aspect-ratio: 1000 / 707; background: #fff; color: #111; font-family: Calibri, Arial, sans-serif; overflow: hidden;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.oc-logo-left { position: absolute; left: 4.6%; top: 4.5%; width: 12.5%; }
+.oc-logo-right { position: absolute; right: 2.4%; top: 5.4%; width: 15%; }
+.oc-title { position: absolute; left: 25%; right: 25%; top: 4.2%; display: grid; justify-items: center; text-align: center; gap: calc(var(--u) * 2); }
+.oc-title > span { font-size: calc(var(--u) * 15); font-family: Arial, sans-serif; }
+.oc-contractor { color: #e00000; font-style: italic; font-size: calc(var(--u) * 16); font-family: Arial, sans-serif; }
+.oc-client { color: #1f3bd6; font-weight: 700; font-size: calc(var(--u) * 11.5); margin-top: calc(var(--u) * 4); }
+.oc-client + .oc-client { margin-top: calc(var(--u) * 1); }
+.oc-company { position: absolute; left: 4.6%; top: 13.5%; width: 26.6%; height: 28.5%; border: calc(var(--u) * 1.6) solid #f4a460; padding: calc(var(--u) * 6) calc(var(--u) * 7);
+  display: flex; flex-direction: column; font-size: calc(var(--u) * 11); line-height: 1.35; box-sizing: border-box; }
+.oc-company > b:first-child { font-size: calc(var(--u) * 13); }
+.oc-address { white-space: pre-line; }
+.oc-sign { margin-top: calc(var(--u) * 12); align-self: flex-end; margin-right: 12%; text-align: center; }
+.oc-signer { margin-top: auto; align-self: flex-end; margin-right: 18%; font-size: calc(var(--u) * 11); }
+.oc-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.oc-lines line { stroke: #2f5597; stroke-width: 1.8; vector-effect: non-scaling-stroke; }
+.oc-lines line.oc-ho { stroke: #e04040; stroke-dasharray: 5 4; stroke-width: 1.2; }
+.oc-ho-label { position: absolute; right: 7%; color: #c00000; font-weight: 700; font-size: calc(var(--u) * 8.5); }
+.oc-box { position: absolute; display: flex; align-items: stretch; gap: calc(var(--u) * 5); padding: calc(var(--u) * 4); box-sizing: border-box; border: 0; margin: 0; text-align: center;
+  font: inherit; cursor: default; overflow: hidden; color: #fff; }
+button.oc-box { cursor: pointer; }
+button.oc-box:hover, .oc-box.on { outline: calc(var(--u) * 3) solid #ffb703; outline-offset: calc(var(--u) * 1.5); }
+.oc-box.blue { background: #4f81bd; box-shadow: calc(var(--u) * 3) calc(var(--u) * 3) 0 #9aa9c4; }
+.oc-box.green { background: #4f6228; border: calc(var(--u) * 4) solid #4f81bd; box-shadow: calc(var(--u) * 3) calc(var(--u) * 3) 0 #9aa9c4; }
+.oc-face { height: 100%; aspect-ratio: 3 / 4; object-fit: cover; background: #ffff00; flex: none; }
+.oc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; font-size: calc(var(--u) * 9 * var(--s, 1)); line-height: 1.32; }
+.oc-text > * { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oc-box.green .oc-vi, .oc-box.green .oc-name { color: #ffff00; }
+.oc-name { font-size: 1.06em; }
+.oc-mail { font-size: .94em; }
+.oc-foot { position: absolute; left: 4.5%; right: 4.5%; bottom: 1.6%; display: flex; justify-content: space-between; font-size: calc(var(--u) * 8.5); font-family: Arial, sans-serif; }
+
+.oc-editor { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(300px, 1.4fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .oc-editor { grid-template-columns: 1fr; } }
+.oc-slot { display: grid; gap: 6px; padding: 10px 0; border-top: 1px solid var(--line); }
+.oc-slot:first-of-type { border-top: 0; }
+.oc-slot-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.oc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.oc-chip { display: grid; gap: 1px; text-align: left; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; font: inherit; font-size: 13px; }
+.oc-chip span { color: var(--muted); font-size: 12px; }
+.oc-chip.on { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand-soft); }
+.oc-chip.add { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; color: var(--brand); }
+.oc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 12px; }
+.oc-person { display: grid; grid-template-columns: 120px 1fr; gap: 14px; margin-top: 10px; }
+@media (max-width: 560px) { .oc-person { grid-template-columns: 1fr; } }
+.oc-photo-edit { display: grid; gap: 6px; justify-items: center; align-content: start; }
+.oc-photo-edit img { width: 108px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: #ffff00; }
+.oc-inline { display: flex; gap: 6px; }
+.oc-inline input { flex: 1; min-width: 0; }
+.oc-check { flex-direction: row; align-items: center; gap: 8px; }
+
+/* In: chỉ trang sơ đồ, A4 ngang, giữ màu */
+@page orgchart { size: A4 landscape; margin: 6mm; }
+@media print {
+  body.oc-printing * { visibility: hidden !important; }
+  body.oc-printing .oc-frame, body.oc-printing .oc-frame * { visibility: visible !important; }
+  body.oc-printing .oc-frame { page: orgchart; position: fixed; left: 0; top: 0; width: 285mm; border: 0; border-radius: 0; }
+  body.oc-printing .oc-box { outline: none !important; }
+}
+.oc-alert { margin: 0 0 10px; padding: 10px 12px; border-radius: 10px; background: var(--warn-bg); color: var(--warn); }

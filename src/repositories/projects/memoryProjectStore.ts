@@ -1,3 +1,4 @@
+import type { OrgChart } from "../../modules/projects/orgChart";
 import { todayVN, systemClock, type Clock } from "../../lib/clock";
 import { computeTimesheetCosts } from "../../modules/projects/cost";
 import { monthOf } from "../../modules/projects/calendar";
@@ -26,6 +27,8 @@ export type ProjectData = {
   expenses: ProjectExpense[];
   locks: PeriodLock[];
   finances: (ProjectFinance & { projectId: string })[];
+  orgCharts?: (OrgChart & { projectId: string })[];
+  orgTemplate?: OrgChart | null;
   checks: AttendanceCheck[];
   requests: AttendanceRequest[];
 };
@@ -80,6 +83,10 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
     actAs(employeeId) { actingAs = employeeId; },
 
     async getFinance(projectId) { const found = data.finances.find((item) => item.projectId === projectId); return found ? { capital: found.capital, note: found.note } : null; },
+    async getOrgChart(projectId) { const found = (data.orgCharts ?? []).find((item) => item.projectId === projectId); return found ? clone({ header: found.header, people: found.people }) : null; },
+    async saveOrgChart(projectId, chart) { data.orgCharts = [...(data.orgCharts ?? []).filter((item) => item.projectId !== projectId), { ...clone(chart), projectId }]; persist(); },
+    async getOrgTemplate() { return data.orgTemplate ? clone(data.orgTemplate) : null; },
+    async saveOrgTemplate(template) { data.orgTemplate = clone(template); persist(); },
     async saveFinance(projectId, finance) { data.finances = [...data.finances.filter((item) => item.projectId !== projectId), { ...finance, projectId }]; persist(); },
 
     async myAttendance() {

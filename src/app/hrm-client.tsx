@@ -121,11 +121,14 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const partnerStore = usePartners(backend.mode === "live" ? getSupabaseClient() : null, templateError);
   const listInput = useMemo(() => toListInput(filters), [filters]);
   // Nhân sự để chọn vào dự án (chỉ khi được xem nhân sự); dự án dùng store riêng (Supabase hoặc demo)
+  // Ảnh chân dung tải qua ensureFiles (khai báo phía dưới) nên giữ tham chiếu
+  const photoLoaderRef = useRef<(employeeId: string) => Promise<Blob | null>>(async () => null);
   const employeeSource = useMemo<EmployeeSource>(() => app && can(actor, "employeeRead") ? {
     search: async (query: string) => {
       const result = await app.employees.list(actor, { query, page: 1, pageSize: 100 });
-      return result.ok ? result.value.items.filter((employee) => !employee.archivedAt && employee.status !== "resigned").map((employee) => ({ id: employee.id, code: employee.code, name: employee.name, position: employee.position })) : [];
+      return result.ok ? result.value.items.filter((employee) => !employee.archivedAt && employee.status !== "resigned").map((employee) => ({ id: employee.id, code: employee.code, name: employee.name, position: employee.position, phone: employee.phone, hasPhoto: Boolean(employee.photo) })) : [];
     },
+    photo: (employeeId: string) => photoLoaderRef.current(employeeId),
   } : null, [app, actor]);
   const projectStore = useProjectStore(backend.mode, employeeSource);
   const purchaseStore = getPurchaseStore(backend.mode);
@@ -172,6 +175,17 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   /** Tệp theo nhân sự (ảnh chân dung + ảnh trường tùy chỉnh), cần có trong phiên trước khi xuất hồ sơ. */
   const extraFileRefs = (employee: Employee) => [...Object.values(employee.extraFiles ?? {}), ...[photoRef(employee.photo)].filter((file) => file !== null)].map((file) => ({ id: file.id, name: file.name, folder: "employees" as const }));
   const loadPhoto = async (file: FileRef) => (await ensureFiles([{ id: file.id, name: file.name, folder: "employees" }]))[file.id] ?? null;
+  useEffect(() => {
+    photoLoaderRef.current = async (employeeId: string) => {
+      if (!app) return null;
+      const found = await app.employees.get(actor, employeeId);
+      const photo = found.ok ? found.value.photo : null;
+      if (!photo) return null;
+      if (typeof photo === "string") return await (await fetch(photo)).blob();
+      const ref = photoRef(photo);
+      return ref ? await loadPhoto(ref) : null;
+    };
+  });
   /** Nhân sự đang chọn ở danh sách (bỏ người đã lưu trữ), sắp theo mã. */
   const loadSelectedEmployees = async () => (await Promise.all(selectedIds.map((id) => app.employees.get(actor, id)))).flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []).sort((a, b) => a.code.localeCompare(b.code, "en", { numeric: true }));
   const signatureFileRefs = async () => { const listed = await app.signatures.list(actor); return listed.ok ? listed.value.map((signature) => ({ id: signature.file.id, name: signature.file.name, folder: "signatures" as const })) : []; };

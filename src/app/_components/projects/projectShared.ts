@@ -49,8 +49,12 @@ export function viewerFor(actor: Actor, myEmployeeId: string | null, project: Pr
 export const canCreateProject = (actor: Actor) => actor.role === "admin" || hasAccess(actor, "projects.manage");
 
 /** Nhân sự để chọn khi thêm thành viên; null khi người xem không đọc được danh sách nhân sự. */
-export type EmployeeOption = { id: string; code: string; name: string; position: string };
-export type EmployeeSource = { search(query: string): Promise<EmployeeOption[]> } | null;
+export type EmployeeOption = { id: string; code: string; name: string; position: string; phone?: string; hasPhoto?: boolean };
+export type EmployeeSource = {
+  search(query: string): Promise<EmployeeOption[]>;
+  /** Ảnh chân dung của nhân sự (để điền sơ đồ tổ chức); không có thì null. */
+  photo?(employeeId: string): Promise<Blob | null>;
+} | null;
 
 /** Nhập số tiền có dấu chấm ngăn cách: "1.250.000" → 1250000. */
 export const parseMoney = (text: string) => Number(text.replace(/[^\d]/g, "")) || 0;

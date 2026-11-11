@@ -1,3 +1,4 @@
+import type { OrgChart } from "./orgChart";
 import type {
   Holiday, LaborRate, LaborSettings, MemberRate, PeriodLock, Project, ProjectBudget, ProjectExpense, ProjectFinance, ProjectInput, ProjectMember,
   Subcontract, SubcontractPayment, Timesheet, TimesheetCost,
@@ -66,6 +67,13 @@ export interface ProjectStore {
   /** Vốn dự án; null khi người xem không được xem tiền hoặc chưa nhập. */
   getFinance(projectId: string): Promise<ProjectFinance | null>;
   saveFinance(projectId: string, finance: ProjectFinance): Promise<void>;
+
+  /** Sơ đồ tổ chức nhà thầu phụ (BH-02-F02); null khi chưa lập. */
+  getOrgChart(projectId: string): Promise<OrgChart | null>;
+  saveOrgChart(projectId: string, chart: OrgChart): Promise<void>;
+  /** Mẫu chung của công ty (tiêu đề + khối Văn phòng) để sơ đồ mới của mọi dự án dùng lại. */
+  getOrgTemplate(): Promise<OrgChart | null>;
+  saveOrgTemplate(template: OrgChart): Promise<void>;
 
   /** Dự án đang thi công mà người đăng nhập là thành viên (để tự chấm công). */
   myAttendance(): Promise<AttendanceContext[]>;

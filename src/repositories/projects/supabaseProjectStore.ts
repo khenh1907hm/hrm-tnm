@@ -1,3 +1,4 @@
+import { DEFAULT_ORG_HEADER, type OrgChart } from "../../modules/projects/orgChart";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectStore } from "../../modules/projects/store";
 import type { AttendanceCheck, AttendanceContext, GpsFix } from "../../modules/projects/attendance";
@@ -93,6 +94,20 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
       const row = data as Row | null;
       return row ? { capital: num(row.capital), note: str(row.note) } : null;
     },
+    async getOrgChart(projectId) {
+      const { data, error } = await client.from("project_org_charts").select("doc").eq("project_id", projectId).maybeSingle();
+      if (error) raise(error);
+      const doc = (data as { doc?: OrgChart } | null)?.doc;
+      return doc && Array.isArray(doc.people) ? { header: { ...DEFAULT_ORG_HEADER, ...doc.header }, people: doc.people } : null;
+    },
+    async saveOrgChart(projectId, chart) { await run(client.from("project_org_charts").upsert({ project_id: projectId, doc: chart })); },
+    async getOrgTemplate() {
+      const { data, error } = await client.from("org_chart_template").select("doc").eq("id", 1).maybeSingle();
+      if (error) raise(error);
+      const doc = (data as { doc?: OrgChart } | null)?.doc;
+      return doc && Array.isArray(doc.people) ? { header: { ...DEFAULT_ORG_HEADER, ...doc.header }, people: doc.people } : null;
+    },
+    async saveOrgTemplate(template) { await run(client.from("org_chart_template").upsert({ id: 1, doc: template })); },
     async saveFinance(projectId, finance) { await run(client.from("project_finance").upsert({ project_id: projectId, capital: finance.capital, note: finance.note })); },
     async myAttendance() {
       const found = (await rpc("my_attendance_context", {}) ?? []) as Row[];
