@@ -8,6 +8,7 @@ import { PurchasesPage } from "./purchases/PurchasesPage";
 import { getPurchaseStore } from "./purchases/usePurchaseStore";
 import SkillsClient from "../skills/SkillsClient";
 import { BeforeAfterTool } from "./BeforeAfterTool";
+import { TiaPortalMcpGuide } from "./TiaPortalMcpGuide";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { EMPLOYEE_VIEWS, parseRoute, projectPath, purchasePath, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
@@ -62,6 +63,7 @@ export function ToolsPage(props: { orgChart?: Parameters<typeof OrgChartTool>[0]
       <div className="page-head"><div><h1>Công cụ</h1><p>Các công cụ làm việc dùng chung của công ty.</p></div></div>
       {props.orgChart && <OrgChartTool {...props.orgChart} />}
       <BeforeAfterTool />
+      <TiaPortalMcpGuide />
     </section>
   );
 }
