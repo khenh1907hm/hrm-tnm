@@ -67,7 +67,7 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
             <li key={step.id} className={`ap-step ${step.result}${step.canSign ? " mine" : ""}`}>
               <span className="ap-seq">{step.seq}</span>
               <div className="ap-body">
-                <b>{ROLE_LABELS[step.role]}</b>
+                <b>{ROLE_LABELS[step.role]}{step.assigneeName ? ` · ${step.assigneeName}` : ""}</b>
                 <small className={late ? "warn-text" : "muted"}>Mục tiêu {dmy(step.targetDate)}{late ? " · quá hạn" : ""}</small>
                 {step.signerName && <small>{step.signerName}{step.actedAt ? ` · ${new Date(step.actedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}</small>}
                 {step.note && <small className="muted">“{step.note}”</small>}

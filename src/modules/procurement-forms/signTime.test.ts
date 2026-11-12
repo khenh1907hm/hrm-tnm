@@ -10,3 +10,18 @@ describe("vnDateTime (thời gian duyệt in dưới tên trong ô ký)", () => 
     expect(vnDateTime(null)).toBe("");
   });
 });
+
+import { stepOf } from "./forms";
+describe("stepOf (khối duyệt lần lượt gộp vào một ô ký)", () => {
+  const base = { role: "leader" as const, targetDate: "2026-11-13" };
+  it("gộp tên những người đã ký, giờ của người ký sau cùng", () => {
+    const merged = stepOf([
+      { ...base, result: "signed", signerName: "A", actedAt: "2026-11-12T01:00:00Z" },
+      { ...base, result: "signed", signerName: "B", actedAt: "2026-11-12T03:00:00Z" },
+    ], "leader");
+    expect(merged).toMatchObject({ result: "signed", signerName: "A, B", actedAt: "2026-11-12T03:00:00Z" });
+  });
+  it("chưa ai ký thì là bước đang chờ", () => {
+    expect(stepOf([{ ...base, result: "pending", signerName: "", actedAt: null }, { ...base, result: "pending", signerName: "", actedAt: null }], "leader")?.result).toBe("pending");
+  });
+});

@@ -9,7 +9,7 @@ import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
 import { DEFAULT_SITE_SETTINGS, MEMBER_ROLE_LABELS, MEMBER_ROLES, PROJECT_STATUS_LABELS, type MemberRole, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
 import { getSupabaseClient } from "../../../lib/supabase/client";
-import { setProjectApprovers } from "../accountApi";
+import { setProjectApprovers, type ApprovalModes } from "../accountApi";
 import { ApproverEditor, type ApproverDraft } from "./ProjectApproversPanel";
 import type { Notify } from "../Toast";
 import { ProjectDetail } from "./ProjectDetail";
@@ -143,6 +143,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   const [memberRole, setMemberRole] = useState<MemberRole>("engineer");
   const [memberPicker, setMemberPicker] = useState(0);
   const [approvers, setApprovers] = useState<ApproverDraft[]>([]);
+  const [approvalModes, setApprovalModes] = useState<ApprovalModes>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setDraft((current) => ({ ...current, [key]: value }));
@@ -166,7 +167,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           if (member.id === saved.pmEmployeeId && member.role === "pm") continue;
           await props.store.saveMember({ projectId: saved.id, employeeId: member.id, displayName: member.name, employeeCode: member.code, role: member.role, parentId: null, team: "", subcontractId: null, joinedOn: saved.plannedStart, leftOn: null });
         }
-        if (approvers.length && getSupabaseClient()) await setProjectApprovers(saved.id, approvers.map(({ role, employeeId }) => ({ role, employeeId })));
+        if (approvers.length && getSupabaseClient()) await setProjectApprovers(saved.id, approvers.map(({ role, employeeId }) => ({ role, employeeId })), approvalModes);
       }
       props.onSaved(saved);
     } catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); }
@@ -214,7 +215,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           {!props.initial && getSupabaseClient() && <fieldset className="pj-create-block">
             <legend>Người duyệt của dự án</legend>
             <p className="muted"><small>Ai ký từng bước của phiếu thuộc dự án (ngân sách, đơn hàng, vật tư, thanh toán…). Để trống vai trò nào thì dùng bộ phận chung của công ty. Giám đốc luôn duyệt ngay được.</small></p>
-            <ApproverEditor value={approvers} onChange={setApprovers} employees={props.employees} />
+            <ApproverEditor value={approvers} onChange={setApprovers} modes={approvalModes} onModesChange={setApprovalModes} employees={props.employees} />
           </fieldset>}
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>

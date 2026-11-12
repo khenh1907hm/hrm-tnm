@@ -67,6 +67,8 @@ export type ApprovalStep = {
   signerName: string;
   note: string;
   actedAt: string | null;
+  /** Khối duyệt lần lượt: bước dành riêng cho người này. */
+  assigneeName?: string;
 };
 
 const addDays = (iso: string, days: number) => { const date = new Date(`${iso}T00:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };

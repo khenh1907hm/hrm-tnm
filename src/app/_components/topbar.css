@@ -35,3 +35,4 @@
 @media (max-width: 860px) { .top-actions { margin: 0 0 10px; } }
 .emp-desktop-only { display: block; }
 @media (max-width: 768px) { .emp-desktop-only { display: none; } }
+.top-pop h4 .top-board-link { margin-left: auto; font-weight: 600; }

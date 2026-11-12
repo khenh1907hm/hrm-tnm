@@ -1,5 +1,5 @@
 "use client";
-import { BadgeCheck, BellRing, ClipboardCheck, Coins, FileSpreadsheet, FolderKanban, History, KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import { BadgeCheck, BellRing, ClipboardCheck, ClipboardSignature, GitBranch, Coins, FileSpreadsheet, FolderKanban, History, KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
@@ -11,9 +11,9 @@ type NavItem = readonly [PageView, string, LucideIcon];
 const NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
   { label: "Nhân sự", items: [["employees", "Nhân sự", Users], ["alerts", "Chứng chỉ hết hạn", BellRing], ["signatures", "Thư viện chữ ký", PenLine]] },
   { label: "Dự án", items: [["projects", "Dự án", FolderKanban], ["timesheet", "Chấm công", ClipboardCheck], ["laborRates", "Đơn giá & lịch làm việc", Coins]] },
-  { label: "Mua hàng", items: [["purchases", "Đặt hàng", ShoppingCart]] },
+  { label: "Mua hàng", items: [["purchases", "Đặt hàng", ShoppingCart], ["approvals", "Đơn phiếu cần duyệt", ClipboardSignature]] },
   { label: "Tài liệu", items: [["reports", "FORM Báo cáo (Excel)", FileSpreadsheet], ["skills", "Kho Skill AI", Sparkles], ["tools", "Công cụ", Wrench]] },
-  { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["audit", "Nhật ký thay đổi", History]] },
+  { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["approvalSettings", "Quy trình duyệt", GitBranch], ["audit", "Nhật ký thay đổi", History]] },
 ];
 const COLLAPSED_KEY = "tnm.sideNav.collapsed";
 const ROLE_LABELS: Record<Actor["role"], string> = { admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên" };

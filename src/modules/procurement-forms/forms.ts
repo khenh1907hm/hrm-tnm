@@ -88,7 +88,20 @@ const signText = (step: SignStep | undefined) => {
   if (step.result === "skipped") return "";
   return "";
 };
-const stepOf = (steps: readonly SignStep[], role: ApprovalRole) => steps.find((step) => step.role === role);
+/**
+ * Bước ký của một khối trên mẫu. Khối duyệt lần lượt có nhiều bước cùng vai trò: gộp vào một ô
+ * (tên những người đã ký, giờ ký của người ký sau cùng).
+ */
+export const stepOf = (steps: readonly SignStep[], role: ApprovalRole): SignStep | undefined => {
+  const list = steps.filter((step) => step.role === role);
+  if (list.length <= 1) return list[0];
+  if (list.some((step) => step.result === "returned")) return list.find((step) => step.result === "returned");
+  const signed = list.filter((step) => step.result === "signed");
+  if (!signed.length) return list.find((step) => step.result === "pending") ?? list[0];
+  const last = [...signed].sort((a, b) => String(a.actedAt).localeCompare(String(b.actedAt))).at(-1)!;
+  // Đã có người ký thì in tên những người đã ký (kể cả khi cấp sau chưa ký)
+  return { ...last, signerName: signed.map((step) => step.signerName).filter(Boolean).join(", ") };
+};
 function signBox(sheet: ExcelJS.Worksheet, steps: readonly SignStep[], boxes: readonly [ApprovalRole, string, string | null][]) {
   for (const [role, nameCell, dateCell] of boxes) {
     const step = stepOf(steps, role);

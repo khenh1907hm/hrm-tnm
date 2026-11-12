@@ -174,6 +174,7 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
       return (((await rpc("approval_steps_of", { p_type: docType, p_doc: docId })) ?? []) as Row[]).map((row) => ({
         id: str(row.id), docType, docId, seq: num(row.seq), role: row.role as ApprovalStep["role"], targetDate: str(row.target_date), result: row.result as ApprovalStep["result"],
         signerName: str(row.signer_name), note: str(row.note), actedAt: strOrNull(row.acted_at), canSign: Boolean(row.can_sign),
+        ...(row.assignee_name ? { assigneeName: str(row.assignee_name) } : {}),
       }));
     },
     async sign(stepId, approve, note) { await rpc("approval_sign", { p_step: stepId, p_approve: approve, p_note: note }); },

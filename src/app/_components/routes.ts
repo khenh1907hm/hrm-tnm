@@ -17,10 +17,12 @@ export const VIEW_PATHS: Record<PageView, string> = {
   timesheet: "/cham-cong",
   laborRates: "/don-gia",
   purchases: "/dat-hang",
+  approvals: "/don-can-duyet",
+  approvalSettings: "/quy-trinh-duyet",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
-export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet", "purchases"];
+export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet", "purchases", "approvals"];
 
 /** Mục quyền cần có để mở từng màn hình; null là ai cũng mở được, "admin" là chỉ Admin. */
 const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
@@ -40,6 +42,9 @@ const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
   laborRates: "projects.rates",
   // Ai cũng lập được đơn hàng; RLS chỉ trả đơn người đó được xem
   purchases: null,
+  // Ai cũng mở được: chỉ thấy phiếu mình liên quan
+  approvals: null,
+  approvalSettings: "admin",
 };
 
 export function canOpenView(actor: Actor, view: PageView): boolean {
@@ -69,6 +74,8 @@ export const VIEW_TITLES: Record<PageView, string> = {
   timesheet: "Chấm công",
   laborRates: "Đơn giá & lịch làm việc",
   purchases: "Đặt hàng",
+  approvals: "Đơn phiếu cần duyệt của tôi",
+  approvalSettings: "Quy trình duyệt",
 };
 
 /** projectId chỉ có khi mở một dự án (/du-an/<id>). */

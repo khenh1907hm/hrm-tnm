@@ -1,11 +1,12 @@
 import { TopBarActions } from "./TopBarActions";
+import { ApprovalBoardPage } from "./ApprovalBoardPage";
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import "./employee.css";
 import { isWorkerEmail } from "../../lib/workerLogin";
 import { usePathname } from "next/navigation";
-import { Camera, ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import { Camera, ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon, ClipboardSignature } from "lucide-react";
 import { PurchasesPage } from "./purchases/PurchasesPage";
 import { getPurchaseStore } from "./purchases/usePurchaseStore";
 import SkillsClient from "../skills/SkillsClient";
@@ -28,6 +29,7 @@ const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
   projects: ["Dự án", FolderKanban],
   timesheet: ["Chấm công", ClipboardCheck],
   purchases: ["Đặt hàng", ShoppingCart],
+  approvals: ["Cần duyệt", ClipboardSignature],
 };
 
 /**
@@ -88,7 +90,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
   const projectStore = useProjectStore(props.mode, null);
   const projects = useHasProjects(projectStore.store, projectStore.ready, props.actor);
   const setNotice = useToast();
-  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "purchases" || projects.buys) && (key !== "timesheet" || projects.attends));
+  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "purchases" || projects.buys) && (key !== "approvals" || projects.buys) && (key !== "timesheet" || projects.attends));
   // Công nhân có dự án đang thi công: mở thẳng trang Chấm công
   const home: PageView = projects.attends && !projects.has ? "timesheet" : canUseTools ? roleInfo.home : "skills";
   const route = parseRoute(usePathname());
@@ -169,6 +171,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       <main className="main-content emp-main" onClick={() => setMenuOpen(false)}>
         {props.mode === "live" && <div className="emp-desktop-only"><TopBarActions /></div>}
         {view === "skills" && <SkillsClient embedded />}
+        {view === "approvals" && <ApprovalBoardPage live={props.mode === "live"} setNotice={setNotice} />}
         {view === "tools" && <ToolsPage orgChart={props.actor ? { store: projectStore.store, ready: projectStore.ready, actor: props.actor, employees: null, setNotice } : undefined} />}
         {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
           onOpen={(projectId) => { const path = projectId ? projectPath(projectId) : routePath("projects"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />)}

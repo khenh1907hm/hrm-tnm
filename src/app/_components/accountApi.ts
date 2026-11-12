@@ -57,8 +57,59 @@ export async function projectApprovers(projectId: string): Promise<ProjectApprov
   }));
 }
 
-export async function setProjectApprovers(projectId: string, items: readonly { role: ApprovalRole; employeeId: string }[]) {
-  await rpc("project_approvers_set", { p_project: projectId, p_items: items });
+/** Kiểu duyệt của một khối khi có nhiều người: một người là đủ, hoặc lần lượt từng người theo thứ tự. */
+export type ApprovalMode = "any" | "sequence";
+export type ApprovalModes = Partial<Record<ApprovalRole, ApprovalMode>>;
+
+/** Lưu người duyệt (đúng thứ tự trong danh sách) và kiểu duyệt từng vai trò của dự án. */
+export async function setProjectApprovers(projectId: string, items: readonly { role: ApprovalRole; employeeId: string }[], modes?: ApprovalModes) {
+  await rpc("project_approvers_set", { p_project: projectId, p_items: items, p_modes: modes ?? null });
+}
+
+export async function projectApprovalModes(projectId: string): Promise<ApprovalModes> {
+  const client = getSupabaseClient();
+  if (!client) return {};
+  const { data } = await client.from("projects").select("approval_modes").eq("id", projectId).maybeSingle();
+  return ((data?.approval_modes ?? {}) as ApprovalModes);
+}
+
+/** Cấu hình chung (Admin): người từng bộ phận theo thứ tự và kiểu duyệt. */
+export type ApprovalSettings = { departments: Record<string, string[]>; modes: ApprovalModes; names: Record<string, string> };
+export async function approvalSettings(): Promise<ApprovalSettings> {
+  const client = getSupabaseClient();
+  if (!client) return { departments: {}, modes: {}, names: {} };
+  const [{ data, error }, people] = await Promise.all([
+    client.from("procurement_settings").select("departments, modes").eq("id", 1).maybeSingle(),
+    rpc("procurement_departments"),
+  ]);
+  if (error) throw new Error(error.message);
+  const names = Object.fromEntries(((people ?? []) as Row[]).map((row) => [str(row.employee_id), str(row.name)]));
+  return { departments: (data?.departments ?? {}) as Record<string, string[]>, modes: (data?.modes ?? {}) as ApprovalModes, names };
+}
+export async function saveApprovalSettings(departments: Record<string, string[]>, modes: ApprovalModes) {
+  await rpc("approval_settings_save", { p_departments: departments, p_modes: modes });
+}
+
+/** Một phiếu trên bảng "Đơn phiếu cần duyệt của tôi". */
+export type BoardColumn = "todo" | "waiting" | "approved" | "returned";
+export type BoardCard = {
+  docType: string; docId: string; projectId: string | null; projectCode: string; title: string; amount: number; creatorName: string; column: BoardColumn;
+  stepId: string | null; role: ApprovalRole | null; assignee: string; targetDate: string | null; canSign: boolean; signed: number; total: number; updatedAt: string; link: string;
+};
+export async function approvalBoard(): Promise<BoardCard[]> {
+  return (((await rpc("my_approval_board")) ?? []) as Row[]).map((row) => ({
+    docType: str(row.doc_type), docId: str(row.doc_id), projectId: row.project_id ? str(row.project_id) : null, projectCode: str(row.project_code), title: str(row.title),
+    amount: Number(row.amount ?? 0), creatorName: str(row.creator_name), column: str(row.column_key) as BoardColumn,
+    stepId: row.current_step_id ? str(row.current_step_id) : null, role: row.step_role ? (str(row.step_role) as ApprovalRole) : null,
+    assignee: str(row.current_assignee), targetDate: row.current_target ? str(row.current_target) : null, canSign: Boolean(row.can_sign),
+    signed: Number(row.signed_count ?? 0), total: Number(row.total_count ?? 0), updatedAt: str(row.updated_at), link: str(row.link),
+  }));
+}
+
+/** Ký hoặc trả về bước đang chờ của một phiếu. */
+export async function signStep(stepId: string, approve: boolean, note: string) {
+  await rpc("approval_sign", { p_step: stepId, p_approve: approve, p_note: note });
+  dispatchNotificationEmails();
 }
 
 export async function directorApprove(docType: string, docId: string, note: string) {

@@ -1,6 +1,8 @@
 "use client";
 
 import { TopBarActions } from "./_components/TopBarActions";
+import { ApprovalBoardPage } from "./_components/ApprovalBoardPage";
+import { ApprovalSettingsPage } from "./_components/ApprovalSettingsPage";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { can, type Actor } from "../modules/auth/permissions";
@@ -484,6 +486,8 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
         {view === "purchases" && <PurchasesPage store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
+        {view === "approvals" && <ApprovalBoardPage live={backend.mode === "live"} setNotice={setNotice} />}
+        {view === "approvalSettings" && actor.role === "admin" && <ApprovalSettingsPage live={backend.mode === "live"} employees={employeeSource} setNotice={setNotice} />}
         {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}
         {view === "accounts" && actor.role === "admin" && <AccountsView employees={employeeSource} actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}
         {(view === "settings" || view === "certTypes") && <SettingsPanel key={view} section={view === "certTypes" ? "types" : "emails"} app={app} actor={actor} setNotice={setNotice} onAddSignature={() => navigate("signatures")} sessionFiles={sessionFiles} />}

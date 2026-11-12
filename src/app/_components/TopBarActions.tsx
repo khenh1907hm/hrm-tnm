@@ -95,7 +95,7 @@ export function TopBarActions(props: { compact?: boolean }) {
       {open === "bell" && (
         <div className="top-pop" role="dialog" aria-label="Thông báo">
           <header><b>Thông báo</b>{items.some((item) => !item.readAt) && <button type="button" className="link-button" onClick={() => void markNotificationsRead(null).then(refresh)}><CheckCheck size={14} aria-hidden="true" /> Đã đọc hết</button>}</header>
-          <h4>Cần bạn duyệt {pending.length > 0 && <span className="pill warn">{pending.length}</span>}</h4>
+          <h4>Cần bạn duyệt {pending.length > 0 && <span className="pill warn">{pending.length}</span>}<button type="button" className="link-button top-board-link" onClick={() => go("/don-can-duyet")}>Xem bảng duyệt</button></h4>
           {!pending.length ? <p className="muted top-empty">Không có phiếu nào đang chờ bạn ký.</p> : (
             <ul className="top-list">
               {pending.map((item) => {
