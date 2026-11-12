@@ -3,12 +3,13 @@
  * rồi gửi file vào nhóm Telegram. Ảnh chỉ nằm trong thư mục tạm của một yêu cầu và bị xóa ngay sau đó.
  *
  * Biến môi trường: DAILY_REPORT_PYTHON (mặc định python3, Windows: python), TELEGRAM_BOT_TOKEN,
- * DAILY_REPORT_TELEGRAM_CHAT_ID, cùng biến của read_board.py (CLOUDFLARE_*, DAILY_REPORT_VISION_*, ANTHROPIC_API_KEY).
+ * DAILY_REPORT_TELEGRAM_CHAT_ID, cùng biến của read_board.py (DAILY_REPORT_VISION_*, CLOUDFLARE_*, GEMINI_API_KEY / GEMINI_VISION_MODEL, ANTHROPIC_API_KEY).
  */
 import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DAILY_MAX_PHOTOS } from "../modules/projects/dailyReport";
 
 type Env = { supabaseUrl?: string | undefined; supabaseKey?: string | undefined };
 const SCRIPTS = path.join(process.cwd(), "scripts", "daily_report");
@@ -98,7 +99,7 @@ async function sendTelegram(file: Uint8Array, fileName: string, caption: string)
 }
 
 /**
- * POST /api/daily-report/send: form {project, data(JSON đã lưu + lũy kế + caption), photos[] ≤ 4}
+ * POST /api/daily-report/send: form {project, data(JSON đã lưu + lũy kế + caption), photos[] ≤ 12, không bắt buộc}
  * → điền mẫu "BC ngày" kèm ảnh, gửi Telegram, trả file (base64) để tải nếu cần.
  */
 export async function handleDailySend(request: Request, env: Env): Promise<Response> {
@@ -108,7 +109,7 @@ export async function handleDailySend(request: Request, env: Env): Promise<Respo
   if (!(await canSend(request, env, projectId))) return fail(403, "Chỉ PM hoặc Chỉ huy trưởng của dự án mới gửi báo cáo ngày.");
   let data: Record<string, unknown>;
   try { data = JSON.parse(String(form.get("data") ?? "")) as Record<string, unknown>; } catch { return fail(400, "Dữ liệu báo cáo không hợp lệ."); }
-  const photos = form.getAll("photos").filter((item): item is File => item instanceof File && item.size > 0).slice(0, 4);
+  const photos = form.getAll("photos").filter((item): item is File => item instanceof File && item.size > 0).slice(0, DAILY_MAX_PHOTOS);
   if (photos.some((photo) => photo.size > MAX_IMAGE_BYTES || (photo.type && !PHOTO_TYPES.has(photo.type)))) return fail(413, "Ảnh thi công phải là JPG/PNG/WebP, tối đa 15 MB mỗi ảnh.");
   return withTempDir(async (dir) => {
     const dataPath = path.join(dir, "report.json");

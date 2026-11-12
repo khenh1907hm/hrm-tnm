@@ -1,5 +1,5 @@
 """
-Điền báo cáo ngày vào mẫu "BC ngày" (template.xlsx) và chèn tối đa 4 ảnh thi công vào khung 2×2 bên dưới.
+Điền báo cáo ngày vào mẫu "BC ngày" (template.xlsx) và chèn ảnh thi công (0–12, không bắt buộc) vào khung bên dưới, 2 ảnh mỗi hàng.
 
   python fill_report.py --data report.json --out bao-cao.xlsx [--photo a.jpg ...] [--template template.xlsx]
 
@@ -21,16 +21,20 @@ from openpyxl.drawing.spreadsheet_drawing import AnchorMarker, OneCellAnchor
 from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.utils import column_index_from_string
 from openpyxl.utils.units import pixels_to_EMU
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Alignment, Border, Side
+from openpyxl.worksheet.pagebreak import Break
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SHEET = "BC ngày"
 TASK_FIRST_ROW, TASK_LAST_ROW = 6, 17
-# Khung ảnh 2×2: hai khối trái (A:E) / phải (F:H) của hai hàng ảnh đầu tiên trong mẫu
-PHOTO_BLOCKS = [("A", "E", 21, 33), ("F", "H", 21, 33), ("A", "E", 34, 46), ("F", "H", 34, 46)]
-LAST_ROW = 46
-MAX_PHOTOS = 4
+# Phần ảnh của mẫu: tiêu đề "Hình Ảnh Dự Án" ở dòng 19, sáu hàng khung (mỗi hàng 13 dòng, trái A:E / phải F:H).
+# Trang 1 chứa 2 hàng khung (dòng 21–46), dòng 47 là ngắt trang, trang 2 chứa 4 hàng (48–99).
+PHOTO_SECTION_FIRST_ROW = 18
+PHOTO_ROW_STARTS = [21, 34, 48, 61, 74, 87]
+PHOTO_ROW_HEIGHT = 13
+MAX_PHOTOS = 2 * len(PHOTO_ROW_STARTS)
 PHOTO_SIDE = 1280
+THIN = Side(style="thin")
 
 
 def column_px(sheet, letter: str) -> float:
@@ -62,6 +66,15 @@ def photo_image(path: str, max_w: float, max_h: float) -> XlImage:
     return image
 
 
+def box(sheet, first_row: int, last_row: int) -> None:
+    """Viền mỏng quanh khối A:H của một hàng khung, bỏ đường chia giữa E|F."""
+    for row in range(first_row, last_row + 1):
+        for col in "ABCDEFGH":
+            sheet[f"{col}{row}"].border = Border(
+                left=THIN if col == "A" else Side(), right=THIN if col == "H" else Side(),
+                top=THIN if row == first_row else Side(), bottom=THIN if row == last_row else Side())
+
+
 def dmy(iso: str) -> str:
     parts = (iso or "").split("-")
     return f"{parts[2]}/{parts[1]}/{parts[0]}" if len(parts) == 3 else iso or ""
@@ -90,13 +103,7 @@ def fill(template: str, data: dict, photos: list[str], out: str) -> None:
     for cell, key in (("D2", "total"), ("F2", "present"), ("H2", "absent"), ("B3", "otCount"), ("D3", "otHours"), ("F3", "cumulativeWorkdays"), ("H3", "cumulativeOtHours")):
         sheet[cell] = number(data.get(key))
 
-    # Người vắng: dòng 4 (mẫu để trống)
-    absent = [name for name in data.get("absentNames") or [] if name]
-    sheet.merge_cells("A4:H4")
-    sheet["A4"] = f"Người vắng: {', '.join(absent)}" if absent else ""
-    sheet["A4"].alignment = Alignment(wrap_text=True, vertical="center")
-    sheet["A4"].font = Font(italic=True)
-
+    # Chỉ ghi số vắng (ô H2), không ghi tên người vắng: dòng 4 của mẫu để trống
     wrap = Alignment(wrap_text=True, vertical="center")
     tasks = list(data.get("tasks") or [])
     capacity = TASK_LAST_ROW - TASK_FIRST_ROW + 1
@@ -119,15 +126,37 @@ def fill(template: str, data: dict, photos: list[str], out: str) -> None:
         lines = max(1, -(-len(sheet[f"G{row}"].value or "") // 22), -(-len(str(task.get("task", ""))) // 28))
         sheet.row_dimensions[row].height = max(18.85, 15 * lines)
 
-    # Bỏ các khối ảnh thừa của mẫu (dòng 47 trở đi), chỉ giữ khung 2×2
+    # Khung ảnh: chỉ giữ đủ hàng khung cho số ảnh đã chọn (2 ảnh mỗi hàng); không có ảnh thì bỏ cả phần "Hình Ảnh Dự Án"
+    photos = photos[:MAX_PHOTOS]
+    frame_rows = -(-len(photos) // 2)
+    last_row = PHOTO_ROW_STARTS[frame_rows - 1] + PHOTO_ROW_HEIGHT - 1 if frame_rows else TASK_LAST_ROW
     for merged in list(sheet.merged_cells.ranges):
-        if merged.min_row > LAST_ROW:
+        if merged.min_row > last_row:
             sheet.unmerge_cells(str(merged))
-    if sheet.max_row > LAST_ROW:
-        sheet.delete_rows(LAST_ROW + 1, sheet.max_row - LAST_ROW)
+    if sheet.max_row > last_row:
+        sheet.delete_rows(last_row + 1, sheet.max_row - last_row)
+    if not frame_rows and sheet.max_row >= PHOTO_SECTION_FIRST_ROW:
+        sheet.delete_rows(PHOTO_SECTION_FIRST_ROW, sheet.max_row - PHOTO_SECTION_FIRST_ROW + 1)
 
-    for path, (first_col, last_col, first_row, last_row) in zip(photos[:MAX_PHOTOS], PHOTO_BLOCKS):
-        width, height = block_size(sheet, first_col, last_col, first_row, last_row)
+    blocks = []
+    for index in range(len(photos)):
+        start = PHOTO_ROW_STARTS[index // 2]
+        end = start + PHOTO_ROW_HEIGHT - 1
+        if index == len(photos) - 1 and index % 2 == 0:
+            # Ảnh lẻ cuối cùng: gộp cả hàng A:H để ảnh nằm giữa, không để trống khung bên phải
+            sheet.unmerge_cells(f"A{start}:E{end}")
+            sheet.unmerge_cells(f"F{start}:H{end}")
+            sheet.merge_cells(f"A{start}:H{end}")
+            box(sheet, start, end)
+            blocks.append(("A", "H", start, end))
+        else:
+            blocks.append(("A", "E", start, end) if index % 2 == 0 else ("F", "H", start, end))
+    if frame_rows > 2:
+        # Hai hàng khung đầu ở trang 1, phần còn lại sang trang 2 (giữ nguyên khung, không cắt đôi ảnh)
+        sheet.row_breaks.append(Break(id=PHOTO_ROW_STARTS[2] - 1))
+
+    for path, (first_col, last_col, first_row, last_row_block) in zip(photos, blocks):
+        width, height = block_size(sheet, first_col, last_col, first_row, last_row_block)
         image = photo_image(path, width, height)
         # Căn giữa ảnh trong khung (lệch theo pixel tính từ ô trên-trái của khung)
         offset_x, offset_y = (width - image.width) / 2, (height - image.height) / 2
@@ -135,7 +164,7 @@ def fill(template: str, data: dict, photos: list[str], out: str) -> None:
         image.anchor = OneCellAnchor(_from=marker, ext=XDRPositiveSize2D(pixels_to_EMU(int(image.width)), pixels_to_EMU(int(image.height))))
         sheet.add_image(image)
 
-    sheet.print_area = f"A1:H{LAST_ROW}"
+    sheet.print_area = f"A1:H{last_row}"
     sheet.page_setup.orientation = "portrait"
     sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
     sheet.page_setup.fitToWidth = 1

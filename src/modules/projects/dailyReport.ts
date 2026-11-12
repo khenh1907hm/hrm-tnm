@@ -1,6 +1,6 @@
 /**
  * Báo cáo ngày của dự án (mẫu "BC ngày"): đọc từ ảnh bảng phân công (scripts/daily_report/read_board.py),
- * chỉ huy trưởng kiểm tra / sửa, rồi máy chủ điền Excel kèm tối đa 4 ảnh và gửi Telegram. Chỉ lưu dữ liệu, không lưu ảnh.
+ * chỉ huy trưởng kiểm tra / sửa, rồi máy chủ điền Excel kèm ảnh thi công (nếu có) và gửi Telegram. Chỉ lưu dữ liệu, không lưu ảnh.
  */
 
 /** Một tên đọc từ bảng, đã so với danh sách công nhân dự án. */
@@ -41,9 +41,9 @@ export type DailyReport = {
 export type DailyReportInput = Omit<DailyReport, "id" | "projectId" | "createdByName" | "sentAt" | "sentError"> & { model: string };
 export type DailyReportSaved = { id: string; projectCode: string; projectName: string; cumulativeWorkdays: number; cumulativeOtHours: number };
 
-/** Mẫu Excel có 12 dòng công việc, khung 4 ảnh. */
+/** Mẫu Excel có 12 dòng công việc; khung ảnh 2 ảnh mỗi hàng, tối đa 6 hàng (12 ảnh), không có ảnh thì bỏ phần ảnh. */
 export const DAILY_MAX_TASKS = 12;
-export const DAILY_MAX_PHOTOS = 4;
+export const DAILY_MAX_PHOTOS = 12;
 
 export const manualName = (text: string): NameRef => ({ text: text.trim(), name: text.trim(), matched: false, confidence: "manual" });
 
@@ -95,7 +95,7 @@ export function toInput(draft: DailyReportDraft, photoCount: number): DailyRepor
 export function draftFromReport(report: DailyReport, date: string): DailyReportDraft {
   return {
     date, total: report.total, present: report.present, absent: report.absent, otCount: report.otCount, otHours: report.otHours, model: "",
-    absentNames: report.absentNames.map(manualName),
+    absentNames: [],
     tasks: report.tasks.map((task) => ({ no: task.no, task: task.task, leader: task.leader ? manualName(task.leader) : null, members: task.members.map(manualName) })),
   };
 }

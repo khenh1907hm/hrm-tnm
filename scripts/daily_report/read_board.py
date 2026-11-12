@@ -4,8 +4,9 @@
   python read_board.py --image bang.jpg [--roster roster.json]
 
 Mô hình đọc ảnh chọn bằng biến môi trường:
-  DAILY_REPORT_VISION_PROVIDER = "cloudflare" (mặc định) hoặc "anthropic"
+  DAILY_REPORT_VISION_PROVIDER = "cloudflare" (mặc định), "gemini", "anthropic", hoặc chuỗi dự phòng "gemini,cloudflare"
   DAILY_REPORT_VISION_MODEL    = mô hình Cloudflare (mặc định @cf/mistralai/mistral-small-3.1-24b-instruct)
+  Gemini: GEMINI_API_KEY, GEMINI_VISION_MODEL (mặc định gemini-flash-lite-latest).
   Cloudflare: CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN. Claude: ANTHROPIC_API_KEY (model claude-opus-5-5).
 
 Tên đọc được được so với danh sách công nhân của dự án (roster.json: [{"name": "Phạm Văn Kiến", "employeeId": "..."}])
@@ -29,18 +30,20 @@ import urllib.request
 PROMPT = """Đây là ảnh bảng trắng phân công công việc hằng ngày ở công trường (tiếng Việt, viết tay).
 Bố cục thường gặp:
 - Dòng đầu: "Ngày .. Tháng .. Năm ....".
-- Góc phải trên: TS (tổng số), HD (hiện diện), V (vắng); bên dưới là danh sách tên người vắng, mỗi tên một dòng.
+- Góc phải trên: TS (tổng số), HD (hiện diện), V (vắng). Chỉ cần đọc ba con số này; KHÔNG đọc tên người vắng.
 - Danh sách công việc đánh số "1/", "2/", ...: tên công việc, mũi tên "=>", rồi tên các thành viên nối bằng dấu "+".
   Một công việc có thể viết tiếp sang dòng dưới (dòng bắt đầu bằng "+").
 - Dấu ngoặc nhọn "}" bên phải gom một hoặc nhiều công việc; tên viết sau dấu ngoặc là NHÓM TRƯỞNG của TẤT CẢ các công việc nằm trong ngoặc.
   Công việc không nằm trong ngoặc nào thì nhóm trưởng để rỗng.
 Chỉ trả về DUY NHẤT một JSON, không giải thích:
 {"date": "YYYY-MM-DD", "total": số TS, "present": số HD, "absent": số V,
- "absentNames": ["tên người vắng"],
  "tasks": [{"no": số thứ tự, "task": "tên công việc", "leader": "nhóm trưởng hoặc rỗng", "members": ["tên", ...]}]}
-Giữ đúng dấu tiếng Việt; chữ không đọc được thì để nguyên như đã thấy, không bịa thêm người."""
+Giữ đúng dấu tiếng Việt; chữ không đọc được thì để nguyên như đã thấy, không bịa thêm người.
+Số nào không thấy trên bảng thì để null."""
 
 CLOUDFLARE_DEFAULT_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct"
+# Bí danh luôn trỏ tới bản Flash-Lite mới nhất (gói miễn phí nhiều lượt/ngày hơn Flash)
+GEMINI_DEFAULT_MODEL = "gemini-flash-lite-latest"
 CLAUDE_MODEL = "claude-opus-5-5"
 MAX_SIDE = 1600
 
@@ -99,6 +102,37 @@ def read_with_cloudflare(image: bytes, media_type: str) -> tuple[str, str]:
         return json.dumps(text, ensure_ascii=False), model
     if not isinstance(text, str):
         raise ReadError("Cloudflare không trả về nội dung.")
+    return text, model
+
+
+def read_with_gemini(image: bytes, media_type: str) -> tuple[str, str]:
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        raise ReadError("Máy chủ chưa cấu hình Gemini (GEMINI_API_KEY).")
+    model = os.environ.get("GEMINI_VISION_MODEL", "").strip() or GEMINI_DEFAULT_MODEL
+    body = {
+        "contents": [{"role": "user", "parts": [
+            {"inline_data": {"mime_type": media_type, "data": base64.b64encode(image).decode()}},
+            {"text": PROMPT},
+        ]}],
+        "generationConfig": {"temperature": 0, "responseMimeType": "application/json", "maxOutputTokens": 4096},
+    }
+    request = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+        data=json.dumps(body).encode(), headers={"x-goog-api-key": key, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code == 429:
+            raise ReadError("Gemini đã hết lượt miễn phí hôm nay (hoặc gọi quá nhanh).") from error
+        raise ReadError(f"Gemini báo lỗi {error.code} khi đọc ảnh.") from error
+    except (urllib.error.URLError, TimeoutError) as error:
+        raise ReadError("Không kết nối được Gemini để đọc ảnh.") from error
+    parts = ((result.get("candidates") or [{}])[0].get("content") or {}).get("parts") or []
+    text = "".join(part.get("text", "") for part in parts if isinstance(part, dict))
+    if not text:
+        raise ReadError("Gemini không trả về nội dung.")
     return text, model
 
 
@@ -203,14 +237,31 @@ def normalize(data: dict, roster: Roster) -> dict:
             "leader": roster.match(leader_text) if leader_text else None,
             "members": members,
         })
+    # Chỉ đọc số TS / HD / V; không đọc tên người vắng (mô hình hay bịa tên từ danh sách công việc)
     return {
         "date": date,
         "total": to_int(data.get("total")),
         "present": to_int(data.get("present")),
         "absent": to_int(data.get("absent")),
-        "absentNames": [roster.match(name) for name in data.get("absentNames") or [] if str(name).strip()],
+        "absentNames": [],
         "tasks": tasks,
     }
+
+
+READERS = {"gemini": read_with_gemini, "cloudflare": read_with_cloudflare, "anthropic": read_with_claude}
+
+
+def read_with_providers(image: bytes, media_type: str) -> tuple[str, str]:
+    """Thử lần lượt các nhà cung cấp trong DAILY_REPORT_VISION_PROVIDER ("gemini,cloudflare"): cái đầu lỗi / hết lượt thì dùng cái sau."""
+    names = [name.strip().lower() for name in os.environ.get("DAILY_REPORT_VISION_PROVIDER", "cloudflare").split(",") if name.strip()]
+    readers = [READERS[name] for name in names if name in READERS] or [read_with_cloudflare]
+    errors: list[str] = []
+    for reader in readers:
+        try:
+            return reader(image, media_type)
+        except ReadError as error:
+            errors.append(str(error))
+    raise ReadError(" ".join(errors))
 
 
 def main() -> int:
@@ -222,8 +273,7 @@ def main() -> int:
         with open(args.image, "rb") as handle:
             image, media_type = shrink(handle.read())
         people = json.load(open(args.roster, encoding="utf-8")) if args.roster else []
-        provider = os.environ.get("DAILY_REPORT_VISION_PROVIDER", "cloudflare").strip().lower()
-        text, model = read_with_claude(image, media_type) if provider == "anthropic" else read_with_cloudflare(image, media_type)
+        text, model = read_with_providers(image, media_type)
         result = normalize(extract_json(text), Roster(people))
         result["model"] = model
         print(json.dumps({"ok": True, "data": result}, ensure_ascii=False))

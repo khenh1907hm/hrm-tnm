@@ -35,7 +35,7 @@ async function shrink(file: File, side = 1600): Promise<File> {
 
 /**
  * Tab Báo cáo ngày (mẫu "BC ngày"): chụp bảng phân công → máy đọc (Python) → chỉ huy trưởng kiểm tra, sửa →
- * thêm tối đa 4 ảnh thi công → lưu dữ liệu và gửi file Excel vào nhóm Telegram. Không lưu ảnh.
+ * thêm ảnh thi công nếu có (tối đa 12) → lưu dữ liệu và gửi file Excel vào nhóm Telegram. Không lưu ảnh.
  */
 export function DailyReportTab({ store, data, setNotice }: TabProps) {
   const { project, today, members } = data;
@@ -91,7 +91,7 @@ export function DailyReportTab({ store, data, setNotice }: TabProps) {
         ...input, projectCode: saved.projectCode, projectName: saved.projectName, cumulativeWorkdays: saved.cumulativeWorkdays, cumulativeOtHours: saved.cumulativeOtHours,
         caption: telegramCaption(input, { code: saved.projectCode, name: saved.projectName }, ""),
       }));
-      for (const photo of photos) body.append("photos", await shrink(photo));
+      for (const photo of photos) body.append("photos", await shrink(photo, 1280));
       const response = await fetch("/api/daily-report/send", { method: "POST", body, headers: await authHeader() });
       const result = await response.json().catch(() => null) as { ok?: boolean; message?: string; sent?: boolean; telegramError?: string; file?: string; fileName?: string } | null;
       if (!response.ok || !result?.ok) {
@@ -115,7 +115,7 @@ export function DailyReportTab({ store, data, setNotice }: TabProps) {
       {!draft ? (
         <section className="panel pj-section dr-start">
           <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Báo cáo ngày <small className="muted">(mẫu BC ngày)</small></h2>
-          <p className="muted">Chụp bảng phân công trong ngày, máy đọc ra số người, người vắng và công việc. Kiểm tra lại, thêm tối đa {DAILY_MAX_PHOTOS} ảnh thi công rồi gửi vào nhóm Telegram. Hệ thống chỉ lưu dữ liệu, không lưu ảnh.</p>
+          <p className="muted">Chụp bảng phân công trong ngày, máy đọc ra số người (tổng, hiện diện, vắng) và công việc. Kiểm tra lại, thêm ảnh thi công nếu có (không bắt buộc, tối đa {DAILY_MAX_PHOTOS} ảnh) rồi gửi vào nhóm Telegram. Hệ thống chỉ lưu dữ liệu, không lưu ảnh.</p>
           <div className="dr-board">
             <label className="button dr-file"><Camera className="ico" size={16} aria-hidden="true" /> {board ? "Chụp lại" : "Chụp / chọn ảnh bảng"}
               <input type="file" accept="image/*" capture="environment" hidden onChange={(event) => { setBoard(event.target.files?.[0] ?? null); event.target.value = ""; }} />
@@ -160,7 +160,6 @@ function DraftEditor(props: { draft: DailyReportDraft; onChange: (draft: DailyRe
           <label className="field"><span>SL tăng ca</span><input type="number" min={0} inputMode="numeric" value={draft.otCount} onChange={(event) => set({ otCount: num(event.target.value) ?? 0 })} /></label>
           <label className="field"><span>Giờ TC</span><input type="number" min={0} step={0.5} inputMode="decimal" value={draft.otHours} onChange={(event) => set({ otHours: num(event.target.value) ?? 0 })} /></label>
         </div>
-        <div className="field"><span>Người vắng</span><NameChips names={draft.absentNames} suggestions={props.suggestions} onChange={(absentNames) => set({ absentNames })} /></div>
         <div className="table-scroll">
           <table className="pj-table dr-tasks">
             <thead><tr><th>STT</th><th>Công việc</th><th>Nhóm trưởng</th><th>Thành viên</th><th /></tr></thead>
@@ -180,7 +179,7 @@ function DraftEditor(props: { draft: DailyReportDraft; onChange: (draft: DailyRe
       </section>
 
       <section className="panel pj-section">
-        <h2><ImagePlus className="ico" size={18} aria-hidden="true" /> Ảnh thi công <small className="muted">({props.photos.length}/{DAILY_MAX_PHOTOS}, chỉ đính kèm file gửi đi, không lưu)</small></h2>
+        <h2><ImagePlus className="ico" size={18} aria-hidden="true" /> Ảnh thi công <small className="muted">({props.photos.length}/{DAILY_MAX_PHOTOS}, không bắt buộc; ảnh nằm ở khung phía dưới file Excel, không lưu trên hệ thống)</small></h2>
         <div className="dr-photos">
           {props.photoUrls.map((url, index) => (
             <figure key={url}>

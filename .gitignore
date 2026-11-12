@@ -53,3 +53,7 @@ next-env.d.ts
 
 # Font Microsoft cho máy chủ Gotenberg (chỉ dùng nội bộ, không đưa lên git)
 /docker/gotenberg/fonts/*.ttf
+
+# Python
+__pycache__/
+*.pyc
