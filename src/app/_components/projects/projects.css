@@ -151,3 +151,25 @@
 .ap-mode { display: flex; flex-wrap: wrap; gap: 6px; }
 .ap-mode label { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
 .ap-mode label.on { border-color: var(--brand); background: var(--brand-soft); font-weight: 600; }
+/* Cây khung duyệt (kéo thả thành viên vào khung) */
+.ap-tree { display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: start; }
+.ap-pool { position: sticky; top: 8px; display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--soft); }
+.ap-pool-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ap-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 13px; }
+.ap-chip[draggable="true"] { cursor: grab; }
+.ap-chip[draggable="true"]:hover { border-color: var(--brand); }
+.ap-chip.director { background: #fef3c7; border-color: #f59e0b; font-weight: 600; }
+.ap-chip button { border: 0; background: transparent; padding: 1px; display: grid; place-items: center; cursor: pointer; color: var(--muted); border-radius: 50%; }
+.ap-chip button:hover { color: var(--bad); }
+.ap-frames { display: grid; gap: 0; }
+.ap-frame { position: relative; border: 2px dashed var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; background: var(--surface); margin-bottom: 18px; }
+.ap-frame:not(.after)::after { content: "↓"; position: absolute; left: 50%; bottom: -19px; transform: translateX(-50%); color: var(--muted); font-weight: 700; }
+.ap-frame.top { border-style: solid; border-color: #f59e0b; background: #fffbeb; }
+.ap-frame.top::after { display: none; }
+.ap-frame.after { opacity: .9; border-style: dotted; margin-top: 6px; }
+.ap-frame.over { border-color: var(--brand); background: var(--brand-soft); }
+.ap-frame-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.ap-frame-people { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-height: 30px; }
+.ap-frame-empty { font-size: 12px; }
+.ap-frame-add { width: auto; padding: 3px 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+@media (max-width: 760px) { .ap-tree { grid-template-columns: 1fr; } .ap-pool { position: static; } }

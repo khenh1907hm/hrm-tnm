@@ -57,6 +57,11 @@ export async function projectApprovers(projectId: string): Promise<ProjectApprov
   }));
 }
 
+/** Giám đốc: luôn ở khung Lãnh đạo của mọi dự án. */
+export async function directorPeople(): Promise<{ employeeId: string; name: string }[]> {
+  return (((await rpc("director_people")) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name) }));
+}
+
 /** Kiểu duyệt của một khối khi có nhiều người: một người là đủ, hoặc lần lượt từng người theo thứ tự. */
 export type ApprovalMode = "any" | "sequence";
 export type ApprovalModes = Partial<Record<ApprovalRole, ApprovalMode>>;

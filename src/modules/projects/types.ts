@@ -59,7 +59,7 @@ export type ProjectInput = Omit<Project, "id" | "updatedAt">;
 
 export type ProjectBudget = { category: BudgetCategory; amount: number; warnPct: number; plannedHours: number | null };
 
-export type MemberRole = "pm" | "commander" | "supervisor" | "engineer" | "leader" | "worker";
+export type MemberRole = "pm" | "commander" | "supervisor" | "engineer" | "leader" | "worker" | "member";
 export const MEMBER_ROLE_LABELS: Record<MemberRole, string> = {
   pm: "PM",
   commander: "Chỉ huy trưởng",
@@ -67,6 +67,7 @@ export const MEMBER_ROLE_LABELS: Record<MemberRole, string> = {
   engineer: "Kỹ sư",
   leader: "Tổ trưởng",
   worker: "Tổ viên",
+  member: "Thành viên",
 };
 export const MEMBER_ROLES = Object.keys(MEMBER_ROLE_LABELS) as MemberRole[];
 

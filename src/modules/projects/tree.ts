@@ -2,7 +2,7 @@ import type { ProjectMember } from "./types";
 
 export type MemberNode = { member: ProjectMember; children: MemberNode[] };
 
-const ROLE_ORDER = ["pm", "commander", "supervisor", "engineer", "leader", "worker"];
+const ROLE_ORDER = ["pm", "commander", "supervisor", "engineer", "leader", "worker", "member"];
 const byRoleThenName = (a: ProjectMember, b: ProjectMember) =>
   ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role) || a.team.localeCompare(b.team, "vi") || a.displayName.localeCompare(b.displayName, "vi");
 

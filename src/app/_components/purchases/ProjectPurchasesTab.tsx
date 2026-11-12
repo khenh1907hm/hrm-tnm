@@ -33,7 +33,7 @@ export function ProjectPurchasesTab({ store, data, setNotice }: TabProps) {
       </div>
       {orders && <small className="muted">{open_.length} đơn đang xử lý, dự kiến {formatVnd(open_.reduce((sum, order) => sum + (order.totalActual ?? order.totalEstimate), 0))}. Khi hoàn tất, tiền thực nhận tự ghi vào chi phí vật tư và trừ vào vốn dự án.</small>}
       {!orders ? <div className="loading">Đang tải…</div> : <PurchaseList orders={orders} projects={[data.project]} pending={pending} onOpen={open} hideProject />}
-      {creating && <PurchaseFormModal store={purchases} projects={[data.project]} initial={null} defaultProjectId={data.project.id} onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi sếp duyệt.` : `Đã lưu nháp ${order.code}.`, "success"); open(order.id); }} />}
+      {creating && <PurchaseFormModal store={purchases} projects={[data.project]} initial={null} defaultProjectId={data.project.id} lockProject onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi ký duyệt.` : `Đã lưu nháp ${order.code}.`, "success"); open(order.id); }} />}
     </section>
   );
 }

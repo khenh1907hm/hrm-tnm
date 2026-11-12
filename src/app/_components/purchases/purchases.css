@@ -77,3 +77,24 @@
 .po-terms-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; }
 .ap-chain-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .ap-chain-head > span { display: inline-flex; align-items: center; gap: 6px; }
+/* Tệp đính kèm đơn hàng */
+.po-files { display: grid; gap: 0; }
+.po-file-row { display: grid; grid-template-columns: minmax(200px, 1.2fr) 2fr auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.po-file-row:first-child { border-top: 0; }
+.po-file-row.missing .po-file-label b { color: var(--bad); }
+.po-file-label { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.po-req { font-size: 11px; font-weight: 700; color: var(--bad); background: var(--bad-bg); border-radius: 999px; padding: 0 7px; }
+.po-file-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 13px; }
+.po-file-list li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.po-file-add { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; padding: 5px 10px; font-size: 13px; }
+.icon-link { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px; display: inline-grid; place-items: center; }
+.icon-link:hover { color: var(--bad); }
+@media (max-width: 720px) { .po-file-row { grid-template-columns: 1fr; } }
+/* Nhập báo giá */
+.po-import { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border: 1px dashed var(--brand); background: var(--brand-soft); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+.po-import .button { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.po-import small { flex: 1 1 260px; }
+.po-ai input, .po-ai select, input.po-ai { background: #fefce8 !important; border-color: #eab308 !important; }
+.po-locked { display: flex; flex-direction: column; gap: 2px; }
+.po-ai-box { background: #fefce8; border-color: #eab308 !important; }
+.po-items.po-ai input { background: #fefce8; }

@@ -13,6 +13,7 @@ import type { Notify } from "../Toast";
 import { errorMessage, moneyInput, parseMoney, projectText } from "../projects/projectShared";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { ApprovalChain } from "./ApprovalChain";
+import { OrderAttachments } from "./AttachmentsField";
 import { BudgetCheckBox } from "./BudgetCheckBox";
 import { FormExportButtons } from "./FormExport";
 import { budgetCheck } from "../../../modules/purchases/budget";
@@ -116,6 +117,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         <BudgetCheckBox title="Xác nhận đặt hàng (P-CC-07)" check={budgetCheck(order.budgetCode, "", order.budgetA, order.budgetB, order.totalEstimate)} />
       )}
       {order.usesChain && <ApprovalChain store={store} docType="purchase" docId={order.id} refreshKey={chainKey} title="Chuỗi ký đơn đặt hàng" onChanged={() => void reload()} setNotice={setNotice} />}
+      {store.mode === "live" && <OrderAttachments orderId={order.id} editable={order.status !== "cancelled" && order.status !== "completed"} requireSigned={order.kind === "project"} setNotice={setNotice} />}
 
       <section className="panel pj-section" aria-labelledby="po-items-title">
         <h2 id="po-items-title">Hàng cần mua</h2>

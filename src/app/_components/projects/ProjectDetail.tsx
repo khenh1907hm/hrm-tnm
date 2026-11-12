@@ -142,7 +142,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "contract") return <ContractTab {...tabProps} />;
         if (tab === "materials") return <MaterialsTab {...tabProps} />;
         if (tab === "members") return <OrgChartTab {...tabProps} />;
-        if (tab === "approvers") return <ProjectApproversPanel projectId={project.id} canEdit={Boolean(viewer?.canEditProject || approverAccess.isDirector)} employees={props.employees} setNotice={setNotice} />;
+        if (tab === "approvers") return <ProjectApproversPanel projectId={project.id} canEdit={Boolean(viewer?.canEditProject || approverAccess.isDirector)} members={data.members} today={data.today} setNotice={setNotice} />;
         if (tab === "daily") return <DailyReportTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "costs") return <CostsTab {...tabProps} />;
