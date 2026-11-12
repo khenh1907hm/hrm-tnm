@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ClipboardSignature, Undo2 } from "lucide-react";
+import { Check, ClipboardSignature, Crown, Undo2 } from "lucide-react";
+import { directorApprove, myAccount } from "../accountApi";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { DOC_TYPE_LABELS, isOverdue, ROLE_LABELS, type ApprovalDocType, type ApprovalStep } from "../../../modules/purchases/approval";
 import { formatVnd } from "../../../modules/projects/cost";
@@ -9,7 +10,7 @@ import type { Notify } from "../Toast";
 import { errorMessage } from "../projects/projectShared";
 
 const dmy = (date: string) => date.split("-").reverse().join("/");
-const RESULT: Record<ApprovalStep["result"], [string, string]> = { pending: ["Chờ ký", "warn"], signed: ["Đã ký", "ok"], returned: ["Trả về", "bad"], skipped: ["Bỏ qua (chưa có người)", ""] };
+const RESULT: Record<ApprovalStep["result"], [string, string]> = { pending: ["Chờ ký", "warn"], signed: ["Đã ký", "ok"], returned: ["Trả về", "bad"], skipped: ["Bỏ qua", ""] };
 
 /** Chuỗi ký theo bộ phận của một phiếu (PRC-04): ai ký, ngày mục tiêu, nút Ký / Trả về cho người đến lượt. */
 export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDocType; docId: string; refreshKey?: unknown; onChanged: () => void; setNotice: Notify; title?: string }) {
@@ -17,6 +18,13 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
   const [steps, setSteps] = useState<(ApprovalStep & { canSign: boolean })[] | null>(null);
   const [attempt, setAttempt] = useState(0);
   const fetchSteps = useCallback(() => store.listSteps(docType, docId), [store, docType, docId]);
+  const [isDirector, setIsDirector] = useState(false);
+  useEffect(() => {
+    if (store.mode !== "live") return;
+    let active = true;
+    void myAccount().then((account) => { if (active) setIsDirector(Boolean(account?.isDirector)); });
+    return () => { active = false; };
+  }, [store.mode]);
   useEffect(() => {
     let active = true;
     void fetchSteps().then((list) => { if (active) setSteps(list); }, () => { if (active) setSteps([]); });
@@ -34,9 +42,23 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
       props.onChanged();
     } catch (error) { setNotice(errorMessage(error), "error"); }
   };
+  // Giám đốc duyệt ngay: bước Lãnh đạo còn chờ, phiếu chưa bị trả về
+  const leaderPending = steps.some((step) => step.role === "leader" && step.result === "pending") && !steps.some((step) => step.result === "returned");
+  const approveNow = async () => {
+    const note = window.prompt("Giám đốc duyệt ngay (các bước trước chưa ký sẽ được bỏ qua). Ghi chú (có thể để trống):");
+    if (note === null) return;
+    try {
+      await directorApprove(docType, docId, note);
+      setNotice("Giám đốc đã duyệt phiếu.", "success");
+      setAttempt((value) => value + 1);
+      props.onChanged();
+    } catch (error) { setNotice(errorMessage(error), "error"); }
+  };
   return (
     <section className="panel pj-section" aria-label={props.title ?? "Chuỗi ký duyệt"}>
-      <h2><ClipboardSignature className="ico" size={18} aria-hidden="true" /> {props.title ?? "Chuỗi ký duyệt"}</h2>
+      <h2 className="ap-chain-head"><span><ClipboardSignature className="ico" size={18} aria-hidden="true" /> {props.title ?? "Chuỗi ký duyệt"}</span>
+        {isDirector && leaderPending && <button type="button" className="button primary" onClick={() => void approveNow()}><Crown className="ico" size={15} aria-hidden="true" /> Giám đốc duyệt ngay</button>}
+      </h2>
       <ol className="ap-chain">
         {steps.map((step) => {
           const [label, tone] = RESULT[step.result];

@@ -121,3 +121,23 @@
   .bs-head .field.wide, .mr-item .field.wide { grid-column: auto; }
   .mr-item { grid-template-columns: 1fr 1fr; }
 }
+
+/* Tạo dự án: thành viên, người duyệt */
+.pj-create-block { grid-column: 1 / -1; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px 4px; margin: 0 0 12px; }
+.pj-create-block legend { font-weight: 700; padding: 0 6px; }
+.pj-create-member { display: grid; grid-template-columns: 180px 1fr; gap: 12px; align-items: start; }
+.pj-create-list { list-style: none; padding: 0; margin: 0 0 10px; display: grid; gap: 4px; }
+.pj-create-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 640px) { .pj-create-member { grid-template-columns: 1fr; } }
+/* Người duyệt theo vai trò */
+.ap-editor { display: grid; gap: 0; }
+.ap-editor-row { display: grid; grid-template-columns: 220px 1fr; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.ap-editor-row:first-child { border-top: 0; }
+.ap-editor-role { display: grid; gap: 2px; }
+.ap-editor-people { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.ap-editor-people .emp-picker { flex: 1 1 240px; margin: 0; }
+.ap-editor-people .emp-picker > span:first-child:empty { display: none; }
+.ap-person { display: inline-flex; align-items: center; gap: 4px; background: var(--brand-soft); color: var(--ink); padding: 3px 6px 3px 10px; }
+.ap-person button { border: 0; background: transparent; padding: 2px; display: grid; place-items: center; cursor: pointer; color: var(--muted); border-radius: 50%; }
+.ap-person button:hover { background: rgba(0, 0, 0, .08); color: var(--bad); }
+@media (max-width: 640px) { .ap-editor-row { grid-template-columns: 1fr; } }

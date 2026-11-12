@@ -7,7 +7,10 @@ import type { Actor } from "../../../modules/auth/permissions";
 import { budgetSummary, formatPct } from "../../../modules/projects/budget";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
-import { DEFAULT_SITE_SETTINGS, PROJECT_STATUS_LABELS, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
+import { DEFAULT_SITE_SETTINGS, MEMBER_ROLE_LABELS, MEMBER_ROLES, PROJECT_STATUS_LABELS, type MemberRole, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
+import { getSupabaseClient } from "../../../lib/supabase/client";
+import { setProjectApprovers } from "../accountApi";
+import { ApproverEditor, type ApproverDraft } from "./ProjectApproversPanel";
 import type { Notify } from "../Toast";
 import { ProjectDetail } from "./ProjectDetail";
 import { canCreateProject, errorMessage, type EmployeeOption, type EmployeeSource } from "./projectShared";
@@ -135,6 +138,11 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
     stdHours: 8, weeklyOff: [0], status: "planning", note: "", ...DEFAULT_SITE_SETTINGS,
   });
   const [pmName, setPmName] = useState("");
+  // Khi tạo: thành viên tham gia và người duyệt của dự án
+  const [members, setMembers] = useState<{ id: string; code: string; name: string; role: MemberRole }[]>([]);
+  const [memberRole, setMemberRole] = useState<MemberRole>("engineer");
+  const [memberPicker, setMemberPicker] = useState(0);
+  const [approvers, setApprovers] = useState<ApproverDraft[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setDraft((current) => ({ ...current, [key]: value }));
@@ -154,6 +162,11 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
         if (saved.pmEmployeeId && pmName) {
           await props.store.saveMember({ projectId: saved.id, employeeId: saved.pmEmployeeId, displayName: pmName.split(" · ")[1] ?? pmName, employeeCode: pmName.split(" · ")[0] ?? "", role: "pm", parentId: null, team: "", subcontractId: null, joinedOn: saved.plannedStart, leftOn: null });
         }
+        for (const member of members) {
+          if (member.id === saved.pmEmployeeId && member.role === "pm") continue;
+          await props.store.saveMember({ projectId: saved.id, employeeId: member.id, displayName: member.name, employeeCode: member.code, role: member.role, parentId: null, team: "", subcontractId: null, joinedOn: saved.plannedStart, leftOn: null });
+        }
+        if (approvers.length && getSupabaseClient()) await setProjectApprovers(saved.id, approvers.map(({ role, employeeId }) => ({ role, employeeId })));
       }
       props.onSaved(saved);
     } catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); }
@@ -185,6 +198,24 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           </fieldset>
           <SiteFields draft={draft} set={set} />
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú</span><input value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
+          {!props.initial && <fieldset className="pj-create-block">
+            <legend>Thành viên tham gia dự án</legend>
+            <p className="muted"><small>Người được thêm xem được dự án theo vai trò (PM, Chỉ huy trưởng, Giám sát, Kỹ sư, Tổ trưởng; Tổ viên chỉ chấm công). Có thể thêm, xếp sơ đồ sau ở mục Sơ đồ & thành viên.</small></p>
+            <div className="pj-create-member">
+              <label className="field"><span>Vai trò</span><select value={memberRole} onChange={(event) => setMemberRole(event.target.value as MemberRole)}>{MEMBER_ROLES.map((role) => <option key={role} value={role}>{MEMBER_ROLE_LABELS[role]}</option>)}</select></label>
+              <EmployeePicker key={memberPicker} label="Thêm người" source={props.employees} exclude={new Set(members.map((member) => member.id))}
+                onPick={(option) => { if (!option) return; setMembers((list) => [...list, { id: option.id, code: option.code, name: option.name, role: memberRole }]); setMemberPicker((value) => value + 1); }} />
+            </div>
+            {members.length > 0 && <ul className="pj-create-list">{members.map((member) => (
+              <li key={member.id}><span className="pill">{MEMBER_ROLE_LABELS[member.role]}</span> {member.code} · {member.name}
+                <button type="button" className="link-button" onClick={() => setMembers((list) => list.filter((other) => other.id !== member.id))}>Bỏ</button></li>
+            ))}</ul>}
+          </fieldset>}
+          {!props.initial && getSupabaseClient() && <fieldset className="pj-create-block">
+            <legend>Người duyệt của dự án</legend>
+            <p className="muted"><small>Ai ký từng bước của phiếu thuộc dự án (ngân sách, đơn hàng, vật tư, thanh toán…). Để trống vai trò nào thì dùng bộ phận chung của công ty. Giám đốc luôn duyệt ngay được.</small></p>
+            <ApproverEditor value={approvers} onChange={setApprovers} employees={props.employees} />
+          </fieldset>}
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>
         <footer><button type="button" className="button" onClick={props.onClose}>Hủy</button><button type="button" className="button primary" disabled={busy} onClick={() => void submit()}>{busy ? "Đang lưu…" : "Lưu dự án"}</button></footer>

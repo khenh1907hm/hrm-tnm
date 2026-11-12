@@ -1,3 +1,4 @@
+import { dispatchNotificationEmails } from "../../lib/approvalEmailDispatch";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseEvent, PurchaseItem, PurchaseOrder, PurchasePayment } from "../../modules/purchases/types";
@@ -71,7 +72,13 @@ const contractFromRow = (row: Row): ProjectContract => {
 
 /** Store đặt hàng chế độ thật: đọc qua RLS, mọi bước chuyển trạng thái gọi hàm purchase_* ở máy chủ. */
 export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseStore {
-  const rpc = async (name: string, args: Record<string, unknown>) => { const { data, error } = await client.rpc(name, args); if (error) raise(error); return data as unknown; };
+  const rpc = async (name: string, args: Record<string, unknown>) => {
+    const { data, error } = await client.rpc(name, args);
+    if (error) raise(error);
+    // Gửi / ký phiếu tạo thông báo cho người đến lượt: nhờ máy chủ gửi email luôn
+    if (/_submit$|^approval_sign$|^purchase_request_rfp$/.test(name)) dispatchNotificationEmails();
+    return data as unknown;
+  };
   const check = async (request: PromiseLike<{ error: PostgrestError | null }>) => { const { error } = await request; if (error) raise(error); };
   return {
     mode: "live",

@@ -75,3 +75,5 @@
 .po-term small { color: var(--muted); }
 .po-term-pct { max-width: 220px; margin: 0 0 0 28px; }
 .po-terms-line { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 10px; }
+.ap-chain-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ap-chain-head > span { display: inline-flex; align-items: center; gap: 6px; }

@@ -109,3 +109,7 @@
 
 /* Nằm trong khung app: .main-content đã có lề và giới hạn chiều rộng */
 .sk-wrap.embedded{max-width:none;margin:0;padding:0}
+/* Công cụ AI cài từ GitHub (thẻ thu gọn) */
+.sk-tools{display:grid;gap:10px}.sk-tools>h2{font-size:18px;font-weight:700;margin:0}.sk-tools>.sk-hint{margin:0}
+.sk-wrap .tool-fold{background:var(--surface);border:1px solid var(--line);border-radius:10px}
+.sk-wrap .tool-fold .button{display:inline-flex;align-items:center;gap:6px;text-decoration:none}

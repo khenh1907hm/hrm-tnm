@@ -1,14 +1,16 @@
+import { TopBarActions } from "./TopBarActions";
 import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import "./employee.css";
 import { isWorkerEmail } from "../../lib/workerLogin";
 import { usePathname } from "next/navigation";
-import { ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles, Wrench, type LucideIcon } from "lucide-react";
+import { Camera, ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
 import { PurchasesPage } from "./purchases/PurchasesPage";
 import { getPurchaseStore } from "./purchases/usePurchaseStore";
 import SkillsClient from "../skills/SkillsClient";
 import { BeforeAfterTool } from "./BeforeAfterTool";
-import { TiaPortalMcpGuide } from "./TiaPortalMcpGuide";
+import { ToolFold } from "./ToolFold";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { EMPLOYEE_VIEWS, parseRoute, projectPath, purchasePath, routePath, VIEW_TITLES } from "./routes";
 import type { PageView } from "./shared";
@@ -60,10 +62,16 @@ function useHasProjects(store: ReturnType<typeof useProjectStore>["store"], read
 export function ToolsPage(props: { orgChart?: Parameters<typeof OrgChartTool>[0] | undefined }) {
   return (
     <section className="tools-page">
-      <div className="page-head"><div><h1>Công cụ</h1><p>Các công cụ làm việc dùng chung của công ty.</p></div></div>
-      {props.orgChart && <OrgChartTool {...props.orgChart} />}
-      <BeforeAfterTool />
-      <TiaPortalMcpGuide />
+      <div className="page-head"><div><h1>Công cụ</h1><p>Các công cụ làm việc dùng chung của công ty. Bấm vào từng công cụ để mở, bấm lại để thu gọn.</p></div></div>
+      {props.orgChart && (
+        <ToolFold icon={<Users size={20} />} title="Sơ đồ tổ chức dự án" summary="Lập và in sơ đồ tổ chức nhà thầu, lấy dữ liệu từ dự án hoặc nhập tự do.">
+          <OrgChartTool {...props.orgChart} inline />
+        </ToolFold>
+      )}
+      <ToolFold icon={<Camera size={20} />} title="Ảnh Trước / Sau công trình" summary="Chụp hiện trạng và sau thi công, lập bảng Before / After, xuất Word hoặc Excel.">
+        <BeforeAfterTool />
+      </ToolFold>
+      <p className="muted tools-moved">Hướng dẫn TIA Portal MCP và cách tải công cụ từ GitHub đã chuyển sang <Link href="/skills#cong-cu-github">Kho Skill AI</Link>.</p>
     </section>
   );
 }
@@ -130,6 +138,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       <header className="emp-topbar">
         <Image className="emp-topbar-logo" src="/tnm-emblem.png" alt="Thiên Nhật Minh" width={120} height={75} priority />
         <b>{VIEW_TITLES[view]}</b>
+        {props.mode === "live" && <TopBarActions compact />}
         <button type="button" className="emp-avatar-button" aria-label="Tài khoản" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}><span className="emp-avatar">{initials}</span></button>
       </header>
       {menuOpen && <div className="emp-menu" role="dialog" aria-label="Tài khoản">{account}</div>}
@@ -158,6 +167,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       </aside>
       {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
       <main className="main-content emp-main" onClick={() => setMenuOpen(false)}>
+        {props.mode === "live" && <div className="emp-desktop-only"><TopBarActions /></div>}
         {view === "skills" && <SkillsClient embedded />}
         {view === "tools" && <ToolsPage orgChart={props.actor ? { store: projectStore.store, ready: projectStore.ready, actor: props.actor, employees: null, setNotice } : undefined} />}
         {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}

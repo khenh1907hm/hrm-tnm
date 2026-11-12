@@ -344,7 +344,7 @@ export function OrgChartTab(props: TabProps) {
 }
 
 /** Bản trong mục Công cụ: chọn dự án để lấy dữ liệu (hoặc không theo dự án) rồi in. */
-export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor: Actor; employees: EmployeeSource; setNotice: Notify }) {
+export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor: Actor; employees: EmployeeSource; setNotice: Notify; /** Nằm trong thẻ thu gọn (ToolFold): mở sẵn, không có tiêu đề / nút Đóng riêng. */ inline?: boolean }) {
   const { store, ready, actor, employees, setNotice } = props;
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [projectId, setProjectId] = useState<string>("");
@@ -368,7 +368,7 @@ export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor
     });
     return () => { active = false; };
   }, [store, projects, projectId, actor]);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(props.inline ?? false);
   const current = projectId ? (loaded?.project.id === projectId ? loaded : null) : { project: null, members: noMembers, canEdit: true };
   // Ngoài trang Công cụ chỉ hiện tên; bấm vào mới mở form
   if (!open) return (
@@ -377,11 +377,11 @@ export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor
     </button>
   );
   return (
-    <section className="panel tool-card oc-tool">
-      <div className="pj-section-head">
+    <section className={props.inline ? "oc-tool" : "panel tool-card oc-tool"}>
+      {!props.inline && <div className="pj-section-head">
         <h2><Users className="ico" size={18} aria-hidden="true" /> Sơ đồ tổ chức dự án</h2>
         <button type="button" className="button" onClick={() => setOpen(false)}><X className="ico" size={16} aria-hidden="true" /> Đóng</button>
-      </div>
+      </div>}
       <label className="field oc-project-pick"><span>Lấy dữ liệu từ dự án</span>
         <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
           <option value="">Không theo dự án (chỉ lập và in)</option>

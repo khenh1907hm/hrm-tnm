@@ -4,6 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseClient } from "../../lib/supabase/client";
+import { Cpu, FolderDown } from "lucide-react";
+import { GithubDownloadGuide } from "../_components/GithubDownloadGuide";
+import { TiaPortalMcpGuide } from "../_components/TiaPortalMcpGuide";
+import { ToolFold } from "../_components/ToolFold";
 import "./skills.css";
 import { formatFileSize, imagePathsInHtml, isZipFile, safeZipName, SKILL_BUCKET, SKILL_IMAGE_TYPES, SKILL_MAX_BYTES } from "../../modules/skills/files";
 
@@ -18,13 +22,14 @@ type SkillPost = {
   updated_at: string;
 };
 
-type GuideTab = "web" | "code" | "gpt" | "codex" | "gemini";
+type GuideTab = "web" | "code" | "gpt" | "codex" | "gemini" | "github";
 const GUIDE_TABS: { key: GuideTab; label: string }[] = [
   { key: "web", label: "Claude" },
   { key: "code", label: "Claude Code" },
   { key: "gpt", label: "ChatGPT" },
   { key: "codex", label: "Codex" },
   { key: "gemini", label: "Gemini" },
+  { key: "github", label: "Từ GitHub" },
 ];
 
 type ZipState = { kind: "new"; file: File } | { kind: "keep"; path: string; name: string; size: number } | null;
@@ -153,6 +158,17 @@ export default function SkillsClient({ embedded = false }: { embedded?: boolean 
         <span className="sk-count">{posts ? `${posts.length} skill` : ""}</span>
       </header>
 
+      <section className="sk-tools" aria-labelledby="sk-tools-title">
+        <h2 id="sk-tools-title">Công cụ AI cài từ GitHub</h2>
+        <p className="sk-hint">Bấm vào từng thẻ để mở hướng dẫn, bấm lại để thu gọn.</p>
+        <ToolFold id="cong-cu-github" icon={<FolderDown size={20} />} title="Cách tải công cụ từ GitHub" summary="3 cách tải (Releases, ZIP, git clone), mở khóa file, cập nhật bản mới, kiểm tra an toàn, cài skill từ GitHub.">
+          <GithubDownloadGuide />
+        </ToolFold>
+        <ToolFold icon={<Cpu size={20} />} title="TIA Portal MCP cho Claude" summary="Claude điều khiển Siemens TIA Portal V20/V21: tạo project, viết khối PLC, sinh HMI, compile.">
+          <TiaPortalMcpGuide />
+        </ToolFold>
+      </section>
+
       <div className="sk-layout">
         <main className="sk-feed">
           <div className="sk-feed-head">
@@ -254,6 +270,15 @@ export default function SkillsClient({ embedded = false }: { embedded?: boolean 
                   <li>Chọn file <code>SKILL.md</code>, hoặc cả thư mục / file <b>.zip</b> có <code>SKILL.md</code> ở thư mục chính. Tổng tối đa 100 MB.</li>
                   <li>File kèm chỉ nhận dạng chữ, PDF, ảnh và script <code>.py</code>/<code>.sh</code>. <b>Không nhận .docx, .xlsx</b>: đổi sang .md, .pdf hoặc .csv trước khi nén. Script không được truy cập internet.</li>
                   <li>Gọi bằng <code>/</code> hoặc <code>@</code> rồi chọn skill, hoặc để Gemini tự dùng khi khớp mô tả.</li>
+                </ol>
+              )}
+              {guideTab === "github" && (
+                <ol className="sk-steps" role="tabpanel">
+                  <li>Skill đăng trên GitHub không có sẵn file .zip để cài: phải tải repo về trước. Bấm nút xanh <b>&lt;&gt; Code → Download ZIP</b> (hoặc mục <b>Releases</b> nếu có), mở khóa (Properties → Unblock) rồi giải nén.</li>
+                  <li>Tìm thư mục chứa <code>SKILL.md</code> (thường ở <code>skills/ten-skill/</code>). Repo có nhiều skill thì mỗi thư mục là một skill.</li>
+                  <li>Claude / ChatGPT / Gemini: chuột phải đúng thư mục <code>ten-skill</code> → <b>Send to → Compressed (zipped) folder</b>, rồi cài file .zip đó theo tab tương ứng. Không nén cả repo.</li>
+                  <li>Claude Code: chép thư mục vào <code>~/.claude/skills/</code>, hoặc nếu repo là plugin marketplace thì gõ <code>/plugin marketplace add ten-tac-gia/ten-repo</code> rồi <code>/plugin</code> để cài.</li>
+                  <li>Chi tiết từng bước (3 cách tải, cập nhật, kiểm tra an toàn): thẻ <a href="#cong-cu-github">Cách tải công cụ từ GitHub</a>.</li>
                 </ol>
               )}
               <div className="sk-label">Cấu trúc một gói skill (chung cho mọi AI)</div>

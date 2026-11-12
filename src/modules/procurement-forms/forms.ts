@@ -33,6 +33,12 @@ const toDate = (iso: string | null | undefined): Date | null => {
 /** Ngày theo giờ Việt Nam của một mốc thời gian (timestamptz). */
 const vnDay = (iso: string | null | undefined) => iso ? new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10) : null;
 const dmy = (iso: string | null | undefined) => iso ? iso.slice(0, 10).split("-").reverse().join("/") : "";
+/** Ngày giờ duyệt theo giờ Việt Nam: "dd/mm/yyyy HH:mm". */
+export const vnDateTime = (iso: string | null | undefined) => {
+  if (!iso) return "";
+  const local = new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString();
+  return `${dmy(local)} ${local.slice(11, 16)}`;
+};
 
 async function open(template: ArrayBuffer | Uint8Array) {
   const workbook = new ExcelJS.Workbook();
@@ -76,9 +82,10 @@ function merge(sheet: ExcelJS.Worksheet, range: string) {
 }
 const signText = (step: SignStep | undefined) => {
   if (!step) return "";
-  if (step.result === "signed") return `${step.signerName || "Đã ký"}\n✓ đã ký`;
+  // Tên người duyệt, dòng dưới là thời gian duyệt
+  if (step.result === "signed") return `${step.signerName || "Đã ký"}\n${vnDateTime(step.actedAt)}`.trim();
   if (step.result === "returned") return `${step.signerName}\n(trả về)`;
-  if (step.result === "skipped") return "—";
+  if (step.result === "skipped") return "";
   return "";
 };
 const stepOf = (steps: readonly SignStep[], role: ApprovalRole) => steps.find((step) => step.role === role);
@@ -494,7 +501,7 @@ export async function buildMaterialRequest(input: MaterialFormInput): Promise<Ui
     ws.getCell(`${col}${row}`).font = { bold: true };
     ws.getCell(`${col}${row}`).alignment = { horizontal: "center" };
     const sign = ws.getCell(`${col}${row + 1}`);
-    sign.value = step === "requester" ? `${request.requesterName}\n${dmy(request.requestedOn)}` : step?.result === "signed" ? `${step.signerName}\n${dmy(vnDay(step.actedAt))}` : null;
+    sign.value = step === "requester" ? `${request.requesterName}\n${dmy(request.requestedOn)}` : step?.result === "signed" ? `${step.signerName}\n${vnDateTime(step.actedAt)}` : null;
     sign.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     sign.font = { size: 9 };
   }
