@@ -1,5 +1,6 @@
 -- Báo cáo ngày: ảnh thi công không bắt buộc, tối đa 12 ảnh (6 hàng khung × 2) thay vì cố định 4.
 -- Tên người vắng không còn đọc từ ảnh nữa (chỉ đọc số TS / HD / V); cột absent_names giữ lại cho báo cáo cũ.
+-- Sửa lỗi "column reference id is ambiguous": hàm trả về cột id nên phải ghi rõ profiles.id khi lấy tên người gửi.
 
 alter table public.project_daily_reports drop constraint if exists project_daily_reports_photo_count_check;
 alter table public.project_daily_reports add constraint project_daily_reports_photo_count_check check (photo_count between 0 and 12);
@@ -19,7 +20,7 @@ begin
   if jsonb_typeof(coalesce(p_tasks, '[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(p_tasks, '[]'::jsonb)) = 0 then raise exception 'DR_TASKS_REQUIRED'; end if;
   insert into public.project_daily_reports (project_id, report_date, total, present, absent, absent_names, ot_count, ot_hours, tasks, photo_count, read_model, created_by_name)
   values (p_project, p_date, p_total, p_present, p_absent, coalesce(p_absent_names, '{}'), coalesce(p_ot_count, 0), coalesce(p_ot_hours, 0), p_tasks,
-    least(greatest(coalesce(p_photo_count, 0), 0), 12), coalesce(p_model, ''), coalesce((select full_name from public.profiles where id = auth.uid()), ''))
+    least(greatest(coalesce(p_photo_count, 0), 0), 12), coalesce(p_model, ''), coalesce((select pr.full_name from public.profiles pr where pr.id = auth.uid()), ''))
   on conflict (project_id, report_date) do update set
     total = excluded.total, present = excluded.present, absent = excluded.absent, absent_names = excluded.absent_names,
     ot_count = excluded.ot_count, ot_hours = excluded.ot_hours, tasks = excluded.tasks, photo_count = excluded.photo_count,
