@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
-import { Camera, ClipboardList, Copy, Download, ImagePlus, Plus, ScanText, Send, Trash2, X } from "lucide-react";
+import { Camera, ClipboardList, Copy, Download, ImagePlus, PenLine, Plus, ScanText, Send, Trash2, X } from "lucide-react";
 import { getSupabaseClient } from "../../../lib/supabase/client";
 import {
   DAILY_MAX_PHOTOS, DAILY_MAX_TASKS, draftFromReport, draftIssues, emptyDraft, manualName, needsCheck, telegramCaption, toInput,
@@ -46,6 +46,9 @@ export function DailyReportTab({ store, data, setNotice }: TabProps) {
   const [busy, setBusy] = useState<"read" | "send" | null>(null);
   const [download, setDownload] = useState<{ url: string; name: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [mode, setMode] = useState<"photo" | "manual">("photo");
+  const boardUrl = useMemo(() => board ? URL.createObjectURL(board) : null, [board]);
+  useEffect(() => () => { if (boardUrl) URL.revokeObjectURL(boardUrl); }, [boardUrl]);
 
   useEffect(() => {
     let active = true;
@@ -120,48 +123,90 @@ export function DailyReportTab({ store, data, setNotice }: TabProps) {
   };
 
   const latest = reports?.[0] ?? null;
+  const issues = draft ? draftIssues(draft) : [];
+  const errors = issues.filter((issue) => issue.level === "error");
+  const manual = () => { setMode("manual"); if (!draft) setDraft(emptyDraft(today)); };
+  const copy = (report: DailyReport) => { setMode("manual"); setDraft(draftFromReport(report, today)); window.scrollTo({ top: 0, behavior: "smooth" }); };
+  const cancel = () => {
+    if ((draft || photos.length) && !window.confirm("Bỏ bảng và ảnh đang nhập?")) return;
+    setDraft(null); setBoard(null); setPhotos([]);
+  };
   return (
-    <div className="pj-page">
-      {!draft ? (
-        <section className="panel pj-section dr-start">
-          <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Báo cáo ngày <small className="muted">(mẫu BC ngày)</small></h2>
-          <p className="muted">Chụp bảng phân công trong ngày, máy đọc ra số người (tổng, hiện diện, vắng) và công việc. Kiểm tra lại, thêm ảnh thi công nếu có (không bắt buộc, tối đa {DAILY_MAX_PHOTOS} ảnh) rồi gửi vào nhóm Telegram. Hệ thống chỉ lưu dữ liệu, không lưu ảnh.</p>
+    <div className="pj-page dr-page">
+      <section className="panel pj-section">
+        <div className="pj-section-head">
+          <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Báo cáo ngày</h2>
+          {draft?.model && <small className="muted">Đọc bằng {draft.model}</small>}
+        </div>
+        <div className="role-switch dr-mode" role="group" aria-label="Cách lập bảng">
+          <button type="button" aria-pressed={mode === "photo"} onClick={() => setMode("photo")}><Camera size={16} aria-hidden="true" /> Tạo bằng ảnh</button>
+          <button type="button" aria-pressed={mode === "manual"} onClick={manual}><PenLine size={16} aria-hidden="true" /> Tự nhập bảng</button>
+        </div>
+        {mode === "photo" && (
           <div className="dr-board">
-            <label className="button dr-file"><Camera className="ico" size={16} aria-hidden="true" /> {board ? "Chụp lại" : "Chụp / chọn ảnh bảng"}
-              <input type="file" accept="image/*" capture="environment" hidden onChange={(event) => { setBoard(event.target.files?.[0] ?? null); event.target.value = ""; }} />
+            <label className={`dr-board-pick ${boardUrl ? "has-image" : ""}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- ảnh xem trước tạm thời */}
+              {boardUrl ? <img src={boardUrl} alt="Ảnh bảng phân công" /> : <><Camera size={28} aria-hidden="true" /><span>Chụp hoặc chọn ảnh bảng phân công</span></>}
+              {boardUrl && <span className="dr-board-change">Đổi ảnh</span>}
+              <input type="file" accept="image/*" hidden onChange={(event) => { setBoard(event.target.files?.[0] ?? null); event.target.value = ""; }} />
             </label>
-            {board && <span className="pill">{board.name}</span>}
-            <button type="button" className="button primary" disabled={!board || busy !== null} onClick={() => void read()}><ScanText className="ico" size={16} aria-hidden="true" /> {busy === "read" ? "Đang đọc bảng… (khoảng 10–20 giây)" : "Đọc bảng"}</button>
+            <button type="button" className="button primary dr-wide" disabled={!board || busy !== null} onClick={() => void read()}>
+              <ScanText className="ico" size={16} aria-hidden="true" /> {busy === "read" ? "Đang đọc bảng… (10–20 giây)" : draft?.model ? "Đọc lại bảng" : "Đọc bảng"}
+            </button>
           </div>
-          <div className="button-row">
-            <button type="button" className="button" onClick={() => setDraft(emptyDraft(today))}>Nhập tay</button>
-            {latest && <button type="button" className="button" onClick={() => setDraft(draftFromReport(latest, today))}><Copy className="ico" size={16} aria-hidden="true" /> Sao chép báo cáo {dmy(latest.date)}</button>}
-          </div>
-        </section>
-      ) : (
-        <DraftEditor draft={draft} onChange={setDraft} suggestions={suggestions} photos={photos} photoUrls={photoUrls} onPhotos={setPhotos} busy={busy === "send"}
-          onCancel={() => setDraft(null)} onSend={() => void send()} />
-      )}
-      {download && <p className="dr-download"><a className="button" href={download.url} download={download.name}><Download className="ico" size={16} aria-hidden="true" /> Tải file {download.name}</a></p>}
-      <ReportHistory reports={reports} onCopy={(report) => setDraft(draftFromReport(report, today))} />
+        )}
+        {!draft && latest && <button type="button" className="button dr-wide" onClick={() => copy(latest)}><Copy className="ico" size={16} aria-hidden="true" /> Sao chép báo cáo {dmy(latest.date)}</button>}
+        {draft && <DraftEditor draft={draft} onChange={setDraft} suggestions={suggestions} />}
+      </section>
+
+      <PhotoPicker photos={photos} photoUrls={photoUrls} onPhotos={setPhotos} />
+
+      <div className="dr-actions">
+        {issues.length > 0 && <ul className="dr-issues">{issues.map((issue) => <li key={issue.code} className={issue.level}>{issue.text}</li>)}</ul>}
+        {!draft && <p className="muted dr-hint">Đọc bảng từ ảnh hoặc tự nhập bảng trước khi gửi.</p>}
+        <div className="dr-action-buttons">
+          {(draft || photos.length > 0) && <button type="button" className="button" disabled={busy !== null} onClick={cancel}>Hủy</button>}
+          <button type="button" className="button primary" disabled={!draft || busy !== null || errors.length > 0} onClick={() => void send()}><Send className="ico" size={16} aria-hidden="true" /> {busy === "send" ? "Đang gửi báo cáo…" : "Gửi báo cáo"}</button>
+        </div>
+      </div>
+
+      {download && <p className="dr-download"><a className="button dr-wide" href={download.url} download={download.name}><Download className="ico" size={16} aria-hidden="true" /> Tải file {download.name}</a></p>}
+      <ReportHistory reports={reports} onCopy={copy} />
     </div>
   );
 }
 
-function DraftEditor(props: { draft: DailyReportDraft; onChange: (draft: DailyReportDraft) => void; suggestions: string[]; photos: File[]; photoUrls: string[]; onPhotos: (photos: File[]) => void; busy: boolean; onCancel: () => void; onSend: () => void }) {
+/** Ảnh thi công: luôn hiện, chọn lúc nào cũng được (trước hay sau khi đọc bảng). Không bắt buộc. */
+function PhotoPicker(props: { photos: File[]; photoUrls: string[]; onPhotos: (photos: File[]) => void }) {
+  return (
+    <section className="panel pj-section">
+      <h2><ImagePlus className="ico" size={18} aria-hidden="true" /> Ảnh thi công <small className="muted">{props.photos.length}/{DAILY_MAX_PHOTOS} · không bắt buộc</small></h2>
+      <div className="dr-photos">
+        {props.photoUrls.map((url, index) => (
+          <figure key={url}>
+            {/* eslint-disable-next-line @next/next/no-img-element -- ảnh xem trước tạm thời */}
+            <img src={url} alt={`Ảnh thi công ${index + 1}`} />
+            <button type="button" className="dr-remove" aria-label={`Bỏ ảnh ${index + 1}`} onClick={() => props.onPhotos(props.photos.filter((_, at) => at !== index))}><X size={16} aria-hidden="true" /></button>
+          </figure>
+        ))}
+        {props.photos.length < DAILY_MAX_PHOTOS && (
+          <label className="dr-add"><Camera size={24} aria-hidden="true" /><span>Thêm ảnh</span>
+            <input type="file" accept="image/*" multiple hidden onChange={(event) => { props.onPhotos([...props.photos, ...Array.from(event.target.files ?? [])].slice(0, DAILY_MAX_PHOTOS)); event.target.value = ""; }} />
+          </label>
+        )}
+      </div>
+      <small className="muted">Ảnh nằm ở khung phía dưới file Excel gửi Telegram, 2 ảnh mỗi hàng; hệ thống không lưu ảnh.</small>
+    </section>
+  );
+}
+
+function DraftEditor(props: { draft: DailyReportDraft; onChange: (draft: DailyReportDraft) => void; suggestions: string[] }) {
   const { draft, onChange } = props;
   const set = (patch: Partial<DailyReportDraft>) => onChange({ ...draft, ...patch });
   const setTask = (index: number, patch: Partial<DailyTaskDraft>) => set({ tasks: draft.tasks.map((task, at) => at === index ? { ...task, ...patch } : task) });
   const num = (value: string) => value === "" ? null : Math.max(0, Number(value));
-  const issues = draftIssues(draft);
-  const errors = issues.filter((issue) => issue.level === "error");
   return (
-    <>
-      <section className="panel pj-section">
-        <div className="pj-section-head">
-          <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Kiểm tra báo cáo ngày</h2>
-          {draft.model && <small className="muted">Đọc bằng {draft.model}</small>}
-        </div>
+    <div className="dr-editor">
         <div className="dr-head">
           <label className="field"><span>Ngày *</span><input type="date" value={draft.date} onChange={(event) => set({ date: event.target.value })} /></label>
           <label className="field"><span>Tổng số (TS)</span><input type="number" min={0} inputMode="numeric" value={draft.total ?? ""} onChange={(event) => set({ total: num(event.target.value) })} /></label>
@@ -170,47 +215,20 @@ function DraftEditor(props: { draft: DailyReportDraft; onChange: (draft: DailyRe
           <label className="field"><span>SL tăng ca</span><input type="number" min={0} inputMode="numeric" value={draft.otCount} onChange={(event) => set({ otCount: num(event.target.value) ?? 0 })} /></label>
           <label className="field"><span>Giờ TC</span><input type="number" min={0} step={0.5} inputMode="decimal" value={draft.otHours} onChange={(event) => set({ otHours: num(event.target.value) ?? 0 })} /></label>
         </div>
-        <div className="table-scroll">
-          <table className="pj-table dr-tasks">
-            <thead><tr><th>STT</th><th>Công việc</th><th>Nhóm trưởng</th><th>Thành viên</th><th /></tr></thead>
-            <tbody>{draft.tasks.map((task, index) => (
-              <tr key={index}>
-                <td className="pj-num">{index + 1}</td>
-                <td><input aria-label={`Công việc ${index + 1}`} value={task.task} onChange={(event) => setTask(index, { task: event.target.value })} /></td>
-                <td><NameChips single names={task.leader ? [task.leader] : []} suggestions={props.suggestions} onChange={(names) => setTask(index, { leader: names[0] ?? null })} /></td>
-                <td><NameChips names={task.members} suggestions={props.suggestions} onChange={(names) => setTask(index, { members: names })} /></td>
-                <td><button type="button" className="button danger icon-button" aria-label={`Xóa công việc ${index + 1}`} onClick={() => set({ tasks: draft.tasks.filter((_, at) => at !== index) })}><Trash2 size={14} aria-hidden="true" /></button></td>
-              </tr>
-            ))}</tbody>
-          </table>
-        </div>
-        <button type="button" className="button" disabled={draft.tasks.length >= DAILY_MAX_TASKS} onClick={() => set({ tasks: [...draft.tasks, { no: draft.tasks.length + 1, task: "", leader: null, members: [] }] })}><Plus className="ico" size={16} aria-hidden="true" /> Thêm công việc</button>
-        <p className="dr-legend"><span className="pill warn">vàng</span> máy tự sửa theo danh sách công nhân, kiểm tra lại · <span className="pill bad">đỏ</span> không khớp ai trong dự án · bấm vào tên để sửa</p>
-      </section>
-
-      <section className="panel pj-section">
-        <h2><ImagePlus className="ico" size={18} aria-hidden="true" /> Ảnh thi công <small className="muted">({props.photos.length}/{DAILY_MAX_PHOTOS}, không bắt buộc; ảnh nằm ở khung phía dưới file Excel, không lưu trên hệ thống)</small></h2>
-        <div className="dr-photos">
-          {props.photoUrls.map((url, index) => (
-            <figure key={url}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- ảnh xem trước tạm thời */}
-              <img src={url} alt={`Ảnh thi công ${index + 1}`} />
-              <button type="button" className="dr-remove" aria-label={`Bỏ ảnh ${index + 1}`} onClick={() => props.onPhotos(props.photos.filter((_, at) => at !== index))}><X size={14} aria-hidden="true" /></button>
-            </figure>
+        <div className="dr-tasks">
+          {draft.tasks.map((task, index) => (
+            <div className="dr-task" key={index}>
+              <span className="dr-task-no">{index + 1}</span>
+              <input className="dr-task-name" aria-label={`Công việc ${index + 1}`} placeholder="Tên công việc" value={task.task} onChange={(event) => setTask(index, { task: event.target.value })} />
+              <button type="button" className="dr-task-del" aria-label={`Xóa công việc ${index + 1}`} onClick={() => set({ tasks: draft.tasks.filter((_, at) => at !== index) })}><Trash2 size={16} aria-hidden="true" /></button>
+              <div className="dr-task-leader"><small>Nhóm trưởng</small><NameChips single names={task.leader ? [task.leader] : []} suggestions={props.suggestions} onChange={(names) => setTask(index, { leader: names[0] ?? null })} /></div>
+              <div className="dr-task-members"><small>Thành viên</small><NameChips names={task.members} suggestions={props.suggestions} onChange={(names) => setTask(index, { members: names })} /></div>
+            </div>
           ))}
-          {props.photos.length < DAILY_MAX_PHOTOS && (
-            <label className="dr-add"><Camera size={22} aria-hidden="true" /><span>Thêm ảnh</span>
-              <input type="file" accept="image/*" multiple hidden onChange={(event) => { props.onPhotos([...props.photos, ...Array.from(event.target.files ?? [])].slice(0, DAILY_MAX_PHOTOS)); event.target.value = ""; }} />
-            </label>
-          )}
         </div>
-        {issues.length > 0 && <ul className="dr-issues">{issues.map((issue) => <li key={issue.code} className={issue.level}>{issue.text}</li>)}</ul>}
-        <div className="button-row">
-          <button type="button" className="button" onClick={props.onCancel}>Hủy</button>
-          <button type="button" className="button primary" disabled={props.busy || errors.length > 0} onClick={props.onSend}><Send className="ico" size={16} aria-hidden="true" /> {props.busy ? "Đang gửi báo cáo…" : "Gửi báo cáo"}</button>
-        </div>
-      </section>
-    </>
+        <button type="button" className="button dr-wide" disabled={draft.tasks.length >= DAILY_MAX_TASKS} onClick={() => set({ tasks: [...draft.tasks, { no: draft.tasks.length + 1, task: "", leader: null, members: [] }] })}><Plus className="ico" size={16} aria-hidden="true" /> Thêm công việc</button>
+        <p className="dr-legend"><span className="pill warn">vàng</span> máy tự sửa theo danh sách công nhân · <span className="pill bad">đỏ</span> không khớp ai trong dự án · bấm vào tên để sửa</p>
+    </div>
   );
 }
 
@@ -245,23 +263,23 @@ function ReportHistory(props: { reports: DailyReport[] | null; onCopy: (report: 
   return (
     <section className="panel pj-section">
       <h2>Báo cáo đã gửi</h2>
-      <div className="table-scroll">
-        <table className="pj-table">
-          <thead><tr><th>Ngày</th><th className="pj-num">TS</th><th className="pj-num">HD</th><th className="pj-num">Vắng</th><th className="pj-num">TC (người / giờ)</th><th>Công việc</th><th>Telegram</th><th /></tr></thead>
-          <tbody>{props.reports.map((report) => (
-            <tr key={report.id}>
-              <td>{dmy(report.date)}<br /><small className="muted">{report.createdByName}</small></td>
-              <td className="pj-num">{report.total ?? "–"}</td>
-              <td className="pj-num">{report.present ?? "–"}</td>
-              <td className="pj-num">{report.absent ?? "–"}{report.absentNames.length ? <><br /><small className="muted">{report.absentNames.join(", ")}</small></> : null}</td>
-              <td className="pj-num">{report.otCount} / {report.otHours}</td>
-              <td>{report.tasks.map((task) => task.task).join(" · ")}</td>
-              <td>{report.sentAt ? <span className="pill ok">Đã gửi</span> : <span className="pill bad" title={report.sentError}>{report.sentError ? "Lỗi gửi" : "Chưa gửi"}</span>}</td>
-              <td><button type="button" className="button" onClick={() => props.onCopy(report)}>Sửa / gửi lại</button></td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
+      <ul className="dr-history">
+        {props.reports.map((report) => (
+          <li key={report.id}>
+            <div className="dr-history-top">
+              <b>{dmy(report.date)}</b>
+              {report.sentAt ? <span className="pill ok">Đã gửi</span> : <span className="pill bad" title={report.sentError}>{report.sentError ? "Lỗi gửi" : "Chưa gửi"}</span>}
+              <small className="muted">{report.createdByName}</small>
+            </div>
+            <div className="dr-history-stats">
+              <span>TS <b>{report.total ?? "–"}</b></span><span>HD <b>{report.present ?? "–"}</b></span><span>Vắng <b>{report.absent ?? "–"}</b></span>
+              <span>TC <b>{report.otCount}</b> người · <b>{report.otHours}</b> giờ</span>
+            </div>
+            <p className="muted dr-history-tasks">{report.tasks.map((task) => task.task).join(" · ")}</p>
+            <button type="button" className="button" onClick={() => props.onCopy(report)}>Sửa / gửi lại</button>
+          </li>
+        ))}
+      </ul>
       <small className="muted">{projectText("DR_PHOTOS_NOT_STORED")}</small>
     </section>
   );

@@ -1,21 +1,79 @@
-/* Báo cáo ngày */
-.dr-board { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0 12px; }
-.dr-file { cursor: pointer; }
-.dr-head { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0 12px; }
-.dr-tasks input { width: 100%; min-width: 160px; }
-.dr-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-width: 160px; }
+/* Báo cáo ngày: thiết kế cho điện thoại trước (chỉ huy trưởng gửi từ công trường), màn rộng thì giãn ra */
+.dr-page { padding-bottom: 8px; }
+.dr-wide { width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; }
+.dr-mode { margin: 4px 0 12px; }
+.dr-mode button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; font-weight: 600; cursor: pointer; }
+
+/* Ảnh bảng phân công */
+.dr-board { display: grid; gap: 10px; margin-bottom: 12px; }
+.dr-board-pick { position: relative; display: grid; place-content: center; justify-items: center; gap: 6px; min-height: 140px; border: 2px dashed var(--line); border-radius: 10px; color: var(--muted); text-align: center; padding: 12px; cursor: pointer; overflow: hidden; }
+.dr-board-pick.has-image { padding: 0; min-height: 0; border-style: solid; place-content: stretch; }
+.dr-board-pick img { width: 100%; max-height: 260px; object-fit: contain; background: var(--soft); display: block; }
+.dr-board-change { position: absolute; right: 8px; bottom: 8px; background: rgba(0, 0, 0, .6); color: #fff; border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
+
+/* Bảng nhập */
+.dr-editor { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 12px; }
+.dr-head { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0 12px; }
+.dr-head .field { margin-bottom: 8px; }
+.dr-head input { min-height: 40px; }
+.dr-tasks { display: grid; gap: 8px; }
+.dr-task { display: grid; grid-template-columns: 28px minmax(160px, 2fr) minmax(130px, 1fr) minmax(180px, 2fr) 36px; grid-template-areas: "no name leader members del"; gap: 8px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+.dr-task-no { grid-area: no; font-weight: 700; color: var(--muted); text-align: center; }
+.dr-task-name { grid-area: name; width: 100%; min-height: 38px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: #fff; }
+.dr-task-leader { grid-area: leader; }
+.dr-task-members { grid-area: members; }
+.dr-task-leader small, .dr-task-members small { display: none; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+.dr-task-del { grid-area: del; border: 0; background: none; color: var(--bad); width: 36px; height: 36px; display: grid; place-items: center; cursor: pointer; border-radius: 6px; }
+.dr-task-del:hover { background: var(--bad-bg); }
+.dr-chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .dr-chip { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--soft); font-size: 13px; }
 .dr-chip.warn { background: var(--warn-bg); border-color: var(--warn); }
 .dr-chip.bad { background: var(--bad-bg); border-color: var(--bad); }
-.dr-chip-name, .dr-chip-x { border: 0; background: none; padding: 3px 6px; cursor: pointer; font: inherit; color: inherit; }
+.dr-chip-name, .dr-chip-x { border: 0; background: none; padding: 4px 7px; cursor: pointer; font: inherit; color: inherit; }
 .dr-chip-x { padding-left: 0; color: var(--muted); }
-.dr-chip-input { width: 110px; border: 1px dashed var(--line); border-radius: 999px; padding: 3px 8px; font-size: 13px; }
-.dr-legend { font-size: 13px; color: var(--muted); }
+.dr-chip-input { width: 110px; border: 1px dashed var(--line); border-radius: 999px; padding: 4px 9px; font-size: 13px; background: #fff; }
+.dr-legend { font-size: 13px; color: var(--muted); margin: 0; }
+
+/* Ảnh thi công */
 .dr-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 8px 0; }
 .dr-photos figure { position: relative; margin: 0; aspect-ratio: 4 / 3; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
 .dr-photos img { width: 100%; height: 100%; object-fit: cover; }
-.dr-remove { position: absolute; top: 4px; right: 4px; border: 0; border-radius: 50%; width: 24px; height: 24px; background: rgba(0,0,0,.55); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.dr-remove { position: absolute; top: 4px; right: 4px; border: 0; border-radius: 50%; width: 30px; height: 30px; background: rgba(0, 0, 0, .6); color: #fff; display: grid; place-items: center; cursor: pointer; }
 .dr-add { aspect-ratio: 4 / 3; border: 2px dashed var(--line); border-radius: 10px; display: grid; place-content: center; justify-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
-.dr-issues { margin: 8px 0; padding-left: 18px; }
+
+/* Thanh gửi: dính đáy màn hình để không phải cuộn tìm nút */
+.dr-actions { position: sticky; bottom: 0; z-index: 2; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; box-shadow: 0 -4px 14px rgba(0, 0, 0, .06); }
+.dr-action-buttons { display: flex; gap: 8px; justify-content: flex-end; }
+.dr-action-buttons .button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.dr-action-buttons .button:disabled, .dr-wide:disabled { opacity: .5; cursor: not-allowed; }
+.dr-hint { margin: 0 0 8px; font-size: 13px; }
+.dr-issues { margin: 0 0 8px; padding-left: 18px; font-size: 14px; }
 .dr-issues .error { color: var(--bad); }
 .dr-issues .warn { color: var(--warn); }
+.dr-download { margin: 0; }
+
+/* Lịch sử */
+.dr-history { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 8px; }
+.dr-history li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+.dr-history-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.dr-history-top small { margin-left: auto; }
+.dr-history-stats { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 14px; }
+.dr-history-tasks { margin: 0; font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.dr-history .button { justify-self: start; }
+
+@media (max-width: 720px) {
+  .dr-head { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 8px; }
+  .dr-head .field:first-child { grid-column: 1 / -1; }
+  .dr-head .field span { font-size: 12px; }
+  /* Chữ ≥ 16px để iPhone không tự phóng to khi gõ */
+  .dr-head input, .dr-task-name, .dr-chip-input { font-size: 16px; }
+  .dr-task { grid-template-columns: 28px minmax(0, 1fr) 36px; grid-template-areas: "no name del" ". leader leader" ". members members"; }
+  .dr-task-leader small, .dr-task-members small { display: block; }
+  .dr-chip { font-size: 14px; }
+  .dr-chip-input { width: 120px; }
+  .dr-photos { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .dr-actions { margin: 0 -4px; border-radius: 10px 10px 0 0; }
+  .dr-action-buttons .button { flex: 1; }
+  .dr-history-top small { margin-left: 0; width: 100%; }
+  .dr-history .button { justify-self: stretch; min-height: 40px; }
+}
