@@ -2,7 +2,7 @@
  * Máy chủ cho báo cáo ngày: gọi Python (scripts/daily_report) để đọc ảnh bảng phân công và điền mẫu Excel,
  * rồi gửi file vào nhóm Telegram. Ảnh chỉ nằm trong thư mục tạm của một yêu cầu và bị xóa ngay sau đó.
  *
- * Biến môi trường: DAILY_REPORT_PYTHON (mặc định python3, Windows: python), TELEGRAM_BOT_TOKEN,
+ * Biến môi trường: DAILY_REPORT_PYTHON (mặc định python3, Windows: python), DAILY_REPORT_TELEGRAM_BOT_TOKEN (không có thì dùng TELEGRAM_BOT_TOKEN),
  * DAILY_REPORT_TELEGRAM_CHAT_ID, cùng biến của read_board.py (DAILY_REPORT_VISION_*, CLOUDFLARE_*, GEMINI_API_KEY / GEMINI_VISION_MODEL, ANTHROPIC_API_KEY).
  */
 import { execFile } from "node:child_process";
@@ -80,7 +80,8 @@ export async function handleDailyRead(request: Request, env: Env): Promise<Respo
 }
 
 async function sendTelegram(file: Uint8Array, fileName: string, caption: string): Promise<{ sent: boolean; error: string }> {
-  const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
+  // Bot riêng cho báo cáo ngày; không khai báo thì dùng chung bot thông báo nhân sự
+  const token = process.env.DAILY_REPORT_TELEGRAM_BOT_TOKEN?.trim() || process.env.TELEGRAM_BOT_TOKEN?.trim();
   const chatId = process.env.DAILY_REPORT_TELEGRAM_CHAT_ID?.trim();
   if (!token || !chatId) return { sent: false, error: "Chưa cấu hình nhóm Telegram nhận báo cáo ngày (DAILY_REPORT_TELEGRAM_CHAT_ID)." };
   const body = new FormData();

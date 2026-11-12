@@ -101,9 +101,19 @@ export function DailyReportTab({ store, data, setNotice }: TabProps) {
       await store.markDailyReportSent(saved.id, result.sent ? "" : result.telegramError ?? "").catch(() => undefined);
       if (result.file && result.fileName) {
         const bytes = Uint8Array.from(atob(result.file), (char) => char.charCodeAt(0));
-        setDownload({ url: URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })), name: result.fileName });
+        const url = URL.createObjectURL(new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+        setDownload({ url, name: result.fileName });
+        // Chưa gửi được Telegram thì tải file Excel về máy luôn để không mất báo cáo
+        if (!result.sent) {
+          const link = document.createElement("a");
+          link.href = url; link.download = result.fileName;
+          document.body.appendChild(link); link.click(); link.remove();
+        }
       }
-      setNotice(result.sent ? "Đã lưu và gửi báo cáo ngày vào nhóm Telegram." : `Đã lưu báo cáo, nhưng chưa gửi Telegram: ${result.telegramError}`, result.sent ? "success" : "error");
+      const totals = `${input.present ?? 0} người hiện diện, ${input.otCount} người tăng ca ${input.otHours} giờ (lũy kế ${saved.cumulativeWorkdays} công, ${saved.cumulativeOtHours} giờ TC)`;
+      setNotice(result.sent
+        ? `Đã gửi báo cáo: ${totals}. File Excel đã gửi vào nhóm Telegram.`
+        : `Đã gửi báo cáo: ${totals}. Chưa gửi được Telegram (${result.telegramError}), file Excel đã tải về máy.`, result.sent ? "success" : "error");
       setDraft(null); setBoard(null); setPhotos([]); setAttempt((value) => value + 1);
     } catch (error) { setNotice(errorMessage(error), "error"); }
     finally { setBusy(null); }
@@ -197,7 +207,7 @@ function DraftEditor(props: { draft: DailyReportDraft; onChange: (draft: DailyRe
         {issues.length > 0 && <ul className="dr-issues">{issues.map((issue) => <li key={issue.code} className={issue.level}>{issue.text}</li>)}</ul>}
         <div className="button-row">
           <button type="button" className="button" onClick={props.onCancel}>Hủy</button>
-          <button type="button" className="button primary" disabled={props.busy || errors.length > 0} onClick={props.onSend}><Send className="ico" size={16} aria-hidden="true" /> {props.busy ? "Đang tạo file và gửi…" : "Lưu và gửi Telegram"}</button>
+          <button type="button" className="button primary" disabled={props.busy || errors.length > 0} onClick={props.onSend}><Send className="ico" size={16} aria-hidden="true" /> {props.busy ? "Đang gửi báo cáo…" : "Gửi báo cáo"}</button>
         </div>
       </section>
     </>
