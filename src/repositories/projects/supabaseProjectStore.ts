@@ -113,8 +113,10 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
       if (error) raise(error);
       return ((data ?? []) as Row[]).map((row) => ({ id: str(row.id), code: str(row.code), name: str(row.name), position: str(row.position), phone: str(row.phone) }));
     },
-    async listDailyReports(projectId) {
-      const { data, error } = await client.from("project_daily_reports").select("*").eq("project_id", projectId).order("report_date", { ascending: false }).limit(60);
+    async listDailyReports(projectId, range) {
+      let query = client.from("project_daily_reports").select("*").eq("project_id", projectId);
+      query = range ? query.gte("report_date", range.from).lte("report_date", range.to) : query;
+      const { data, error } = await query.order("report_date", { ascending: false }).limit(range ? 400 : 60);
       if (error) raise(error);
       return ((data ?? []) as Row[]).map((row) => ({
         id: str(row.id), projectId: str(row.project_id), date: str(row.report_date), total: row.total === null ? null : num(row.total), present: row.present === null ? null : num(row.present),

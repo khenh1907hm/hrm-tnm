@@ -76,7 +76,8 @@ export interface ProjectStore {
   getOrgTemplate(): Promise<OrgChart | null>;
   saveOrgTemplate(template: OrgChart): Promise<void>;
   /** Báo cáo ngày (BC ngày): chỉ dữ liệu, mới nhất trước. */
-  listDailyReports(projectId: string): Promise<DailyReport[]>;
+  /** Không có range: 60 báo cáo gần nhất. Có range: mọi báo cáo trong khoảng ngày (báo cáo tuần / tháng). */
+  listDailyReports(projectId: string, range?: { from: string; to: string }): Promise<DailyReport[]>;
   /** Lưu (ghi đè theo ngày), trả về lũy kế công / giờ TC để điền mẫu. */
   saveDailyReport(projectId: string, input: DailyReportInput): Promise<DailyReportSaved>;
   markDailyReportSent(id: string, error: string): Promise<void>;

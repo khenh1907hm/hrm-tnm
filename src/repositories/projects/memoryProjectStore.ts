@@ -90,7 +90,7 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
     async getOrgTemplate() { return data.orgTemplate ? clone(data.orgTemplate) : null; },
     // Demo: chọn người qua nguồn nhân sự của trang (không có hàm máy chủ)
     async orgChartPeople() { return []; },
-    async listDailyReports(projectId) { return clone((data.dailyReports ?? []).filter((item) => item.projectId === projectId)).sort((a, b) => b.date.localeCompare(a.date)); },
+    async listDailyReports(projectId, range) { return clone((data.dailyReports ?? []).filter((item) => item.projectId === projectId && (!range || (item.date >= range.from && item.date <= range.to)))).sort((a, b) => b.date.localeCompare(a.date)); },
     async saveDailyReport(projectId, input) {
       const project = data.projects.find((item) => item.id === projectId) ?? fail("PROJECT_NOT_FOUND");
       if (!input.tasks.length) fail("DR_TASKS_REQUIRED");

@@ -61,7 +61,38 @@
 .dr-history-tasks { margin: 0; font-size: 13px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
 .dr-history .button { justify-self: start; }
 
+/* Báo cáo tuần / tháng */
+.dr-summary { display: grid; gap: 10px; }
+.dr-summary .dr-mode { margin: 0; }
+.dr-period { display: grid; grid-template-columns: 44px 1fr 44px; gap: 8px; align-items: center; }
+.dr-period .icon-button { min-height: 44px; display: grid; place-items: center; padding: 0; }
+.dr-period-label { display: grid; justify-items: center; gap: 4px; text-align: center; }
+.dr-period-label input { border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: #fff; font-size: 14px; }
+.dr-today { justify-self: center; }
+.dr-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.dr-kpis > div { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: grid; gap: 2px; }
+.dr-kpis > div.warn { border-color: var(--warn); background: var(--warn-bg); }
+.dr-kpis span { font-size: 12px; color: var(--muted); }
+.dr-kpis b { font-size: 20px; }
+.dr-kpis b small { font-size: 13px; color: var(--muted); font-weight: 500; }
+.dr-kpis > div > small { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.dr-summary-table td, .dr-summary-table th { padding: 8px 10px; }
+.dr-summary-table tbody tr { cursor: default; }
+.dr-summary-table tr.dr-missing td { background: var(--bad-bg); }
+.dr-summary-table tr.dr-missing td.muted { color: var(--bad); }
+.dr-summary-table tr.dr-off td { background: var(--soft); }
+.dr-summary-table tfoot td { border-top: 2px solid var(--line); }
+.dr-col-tasks { min-width: 220px; font-size: 13px; }
+.dr-task-summary summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.dr-task-summary ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.dr-task-summary li { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--line); padding: 6px 0; font-size: 14px; }
+.dr-task-summary li b { white-space: nowrap; font-size: 13px; }
+
 @media (max-width: 720px) {
+  .dr-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dr-col-tasks { display: none; }
+  .dr-summary-table td, .dr-summary-table th { padding: 8px 6px; }
+  .dr-period-label input { font-size: 16px; }
   .dr-head { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 8px; }
   .dr-head .field:first-child { grid-column: 1 / -1; }
   .dr-head .field span { font-size: 12px; }
