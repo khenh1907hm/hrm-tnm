@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { takeKickMessage } from "./singleSession";
 import Image from "next/image";
 import { Clock, LogIn, LogOut } from "lucide-react";
 
@@ -15,7 +16,8 @@ function LoginBrand() {
 export function LoginScreen(props: { onSignIn: (email: string, password: string) => Promise<string | null> }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  // Vừa bị đăng xuất vì đăng nhập nơi khác / quá 24 giờ: báo lý do
+  const [error, setError] = useState(() => (typeof window === "undefined" ? "" : takeKickMessage() ?? ""));
   const [busy, setBusy] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {

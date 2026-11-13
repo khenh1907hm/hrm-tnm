@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { checkSession, claimSession, forgetSessionKey, kickLocal } from "./singleSession";
 import type { Session } from "@supabase/supabase-js";
 import { createHrApp } from "../../app-core/createHrApp";
 import { fixedClock, systemClock } from "../../lib/clock";
@@ -122,6 +123,27 @@ export function useBackend(): Backend {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, [client]);
 
+  // Một nơi đăng nhập, tối đa 24 giờ: kiểm tra lúc mở, mỗi phút và khi quay lại tab
+  useEffect(() => {
+    if (!client || !userId) return;
+    let active = true;
+    const check = () => {
+      if (!active || document.visibilityState !== "visible") return;
+      void checkSession(client).then((state) => {
+        if (!active || state === "ok") return;
+        liveRef.current?.dispose();
+        liveRef.current = null;
+        setLive(null);
+        setProfile(null);
+        void kickLocal(client, state);
+      });
+    };
+    check();
+    const timer = window.setInterval(check, 60_000);
+    document.addEventListener("visibilitychange", check);
+    return () => { active = false; window.clearInterval(timer); document.removeEventListener("visibilitychange", check); };
+  }, [client, userId]);
+
   // Rời trang: dọn bộ nhớ tạm và hẹn giờ
   useEffect(() => () => { liveRef.current?.dispose(); liveRef.current = null; }, []);
 
@@ -134,10 +156,14 @@ export function useBackend(): Backend {
     if (!client) return "Chưa cấu hình Supabase.";
     // Mã nhân viên: thử đuôi email mới rồi đuôi cũ (tài khoản tạo trước khi đổi đuôi)
     let error: unknown = null;
+    // Bỏ khóa phiên cũ của trình duyệt trước khi đăng nhập (kiểm tra định kỳ sẽ nhận phiên mới)
+    forgetSessionKey();
     for (const candidate of loginCandidates(email)) {
       ({ error } = await client.auth.signInWithPassword({ email: candidate, password }));
       if (!error) break;
     }
+    // Một tài khoản một nơi: máy này thành phiên duy nhất, các nơi khác bị đăng xuất
+    if (!error) await claimSession(client);
     return error ? "Email (mã nhân viên) hoặc mật khẩu không đúng." : null;
   }, [client]);
 
@@ -147,7 +173,8 @@ export function useBackend(): Backend {
     liveRef.current = null;
     setLive(null);
     setProfile(null);
-    await client?.auth.signOut();
+    forgetSessionKey();
+    await client?.auth.signOut({ scope: "local" });
   }, [client]);
 
   if (!client && demoEmployee) return { status: "employee", role: "employee", canUseTools: true, actor: { id: "demo-employee", role: "employee", access: ["tools"] }, mode: "demo", email: null, signOut: async () => undefined, exitPreview: () => setDemoEmployee(false) };

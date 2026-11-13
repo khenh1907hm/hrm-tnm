@@ -82,6 +82,9 @@ export type PurchaseAttachment = Attachment;
 export const listAttachments = (orderId: string) => purchaseFiles.list(orderId);
 export const uploadAttachment = (orderId: string, kind: string, file: File) => purchaseFiles.upload(orderId, kind, file);
 
+/** Báo cáo giải thích (P-COST-05): tệp bằng chứng, lý do. */
+export const explanatoryFiles = attachmentApi("project-files", "explanatory_attachments", "report_id");
+
 /** Confirm Contract (P-COST-01). */
 export const contractFiles = attachmentApi("project-files", "contract_attachments", "contract_id");
 

@@ -217,3 +217,23 @@
 .tb-people.seq { flex-direction: column; align-items: flex-start; }
 .tb-empty { font-size: 12px; }
 .tb-add { justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; font-size: 13px; margin: -6px 0 18px; }
+/* Cột Người duyệt responsive: màn rộng ở bên phải; màn vừa / nhỏ đưa lên trên, các khối xếp ngang và xuống dòng */
+.ap-aside { min-width: 0; }
+.ap-aside .ap-chip { max-width: 100%; overflow-wrap: anywhere; }
+.ap-aside .ap-frame-add, .ap-aside .tb-mode { max-width: 100%; }
+.pj-with-aside { grid-template-columns: minmax(0, 1fr) clamp(260px, 24vw, 340px); }
+@media (max-width: 1399px) {
+  .pj-with-aside { grid-template-columns: minmax(0, 1fr); }
+  .pj-with-aside > .ap-aside { order: -1; position: static; max-height: none; }
+  .ap-aside .tb-tree { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px 26px; }
+  .ap-aside .tb-block { margin: 0; flex: 1 1 210px; max-width: 340px; }
+  .ap-aside .tb-block::after { content: "→"; left: auto; right: -19px; top: 50%; bottom: auto; transform: translateY(-50%); }
+  .ap-aside .tb-add { margin: 0; align-self: center; }
+  .ap-aside .tb-pool .ap-pool-list { max-height: 120px; overflow: auto; }
+}
+@media (max-width: 640px) {
+  .ap-aside .tb-tree { flex-direction: column; gap: 18px; }
+  .ap-aside .tb-block { max-width: none; flex-basis: auto; }
+  .ap-aside .tb-block::after { content: "↓"; left: 50%; right: auto; top: auto; bottom: -19px; transform: translateX(-50%); }
+  .ap-aside .button-row { flex-wrap: wrap; }
+}

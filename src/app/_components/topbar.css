@@ -36,3 +36,13 @@
 .emp-desktop-only { display: block; }
 @media (max-width: 768px) { .emp-desktop-only { display: none; } }
 .top-pop h4 .top-board-link { margin-left: auto; font-weight: 600; }
+.top-menu { display: grid; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.top-menu .button { display: flex; align-items: center; gap: 8px; justify-content: flex-start; }
+/* Báo lỗi */
+.bug-shot { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; justify-self: start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bug-list { display: grid; gap: 10px; }
+.bug-item { padding: 12px 16px; display: grid; gap: 6px; }
+.bug-item.done { opacity: .8; }
+.bug-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.bug-head .pill { margin-left: auto; }
+.bug-msg { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }

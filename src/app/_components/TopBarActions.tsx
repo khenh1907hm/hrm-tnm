@@ -1,6 +1,8 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Bell, CheckCheck, Crown, Mail, UserRound } from "lucide-react";
+import { Bell, Bug, CheckCheck, Crown, KeyRound, LogOut, Mail, UserRound } from "lucide-react";
+import { BugReportModal } from "./BugReports";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { getSupabaseClient } from "../../lib/supabase/client";
 import { DOC_TYPE_LABELS, type ApprovalDocType, type ApprovalRole } from "../../modules/purchases/approval";
 import { DOC_PROJECT_TAB } from "../../modules/purchases/store";
@@ -34,13 +36,14 @@ async function loadPending(): Promise<Pending[]> {
  * Góc phải trên cùng: chuông thông báo (phiếu chờ tôi duyệt + thông báo trả về / đã duyệt) và hồ sơ
  * (tên, vai trò, Giám đốc, email nhận thông báo). Chỉ hiện ở chế độ thật (có Supabase).
  */
-export function TopBarActions(props: { compact?: boolean }) {
+export function TopBarActions(props: { compact?: boolean; email?: string | null; onSignOut?: () => void; onNotice?: (message: string) => void }) {
   const live = getSupabaseClient() !== null;
   const [open, setOpen] = useState<"bell" | "profile" | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
   const [items, setItems] = useState<AppNotification[]>([]);
   const [account, setAccount] = useState<MyAccount | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  const [dialog, setDialog] = useState<"password" | "bug" | null>(null);
 
   const refresh = useCallback(async () => {
     const [nextPending, nextItems] = await Promise.all([loadPending(), myNotifications(30).catch(() => [])]);
@@ -130,17 +133,24 @@ export function TopBarActions(props: { compact?: boolean }) {
         </div>
       )}
 
-      {open === "profile" && <ProfilePop key={account ? "ready" : "loading"} account={account} onSaved={(next) => setAccount(next)} />}
+      {open === "profile" && <ProfilePop key={account ? "ready" : "loading"} account={account} onSaved={(next) => setAccount(next)}
+        actions={<div className="top-menu">
+          {props.email && <button type="button" className="button" onClick={() => { setOpen(null); setDialog("password"); }}><KeyRound size={16} aria-hidden="true" /> Đổi mật khẩu</button>}
+          <button type="button" className="button" onClick={() => { setOpen(null); setDialog("bug"); }}><Bug size={16} aria-hidden="true" /> Báo lỗi / góp ý</button>
+          {props.onSignOut && <button type="button" className="button danger" onClick={() => { setOpen(null); props.onSignOut?.(); }}><LogOut size={16} aria-hidden="true" /> Đăng xuất</button>}
+        </div>} />}
+      {dialog === "password" && props.email && <ChangePasswordModal email={props.email} onClose={() => setDialog(null)} />}
+      {dialog === "bug" && <BugReportModal onClose={() => setDialog(null)} onSent={(message) => { setDialog(null); if (props.onNotice) props.onNotice(message); else window.alert(message); }} />}
     </div>
   );
 }
 
-function ProfilePop(props: { account: MyAccount | null; onSaved: (account: MyAccount | null) => void }) {
+function ProfilePop(props: { account: MyAccount | null; onSaved: (account: MyAccount | null) => void; actions?: React.ReactNode }) {
   const { account } = props;
   const [email, setEmail] = useState(account?.notifyEmail ?? "");
   const [enabled, setEnabled] = useState(account?.notifyEnabled ?? true);
   const [state, setState] = useState<{ busy: boolean; message: string; error: boolean }>({ busy: false, message: "", error: false });
-  if (!account) return <div className="top-pop" role="dialog" aria-label="Hồ sơ"><p className="muted top-empty">Đang tải hồ sơ…</p></div>;
+  if (!account) return <div className="top-pop" role="dialog" aria-label="Hồ sơ"><p className="muted top-empty">Đang tải hồ sơ…</p>{props.actions}</div>;
   const save = async () => {
     const value = email.trim();
     if (value && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value)) { setState({ busy: false, message: "Email chưa đúng dạng (vd ten@congty.com).", error: true }); return; }
@@ -176,6 +186,7 @@ function ProfilePop(props: { account: MyAccount | null; onSaved: (account: MyAcc
         {state.message && <p className={state.error ? "form-error" : "muted"} role="status">{state.message}</p>}
         <button type="submit" className="button primary" disabled={state.busy}>{state.busy ? "Đang lưu…" : "Lưu"}</button>
       </form>
+      {props.actions}
     </div>
   );
 }

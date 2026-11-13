@@ -95,7 +95,8 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
                       const { parseBudgetWorkbook } = await import("../../../modules/procurement-forms/forms");
                       const imported = await parseBudgetWorkbook(await file.arrayBuffer(), codes);
                       setDraft({ id: working.id, header: { ...working.header, quoteNo: imported.quoteNo || working.header.quoteNo, exchangeRate: imported.exchangeRate, offerPrice: imported.offerPrice || working.header.offerPrice, contractValue: imported.contractValue || working.header.contractValue }, lines: imported.lines });
-                      setNotice(`Đã đọc ${imported.lines.length} mã từ ${file.name}. Xem lại rồi bấm Lưu.`, "success");
+                      const emptyBudget = imported.lines.every((line) => !line.budget && !line.nett);
+                      setNotice(`Đã đọc ${imported.lines.length} mã từ ${file.name}${emptyBudget ? " (file chỉ có cột Dự phòng/Remark, cột Giá gốc và Ngân sách (C) đang trống)" : ""}. Xem lại rồi bấm Lưu.`, emptyBudget ? "info" : "success");
                     } catch (error) { setNotice(errorMessage(error), "error"); }
                   })();
                 }} />

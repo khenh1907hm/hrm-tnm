@@ -19,6 +19,7 @@ export const VIEW_PATHS: Record<PageView, string> = {
   purchases: "/dat-hang",
   approvals: "/don-can-duyet",
   approvalSettings: "/quy-trinh-duyet",
+  bugReports: "/bao-loi",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
@@ -45,6 +46,7 @@ const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
   // Ai cũng mở được: chỉ thấy phiếu mình liên quan
   approvals: null,
   approvalSettings: "admin",
+  bugReports: "admin",
 };
 
 export function canOpenView(actor: Actor, view: PageView): boolean {
@@ -76,6 +78,7 @@ export const VIEW_TITLES: Record<PageView, string> = {
   purchases: "Đặt hàng",
   approvals: "Đơn phiếu cần duyệt của tôi",
   approvalSettings: "Quy trình duyệt",
+  bugReports: "Báo lỗi",
 };
 
 /** projectId chỉ có khi mở một dự án (/du-an/<id>). */

@@ -1,5 +1,5 @@
 "use client";
-import { BadgeCheck, BellRing, ClipboardCheck, ClipboardSignature, GitBranch, Coins, FileSpreadsheet, FolderKanban, History, KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import { Bug, BadgeCheck, BellRing, ClipboardCheck, ClipboardSignature, GitBranch, Coins, FileSpreadsheet, FolderKanban, History, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
@@ -13,7 +13,7 @@ const NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
   { label: "Dự án", items: [["projects", "Dự án", FolderKanban], ["timesheet", "Chấm công", ClipboardCheck], ["laborRates", "Đơn giá & lịch làm việc", Coins]] },
   { label: "Mua hàng", items: [["purchases", "Đặt hàng", ShoppingCart], ["approvals", "Đơn phiếu cần duyệt", ClipboardSignature]] },
   { label: "Tài liệu", items: [["reports", "FORM Báo cáo (Excel)", FileSpreadsheet], ["skills", "Kho Skill AI", Sparkles], ["tools", "Công cụ", Wrench]] },
-  { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["approvalSettings", "Quy trình duyệt", GitBranch], ["audit", "Nhật ký thay đổi", History]] },
+  { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["approvalSettings", "Quy trình duyệt", GitBranch], ["bugReports", "Báo lỗi", Bug], ["audit", "Nhật ký thay đổi", History]] },
 ];
 const COLLAPSED_KEY = "tnm.sideNav.collapsed";
 const ROLE_LABELS: Record<Actor["role"], string> = { admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên" };
@@ -74,8 +74,6 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
           <div className="side-user-card">
             <span className="side-avatar" aria-hidden="true">{initialsOf(props.email)}</span>
             <div className="side-user-text"><span className="side-user" title={props.email ?? ""}>{props.email}</span><small>{ROLE_LABELS[actor.role]}</small></div>
-            <button type="button" className="side-signout" onClick={() => setChangingPassword(true)} aria-label="Đổi mật khẩu" title="Đổi mật khẩu"><KeyRound size={17} aria-hidden="true" /></button>
-            <button type="button" className="side-signout" onClick={props.onSignOut} aria-label="Đăng xuất" title="Đăng xuất"><LogOut size={17} aria-hidden="true" /></button>
           </div>
         </div>
       )}

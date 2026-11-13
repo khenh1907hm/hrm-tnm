@@ -211,7 +211,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
           </fieldset>
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú, lý do mua</span><input className={ai("note")} value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
           {live && <fieldset className="po-terms" style={{ gridColumn: "1 / -1" }}>
-            <legend>Tệp đính kèm</legend>
+            <legend>Attach file</legend>
             <AttachmentsField existing={existing} pending={pending} onPendingChange={setPending} editable requireSigned={draft.kind === "project"} setNotice={(message) => setError(message)} />
           </fieldset>}
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}

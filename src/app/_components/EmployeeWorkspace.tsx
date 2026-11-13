@@ -140,7 +140,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       <header className="emp-topbar">
         <Image className="emp-topbar-logo" src="/tnm-emblem.png" alt="Thiên Nhật Minh" width={120} height={75} priority />
         <b>{VIEW_TITLES[view]}</b>
-        {props.mode === "live" && <TopBarActions compact />}
+        {props.mode === "live" && <TopBarActions compact email={props.email} onSignOut={props.onSignOut} onNotice={(message) => setNotice(message, "success")} />}
         <button type="button" className="emp-avatar-button" aria-label="Tài khoản" aria-expanded={menuOpen} onClick={() => setMenuOpen((value) => !value)}><span className="emp-avatar">{initials}</span></button>
       </header>
       {menuOpen && <div className="emp-menu" role="dialog" aria-label="Tài khoản">{account}</div>}
@@ -169,7 +169,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       </aside>
       {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
       <main className="main-content emp-main" onClick={() => setMenuOpen(false)}>
-        {props.mode === "live" && <div className="emp-desktop-only"><TopBarActions /></div>}
+        {props.mode === "live" && <div className="emp-desktop-only"><TopBarActions email={props.email} onSignOut={props.onSignOut} onNotice={(message) => setNotice(message, "success")} /></div>}
         {view === "skills" && <SkillsClient embedded />}
         {view === "approvals" && <ApprovalBoardPage live={props.mode === "live"} setNotice={setNotice} />}
         {view === "tools" && <ToolsPage orgChart={props.actor ? { store: projectStore.store, ready: projectStore.ready, actor: props.actor, employees: null, setNotice } : undefined} />}

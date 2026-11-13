@@ -13,6 +13,10 @@ import type { PurchaseOrder } from "../../../modules/purchases/types";
 import type { Notify } from "../Toast";
 import { ApprovalChain } from "../purchases/ApprovalChain";
 import { FormExportButtons } from "../purchases/FormExport";
+import { AttachmentsField, SavedAttachments, type PendingFile } from "../purchases/AttachmentsField";
+import { explanatoryFiles, filesAvailable, type Attachment } from "../purchases/purchaseFiles";
+
+const EXP_KINDS = (Object.keys(ATTACHMENT_LABELS) as (keyof typeof ATTACHMENT_LABELS)[]).map((key) => ({ kind: key, label: ATTACHMENT_LABELS[key], required: false }));
 import { errorMessage, moneyInput, parseMoney } from "./projectShared";
 
 const TONE: Record<ExplanatoryReport["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad" };
@@ -32,6 +36,17 @@ export function ExplanatoryPanel(props: { store: PurchaseStore; project: Project
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [newCode, setNewCode] = useState("");
+  // Attach file: tệp đã lưu của báo cáo đang sửa và tệp chờ tải lên sau khi lưu
+  const live = filesAvailable();
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
+  const [savedFiles, setSavedFiles] = useState<Attachment[]>([]);
+  const editingId = editing?.id ?? null;
+  useEffect(() => {
+    if (!live || !editingId) return;
+    let active = true;
+    void explanatoryFiles.list(editingId).then((list) => { if (active) setSavedFiles(list); }, () => undefined);
+    return () => { active = false; };
+  }, [live, editingId]);
   const load = useCallback(async () => {
     const [list, orders] = await Promise.all([store.listExplanatory(project.id), store.listOrders().catch(() => [])]);
     const open = orders.filter((order) => order.projectId === project.id && order.budgetCode && (order.status === "draft" || order.status === "rejected"));
@@ -73,7 +88,13 @@ export function ExplanatoryPanel(props: { store: PurchaseStore; project: Project
   const save = (submit: boolean) => editing && run(async () => {
     const issue = explanatoryIssue(editing, submit, props.codes);
     if (issue) throw new Error(issue);
-    const id = await store.saveExplanatory(editing);
+    // Cờ hồ sơ theo tệp thật (máy chủ cũng tự cập nhật khi tải tệp)
+    const kinds = new Set([...savedFiles.filter((item) => item.parentId === editing.id).map((item) => item.kind), ...pendingFiles.map((item) => item.kind)]);
+    const body = live ? { ...editing, attachments: { customerRequest: kinds.has("customerRequest"), overQuote: kinds.has("overQuote"), incident: kinds.has("incident"), drawing: kinds.has("drawing") } } : editing;
+    const id = await store.saveExplanatory(body);
+    for (const item of pendingFiles) await explanatoryFiles.upload(id, item.kind, item.file);
+    setPendingFiles([]);
+    setSavedFiles([]);
     if (submit) await store.submitExplanatory(id);
     setEditing(null);
     setOpenId(id);
@@ -138,8 +159,11 @@ export function ExplanatoryPanel(props: { store: PurchaseStore; project: Project
             <button type="button" className="button" onClick={() => void refreshAB()}><RefreshCw className="ico" size={15} aria-hidden="true" /> Tính lại A, B</button>
           </div>
           <label className="field"><span>Diễn giải (lý do, nguyên nhân, cách khắc phục và kết quả)</span><textarea rows={4} value={editing.explanation} onChange={(event) => setEditing({ ...editing, explanation: event.target.value })} /></label>
-          <fieldset className="exp-attach"><legend>Hồ sơ kèm theo</legend>
-            {(Object.keys(ATTACHMENT_LABELS) as (keyof typeof ATTACHMENT_LABELS)[]).map((key) => (
+          <fieldset className="exp-attach po-terms"><legend>Attach file (bằng chứng, lý do)</legend>
+            {live ? (
+              <AttachmentsField existing={savedFiles.filter((item) => item.parentId === editingId)} pending={pendingFiles} onPendingChange={setPendingFiles} api={explanatoryFiles} kinds={EXP_KINDS} editable requireSigned={false}
+                onChanged={() => { if (editingId) void explanatoryFiles.list(editingId).then(setSavedFiles, () => undefined); }} setNotice={setNotice} />
+            ) : (Object.keys(ATTACHMENT_LABELS) as (keyof typeof ATTACHMENT_LABELS)[]).map((key) => (
               <label key={key}><input type="checkbox" checked={editing.attachments[key]} onChange={(event) => setEditing({ ...editing, attachments: { ...editing.attachments, [key]: event.target.checked } })} /> {ATTACHMENT_LABELS[key]}</label>
             ))}
           </fieldset>
@@ -177,6 +201,9 @@ export function ExplanatoryPanel(props: { store: PurchaseStore; project: Project
         <div className="exp-open">
           <p><b>{opened.number}</b> · {EXPLANATORY_KIND_LABELS[opened.kind]}{opened.warrantyDoneOn ? ` · hoàn thành ${dmy(opened.warrantyDoneOn)}` : ""}</p>
           <p className="exp-text">{opened.explanation}</p>
+          {live && <fieldset className="exp-attach po-terms"><legend>Attach file</legend>
+            <SavedAttachments key={opened.id} parentId={opened.id} api={explanatoryFiles} kinds={EXP_KINDS} editable={props.canEdit} requireSigned={false} setNotice={setNotice} />
+          </fieldset>}
           <FormExportButtons code="P-COST-05" fileBase={opened.number} setNotice={setNotice} build={async (forms, template) => forms.fillExplanatory(template!, {
             report: opened, project: { code: project.code, name: project.name }, steps: opened.status === "draft" ? [] : await store.listSteps("explanatory", opened.id),
           })} />

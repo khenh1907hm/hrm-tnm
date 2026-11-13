@@ -3,6 +3,7 @@
 import { TopBarActions } from "./_components/TopBarActions";
 import { ApprovalBoardPage } from "./_components/ApprovalBoardPage";
 import { ApprovalSettingsPage } from "./_components/ApprovalSettingsPage";
+import { BugReportsPage } from "./_components/BugReports";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { can, type Actor } from "../modules/auth/permissions";
@@ -437,7 +438,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     <div className="app-shell">
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
-        {backend.mode === "live" && <TopBarActions />}
+        {backend.mode === "live" && <TopBarActions email={backend.email} onSignOut={() => void backend.signOut()} onNotice={(message) => setNotice(message, "success")} />}
         {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void loadSelectedEmployees().then(setBatchEmployees)} onExportCertificates={() => void loadSelectedEmployees().then(setCertFolderEmployees)} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
@@ -486,6 +487,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
         {view === "purchases" && <PurchasesPage store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
+        {view === "bugReports" && actor.role === "admin" && <BugReportsPage setNotice={setNotice} />}
         {view === "approvals" && <ApprovalBoardPage live={backend.mode === "live"} setNotice={setNotice} />}
         {view === "approvalSettings" && actor.role === "admin" && <ApprovalSettingsPage live={backend.mode === "live"} employees={employeeSource} setNotice={setNotice} />}
         {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}

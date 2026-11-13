@@ -91,7 +91,7 @@ export function SavedAttachments(props: { parentId: string; api: AttachmentApi; 
 export function OrderAttachments(props: { orderId: string; editable: boolean; requireSigned: boolean; setNotice: Notify }) {
   return (
     <section className="panel pj-section" aria-labelledby="po-files-title">
-      <h2 id="po-files-title"><Paperclip className="ico" size={18} aria-hidden="true" /> Tệp đính kèm</h2>
+      <h2 id="po-files-title"><Paperclip className="ico" size={18} aria-hidden="true" /> Attach file</h2>
       <SavedAttachments parentId={props.orderId} api={purchaseFiles} kinds={ATTACHMENT_KINDS} editable={props.editable} requireSigned={props.requireSigned} setNotice={props.setNotice} />
     </section>
   );

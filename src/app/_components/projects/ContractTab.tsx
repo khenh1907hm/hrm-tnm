@@ -118,7 +118,7 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
               {date("Ngày hoàn thành", "endOn")}
             </div>
             <label className="field"><span>Điều khoản thanh toán của khách</span><textarea rows={3} disabled={!editable} value={body.paymentTerms} placeholder="Ví dụ: Tạm ứng 15%, thanh toán theo tiến độ tháng đến 95% sau 45 ngày ký nghiệm thu khối lượng, 5% còn lại sau 2 tháng khi phát hành bảo lãnh bảo hành" onChange={(event) => set({ paymentTerms: event.target.value })} /></label>
-            <fieldset className="exp-attach po-terms"><legend>Tài liệu đính kèm ({CONFIRMATION_LABELS[body.confirmation]})</legend>
+            <fieldset className="exp-attach po-terms"><legend>Attach file ({CONFIRMATION_LABELS[body.confirmation]})</legend>
               {live ? (
                 <SavedAttachments key={current.id} parentId={current.id} api={contractFiles} editable={canEdit && current.status !== "superseded"} requireSigned setNotice={setNotice}
                   kinds={REQUIRED_ATTACHMENTS[body.confirmation].map((key) => ({ kind: key, label: CONTRACT_ATTACHMENT_LABELS[key], required: key === "signedQuoteOrPo" }))}
