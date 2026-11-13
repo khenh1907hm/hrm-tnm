@@ -42,7 +42,7 @@ export function attachmentApi(bucket: string, table: string, parentColumn: strin
       if (!client) return;
       if (file.size > 25 * 1024 * 1024) throw new Error(`Tệp ${file.name} lớn hơn 25 MB.`);
       const path = `${parentId}/${kind}-${Date.now()}-${storageName(file.name)}`;
-      const { error: upload } = await client.storage.from(bucket).upload(path, file, { upsert: false, ...(file.type ? { contentType: file.type } : {}) });
+      const { error: upload } = await client.storage.from(bucket).upload(path, file, { upsert: false, contentType: file.type || "application/octet-stream" });
       if (upload) throw new Error(`Không tải được tệp ${file.name}: ${upload.message}`);
       const { data: user } = await client.auth.getUser();
       const name = str(user.user?.user_metadata?.full_name) || str(user.user?.email);

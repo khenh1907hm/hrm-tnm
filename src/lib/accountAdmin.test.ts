@@ -137,8 +137,8 @@ describe("tài khoản chấm công cho công nhân", () => {
     expect(isWorkerEmail("ketoan@tnm.com.vn")).toBe(false);
     expect(loginEmail("hr@tnm.vn")).toBe("hr@tnm.vn");
     expect(isWorkerEmail(workerEmail("TNM9"))).toBe(true);
-    expect(initialPassword(() => 0)).toBe("aaaaaaaa");
-    expect(initialPassword()).toMatch(/^[a-z2-9]{8}$/);
+    expect(initialPassword(() => 0)).toBe("aaaaaaaaaa");
+    expect(initialPassword()).toMatch(/^[a-z2-9]{10}$/);
   });
 
   it("ACC_06 Admin tạo hàng loạt: tạo, liên kết hồ sơ, trả mật khẩu một lần; mã đã có tài khoản thì báo exists", async () => {

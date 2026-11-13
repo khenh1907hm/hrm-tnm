@@ -30,8 +30,10 @@ export function isWorkerEmail(email: string): boolean {
   return CODE.test(local) && (domain === WORKER_EMAIL_DOMAIN || domain === LEGACY_WORKER_EMAIL_DOMAIN);
 }
 
-/** Mật khẩu ban đầu 8 ký tự dễ đọc (bỏ 0/O, 1/l/I). */
-export function initialPassword(random: () => number = Math.random): string {
+/** Mật khẩu ban đầu 10 ký tự dễ đọc (bỏ 0/O, 1/l/I). */
+/** Số ngẫu nhiên [0, 1) từ bộ sinh mật mã (không dùng Math.random cho mật khẩu). */
+const secureRandom = () => { const buffer = new Uint32Array(1); globalThis.crypto.getRandomValues(buffer); return buffer[0]! / 2 ** 32; };
+export function initialPassword(random: () => number = secureRandom): string {
   const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  return Array.from({ length: 8 }, () => alphabet[Math.floor(random() * alphabet.length)]).join("");
+  return Array.from({ length: 10 }, () => alphabet[Math.floor(random() * alphabet.length)]).join("");
 }

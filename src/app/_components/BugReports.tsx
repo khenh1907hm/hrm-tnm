@@ -122,7 +122,7 @@ export function BugReportsPage(props: { setNotice: Notify }) {
               </div>
               <p className="bug-msg">{item.message}</p>
               <div className="button-row">
-                {item.pageUrl && <a className="link-button" href={item.pageUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} aria-hidden="true" /> {item.pageUrl}</a>}
+                {item.pageUrl.startsWith("/") && !item.pageUrl.startsWith("//") && <a className="link-button" href={item.pageUrl} target="_blank" rel="noreferrer"><ExternalLink size={13} aria-hidden="true" /> {item.pageUrl}</a>}
                 {item.screenshotPath && <button type="button" className="link-button" onClick={() => void openShot(item)}>Xem ảnh chụp</button>}
               </div>
               {item.adminNote && <p className="muted"><small>Ghi chú xử lý: {item.adminNote}{item.resolvedAt ? ` · ${when(item.resolvedAt)}` : ""}</small></p>}
