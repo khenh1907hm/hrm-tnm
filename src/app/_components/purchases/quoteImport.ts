@@ -82,14 +82,53 @@ export function normalizeAi(raw: unknown): QuoteData {
   };
 }
 
-async function askAi(payload: { text?: string; images?: string[] }): Promise<QuoteData> {
+async function askAiRaw(payload: { text?: string; images?: string[]; purpose?: "contract" }): Promise<unknown> {
   const client = getSupabaseClient();
   const token = client ? (await client.auth.getSession()).data.session?.access_token : null;
   if (!token) throw new Error("Cần đăng nhập để nhờ AI đọc báo giá.");
   const response = await fetch("/api/purchases/read-quote", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify(payload) });
   const result = await response.json().catch(() => null) as { ok?: boolean; data?: unknown; error?: string } | null;
   if (!response.ok || !result?.ok) throw new Error(result?.error ?? "AI chưa đọc được báo giá.");
-  return normalizeAi(result.data);
+  return result.data;
+}
+const askAi = async (payload: { text?: string; images?: string[] }) => normalizeAi(await askAiRaw(payload));
+
+/** Chứng từ khách hàng cho Confirm Contract: báo giá TNM gửi khách, hoặc PO / hợp đồng khách gửi TNM. */
+export type CustomerDoc = {
+  kind: "quote" | "po"; number: string; date: string | null; customerName: string; ownerName: string; description: string;
+  total: number | null; vatIncluded: boolean | null; paymentTerms: string; startOn: string | null; endOn: string | null;
+};
+const isoOrNull = (value: unknown) => { const text = typeof value === "string" ? value.trim() : ""; return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null; };
+function normalizeCustomer(raw: unknown): CustomerDoc {
+  const data = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    kind: data.kind === "po" ? "po" : "quote", number: text(data.number), date: isoOrNull(data.date), customerName: text(data.customerName), ownerName: text(data.ownerName),
+    description: text(data.description), total: num(data.total), vatIncluded: typeof data.vatIncluded === "boolean" ? data.vatIncluded : null,
+    paymentTerms: text(data.paymentTerms), startOn: isoOrNull(data.startOn), endOn: isoOrNull(data.endOn),
+  };
+}
+
+/** Đọc báo giá / PO của khách: PDF có chữ thì dò trên máy; không đủ (thiếu tên khách hoặc giá trị), bản scan, ảnh thì nhờ Gemini. */
+export async function readCustomerDoc(file: File): Promise<{ data: CustomerDoc; source: "text" | "ai" }> {
+  const isPdf = file.type === "application/pdf" || /\.pdf$/i.test(file.name);
+  if (!isPdf) return { data: normalizeCustomer(await askAiRaw({ images: [await imageData(file)], purpose: "contract" })), source: "ai" };
+  const { rows, images } = await pdfRows(file);
+  const all = rows.map((cells) => cells.join(" ")).join("\n");
+  const parsed = parseQuoteRows(rows);
+  const isQuote = /b[aá]o\s*gi[aá]|quotation/i.test(all);
+  const isPo = /purchase\s*order|đơn\s*đặt\s*hàng|h[oợ]p\s*đ[oồ]ng/i.test(all) && !isQuote;
+  if (parsed.supplier && (parsed.total || parsed.quoteNo)) {
+    return {
+      source: "text",
+      data: {
+        kind: isPo ? "po" : "quote", number: parsed.quoteNo, date: parsed.quoteDate, customerName: parsed.supplier, ownerName: "", description: parsed.items.map((item) => item.name).slice(0, 3).join("; "),
+        total: parsed.total ?? (parsed.items.length ? parsed.items.reduce((sum, item) => sum + item.amount, 0) : null), vatIncluded: parsed.vatIncluded, paymentTerms: parsed.paymentTerms, startOn: null, endOn: null,
+      },
+    };
+  }
+  const textPayload = rows.map((cells) => cells.join(" | ")).join("\n");
+  const raw =await askAiRaw(textPayload.trim().length > 200 ? { text: textPayload, ...(images.length ? { images } : {}), purpose: "contract" } : { images, purpose: "contract" });
+  return { data: normalizeCustomer(raw), source: "ai" };
 }
 
 /** Đọc một báo giá (PDF hoặc ảnh). */

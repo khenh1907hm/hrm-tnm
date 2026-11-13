@@ -237,3 +237,8 @@
   .ap-aside .tb-block::after { content: "↓"; left: 50%; right: auto; top: auto; bottom: -19px; transform: translateX(-50%); }
   .ap-aside .button-row { flex-wrap: wrap; }
 }
+/* Quyết định thành lập Ban chỉ huy công trường */
+.bch-bar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; }
+.bch-table input[type="text"], .bch-table input:not([type]) , .bch-table input[inputmode] { width: 100%; min-width: 120px; }
+.bch-table tr.muted input { opacity: .55; }
+.bch-tools { white-space: nowrap; }

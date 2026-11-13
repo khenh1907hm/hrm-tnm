@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Download, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, FileText, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
 import {
   applyEmployeeFacts, DEFAULT_ORG_HEADER, blankPerson, buildFromProject, defaultOrgChart, ghostSlots, isGhost, layoutOrgChart, mergeMembers, orgChartIssue, ORG_CANVAS, ORG_MAX_GROUPS,
   renumberGroups, signDateText, suggestEmail, toCompanyTemplate, type OrgBox, type OrgChart, type OrgChartHeader, type OrgPerson, type OrgSection,
@@ -11,6 +11,7 @@ import { systemClock, todayVN } from "../../../lib/clock";
 import { hasAccess, type Actor } from "../../../modules/auth/permissions";
 import type { TabProps } from "./ProjectDetail";
 import { MembersTab } from "./MembersTab";
+import { BchDecisionDialog } from "./BchDecisionDialog";
 import { EmployeePicker } from "./ProjectsPage";
 import { errorMessage, viewerFor, type EmployeeSource } from "./projectShared";
 import "./orgchart.css";
@@ -328,8 +329,14 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
 export function OrgChartTab(props: TabProps) {
   const { store, data, viewer, actor, employees, setNotice } = props;
   const [listOpen, setListOpen] = useState(false);
+  const [bchOpen, setBchOpen] = useState(false);
   return (
     <div className="pj-page">
+      <section className="panel pj-section bch-bar">
+        <div><b>Quyết định thành lập Ban chỉ huy công trường</b><br /><small className="muted">Theo mẫu công ty, lấy thành viên dự án ở dưới và thông tin dự án. Xuất Excel hoặc PDF.</small></div>
+        <button type="button" className="button primary" onClick={() => setBchOpen(true)}><FileText className="ico" size={16} aria-hidden="true" /> Xuất quyết định BCH</button>
+      </section>
+      {bchOpen && <BchDecisionDialog store={store} project={data.project} members={data.members} today={data.today} employees={employees} setNotice={setNotice} onClose={() => setBchOpen(false)} />}
       <OrgChartEditor store={store} project={data.project} members={data.members} today={data.today} canEdit={viewer.isLead || viewer.canEditProject}
         canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} />
       <section className="panel pj-section">

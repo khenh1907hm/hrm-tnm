@@ -17,6 +17,16 @@ Trả về DUY NHẤT một JSON theo đúng khuôn sau (không thêm chữ nào
  "prepay": true nếu phải thanh toán toàn bộ trước khi giao hàng / ngay khi đặt hàng, "deliveryText": "thời gian giao hàng nguyên văn ngắn gọn"}
 Quy tắc: số là số thuần (không dấu chấm/phẩy phân cách nghìn, đơn vị VNĐ). Không bịa: không thấy thì để "" hoặc null. Giữ nguyên tiếng Việt có dấu.`;
 
+const CONTRACT_PROMPT = `Bạn đọc chứng từ của KHÁCH HÀNG cho Công ty TNHH Thiên Nhật Minh (TNM, MST 0303590774): có thể là báo giá TNM gửi khách (quotation),
+đơn đặt hàng / PO khách gửi TNM, hoặc hợp đồng. Trả về DUY NHẤT một JSON:
+{"kind": "quote" nếu là báo giá TNM gửi khách, "po" nếu là PO / đơn đặt hàng / hợp đồng khách gửi TNM,
+ "number": "số báo giá hoặc số PO / hợp đồng", "date": "YYYY-MM-DD hoặc null",
+ "customerName": "tên công ty KHÁCH HÀNG (không phải Thiên Nhật Minh)", "ownerName": "chủ đầu tư / dự án của khách nếu có, không thì \"\"",
+ "description": "tóm tắt ngắn phạm vi công việc / tên gói thầu", "total": tổng giá trị (số, VNĐ) hoặc null,
+ "vatIncluded": true | false | null, "paymentTerms": "điều khoản thanh toán nguyên văn ngắn gọn",
+ "startOn": "YYYY-MM-DD hoặc null", "endOn": "YYYY-MM-DD hoặc null"}
+Số là số thuần (không dấu phân cách nghìn). Không bịa: không thấy thì "" hoặc null. Giữ nguyên tiếng Việt có dấu.`;
+
 async function authorized(request: Request): Promise<boolean> {
   const header = request.headers.get("authorization") ?? "";
   const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
@@ -31,14 +41,14 @@ export async function POST(request: Request) {
   if (!(await authorized(request))) return Response.json({ ok: false, error: "Cần đăng nhập." }, { status: 401 });
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) return Response.json({ ok: false, error: "Máy chủ chưa cấu hình Gemini (GEMINI_API_KEY)." }, { status: 503 });
-  let body: { text?: unknown; images?: unknown };
+  let body: { text?: unknown; images?: unknown; purpose?: unknown };
   try { body = await request.json() as typeof body; } catch { return Response.json({ ok: false, error: "Dữ liệu gửi lên không hợp lệ." }, { status: 400 }); }
   const text = typeof body.text === "string" ? body.text.slice(0, 60_000) : "";
   const images = Array.isArray(body.images) ? body.images.filter((item): item is string => typeof item === "string").slice(0, 3) : [];
   if (!text.trim() && !images.length) return Response.json({ ok: false, error: "Không có nội dung để đọc." }, { status: 400 });
   if (images.some((item) => item.length > 6_000_000)) return Response.json({ ok: false, error: "Ảnh quá lớn." }, { status: 413 });
 
-  const parts: Record<string, unknown>[] = [{ text: PROMPT }];
+  const parts: Record<string, unknown>[] = [{ text: body.purpose === "contract" ? CONTRACT_PROMPT : PROMPT }];
   if (text.trim()) parts.push({ text: `NỘI DUNG BÁO GIÁ (chữ lấy từ PDF, mỗi dòng các ô cách nhau bởi " | "):\n${text}` });
   for (const image of images) {
     const match = image.match(/^data:(image\/(?:png|jpeg));base64,(.+)$/);

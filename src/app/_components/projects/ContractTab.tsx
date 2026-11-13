@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SavedAttachments } from "../purchases/AttachmentsField";
 import { contractFiles, filesAvailable, type Attachment } from "../purchases/purchaseFiles";
-import { FilePlus2, FileUp, Save, Send, Trash2 } from "lucide-react";
+import { FilePlus2, FileSearch, FileUp, Save, Send, Trash2 } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import { CONFIRMATION_LABELS, type Confirmation } from "../../../modules/purchases/budget";
 import {
@@ -33,6 +33,8 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
   // Tệp thật của lần xác nhận đang xem (chế độ thật); cờ hồ sơ lấy theo tệp
   const live = filesAvailable();
   const [files, setFiles] = useState<{ id: string; items: Attachment[] } | null>(null);
+  const [filesKey, setFilesKey] = useState(0);
+  const [reading, setReading] = useState(false);
   const onFiles = useCallback((items: Attachment[], id: string) => setFiles({ id, items }), []);
   const load = useCallback(() => store.listContracts(projectId), [store, projectId]);
   useEffect(() => {
@@ -97,6 +99,45 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
                 }} />
               </label>
             )}
+            {editable && current && body && (
+              <label className="button" title="Đọc PDF / ảnh báo giá TNM gửi khách hoặc PO / hợp đồng khách gửi để tự điền (dò chữ trước, không được mới nhờ AI)">
+                <FileSearch className="ico" size={16} aria-hidden="true" /> {reading ? "Đang đọc…" : "Đọc PDF báo giá / PO khách"}
+                <input type="file" accept="application/pdf,.pdf,image/*" hidden disabled={reading} onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  setReading(true);
+                  void (async () => {
+                    try {
+                      const { readCustomerDoc } = await import("../purchases/quoteImport");
+                      const { data: doc, source } = await readCustomerDoc(file);
+                      const patch: Partial<ContractDraft> = {};
+                      if (doc.kind === "po") {
+                        if (doc.number) patch.customerDocNo = doc.number;
+                        if (doc.date) patch.customerDocDate = doc.date;
+                        if (doc.total) patch.confirmedValue = Math.round(doc.total);
+                      } else {
+                        if (doc.number) patch.quoteNo = doc.number;
+                        if (doc.date) patch.quoteDate = doc.date;
+                        if (doc.total) { patch.quoteValue = Math.round(doc.total); if (!body.confirmedValue) patch.confirmedValue = Math.round(doc.total); }
+                      }
+                      if (doc.customerName && !body.customerName.trim()) patch.customerName = doc.customerName.slice(0, 200);
+                      if (doc.ownerName && !body.ownerName.trim()) patch.ownerName = doc.ownerName.slice(0, 200);
+                      if (doc.paymentTerms && !body.paymentTerms.trim()) patch.paymentTerms = doc.paymentTerms.slice(0, 2000);
+                      if (doc.description && !body.description.trim()) patch.description = doc.description.slice(0, 500);
+                      if (doc.startOn && !body.startOn) patch.startOn = doc.startOn;
+                      if (doc.endOn && !body.endOn) patch.endOn = doc.endOn;
+                      setDraft({ id: current.id, body: { ...body, ...patch } });
+                      // Đính kèm luôn tệp vừa đọc: PO / hợp đồng khách → "Báo giá có ký hoặc PO / HĐ"; báo giá TNM → "Báo giá TNM gửi có ký đóng dấu"
+                      const kind = doc.kind === "po" ? "signedQuoteOrPo" : "stampedQuote";
+                      if (live) { await contractFiles.upload(current.id, kind, file).catch(() => undefined); setFilesKey((value) => value + 1); }
+                      setNotice(`Đã đọc ${doc.kind === "po" ? "PO / hợp đồng khách" : "báo giá"} bằng ${source === "text" ? "chữ trong PDF (không dùng AI)" : "AI Gemini"}: điền ${Object.keys(patch).length} mục${live ? `, đính kèm vào "${CONTRACT_ATTACHMENT_LABELS[kind]}"` : ""}. Xem lại rồi bấm Lưu.`, "success");
+                    } catch (error) { setNotice(error instanceof Error && !/^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : errorMessage(error), "error"); }
+                    finally { setReading(false); }
+                  })();
+                }} />
+              </label>
+            )}
             {editable && <button type="button" className="button" disabled={busy || draft?.id !== current?.id} onClick={() => void save(false)}><Save className="ico" size={16} aria-hidden="true" /> Lưu</button>}
             {editable && <button type="button" className="button primary" disabled={busy} onClick={() => void save(true)}><Send className="ico" size={16} aria-hidden="true" /> Lưu và gửi ký</button>}
             {editable && <button type="button" className="button danger" disabled={busy} onClick={() => { if (window.confirm("Xóa lần xác nhận nháp này?")) void run(async () => { await store.deleteContract(current!.id); setSelected(null); }, "Đã xóa nháp."); }}><Trash2 className="ico" size={16} aria-hidden="true" /> Xóa nháp</button>}
@@ -139,7 +180,7 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
             <label className="field"><span>Điều khoản thanh toán của khách</span><textarea rows={3} disabled={!editable} value={body.paymentTerms} placeholder="Ví dụ: Tạm ứng 15%, thanh toán theo tiến độ tháng đến 95% sau 45 ngày ký nghiệm thu khối lượng, 5% còn lại sau 2 tháng khi phát hành bảo lãnh bảo hành" onChange={(event) => set({ paymentTerms: event.target.value })} /></label>
             <fieldset className="exp-attach po-terms"><legend>Attach file ({CONFIRMATION_LABELS[body.confirmation]})</legend>
               {live ? (
-                <SavedAttachments key={current.id} parentId={current.id} api={contractFiles} editable={canEdit && current.status !== "superseded"} requireSigned setNotice={setNotice}
+                <SavedAttachments key={`${current.id}-${filesKey}`} parentId={current.id} api={contractFiles} editable={canEdit && current.status !== "superseded"} requireSigned setNotice={setNotice}
                   kinds={REQUIRED_ATTACHMENTS[body.confirmation].map((key) => ({ kind: key, label: CONTRACT_ATTACHMENT_LABELS[key], required: key === "signedQuoteOrPo" }))}
                   onChanged={onFiles} />
               ) : REQUIRED_ATTACHMENTS[body.confirmation].map((key) => (
