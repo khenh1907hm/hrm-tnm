@@ -60,7 +60,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
             ?? list.find((row) => plain(row.name) === plain(person.name));
           return {
             key: `chart-${person.id}`, name: member?.name || titleCase(person.name), title: person.titleVi.trim() || member?.title || "", phone: person.phone.trim() || member?.phone || "",
-            include: person.branch !== "group",
+            include: true,
           };
         });
       // Chỉ lấy người có trên sơ đồ (thành viên dự án khác như hành chính không vào); sơ đồ chưa có ai thì mới lấy thành viên dự án
@@ -115,7 +115,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
           </select></label>
           <label className="field"><span>Giám đốc ký</span><input value={directorName} placeholder="Để trống = dòng chấm" onChange={(event) => setDirectorName(event.target.value)} /></label>
           <div style={{ gridColumn: "1 / -1" }}>
-            <b>Thành viên Ban chỉ huy</b> <small className="muted">Chỉ lấy người trên sơ đồ tổ chức (bỏ Giám đốc; Quản lý nhóm mặc định không chọn), chức vụ tiếng Việt và số điện thoại theo sơ đồ. Ô viền đỏ là còn trống, điền tay rồi tải.</small>
+            <b>Thành viên Ban chỉ huy</b> <small className="muted">Chỉ lấy người trên sơ đồ tổ chức (bỏ Giám đốc, còn lại chọn sẵn hết), chức vụ tiếng Việt và số điện thoại theo sơ đồ. Ô viền đỏ là còn trống, điền tay rồi tải.</small>
             {!rows ? <div className="loading">Đang tải thành viên…</div> : (
               <div className="table-scroll">
                 <table className="pj-table bch-table">
