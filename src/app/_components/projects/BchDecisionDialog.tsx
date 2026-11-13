@@ -11,6 +11,7 @@ import { errorMessage, type EmployeeSource } from "./projectShared";
 
 type Row = BchMember & { key: string; include: boolean };
 const ROLE_ORDER = ["pm", "commander", "supervisor", "engineer", "leader", "member", "worker"];
+const plain = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").replace(/\s+/g, " ").trim().toLowerCase();
 const safeName = (text: string) => text.normalize("NFC").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 120);
 
 /**
@@ -39,8 +40,12 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
       for (const member of [...active_].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role))) if (!unique.has(member.employeeId)) unique.set(member.employeeId, member);
       const list = await Promise.all([...unique.values()].map(async (member): Promise<Row> => {
         const option = await props.employees?.get?.(member.employeeId).catch(() => null);
-        const fromChart = chart?.people.find((person) => person.employeeId === member.employeeId && person.phone.trim())?.phone ?? "";
-        return { key: member.id, name: member.displayName, title: BCH_TITLES[member.role] ?? "", phone: option?.phone || fromChart, include: member.role !== "worker" && member.role !== "leader" };
+        // Người này trên sơ đồ tổ chức: gắn theo hồ sơ, không thì khớp theo tên
+        const onChart = chart?.people.find((person) => person.employeeId === member.employeeId)
+          ?? chart?.people.find((person) => person.name.trim() && plain(person.name) === plain(member.displayName));
+        const title = BCH_TITLES[member.role] || onChart?.titleVi?.trim() || option?.position?.trim() || "";
+        const phone = option?.phone?.trim() || onChart?.phone?.trim() || "";
+        return { key: member.id, name: member.displayName, title, phone, include: member.role !== "worker" && member.role !== "leader" };
       }));
       if (!active) return;
       setRows(list);
@@ -90,7 +95,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
           </select></label>
           <label className="field"><span>Giám đốc ký</span><input value={directorName} placeholder="Để trống = dòng chấm" onChange={(event) => setDirectorName(event.target.value)} /></label>
           <div style={{ gridColumn: "1 / -1" }}>
-            <b>Thành viên Ban chỉ huy</b> <small className="muted">Lấy từ thành viên dự án (tổ trưởng, tổ viên mặc định không chọn). Sửa chức vụ, số điện thoại, thứ tự tùy ý.</small>
+            <b>Thành viên Ban chỉ huy</b> <small className="muted">Lấy từ thành viên dự án (tổ trưởng, tổ viên mặc định không chọn). Chức vụ, số điện thoại lấy từ vai trò, sơ đồ tổ chức và hồ sơ nhân sự; ô viền đỏ là còn trống, điền tay rồi tải.</small>
             {!rows ? <div className="loading">Đang tải thành viên…</div> : (
               <div className="table-scroll">
                 <table className="pj-table bch-table">
@@ -99,8 +104,8 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
                     <tr key={row.key} className={row.include ? undefined : "muted"}>
                       <td><input type="checkbox" aria-label={`Chọn ${row.name}`} checked={row.include} onChange={(event) => update(row.key, { include: event.target.checked })} /></td>
                       <td><input value={row.name} aria-label="Họ và tên" onChange={(event) => update(row.key, { name: event.target.value })} /></td>
-                      <td><input value={row.title} aria-label="Chức vụ" list="bch-titles" onChange={(event) => update(row.key, { title: event.target.value })} /></td>
-                      <td><input value={row.phone} aria-label="Số điện thoại" inputMode="tel" onChange={(event) => update(row.key, { phone: event.target.value })} /></td>
+                      <td><input className={row.include && !row.title.trim() ? "bch-missing" : undefined} placeholder="Chưa có chức vụ" value={row.title} aria-label="Chức vụ" list="bch-titles" onChange={(event) => update(row.key, { title: event.target.value })} /></td>
+                      <td><input className={row.include && !row.phone.trim() ? "bch-missing" : undefined} placeholder="Chưa có SĐT" value={row.phone} aria-label="Số điện thoại" inputMode="tel" onChange={(event) => update(row.key, { phone: event.target.value })} /></td>
                       <td className="bch-tools">
                         <button type="button" className="icon-link" aria-label="Lên" disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={14} aria-hidden="true" /></button>
                         <button type="button" className="icon-link" aria-label="Xuống" disabled={index === rows.length - 1} onClick={() => move(index, 1)}><ArrowDown size={14} aria-hidden="true" /></button>

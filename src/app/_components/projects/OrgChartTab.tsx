@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Download, FileText, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
+import { ChevronRight, Download, FileText, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
 import {
   applyEmployeeFacts, DEFAULT_ORG_HEADER, blankPerson, buildFromProject, defaultOrgChart, ghostSlots, isGhost, layoutOrgChart, mergeMembers, orgChartIssue, ORG_CANVAS, ORG_MAX_GROUPS,
   renumberGroups, signDateText, suggestEmail, toCompanyTemplate, type OrgBox, type OrgChart, type OrgChartHeader, type OrgPerson, type OrgSection,
@@ -10,7 +10,6 @@ import { MEMBER_ROLE_LABELS, type Project, type ProjectMember } from "../../../m
 import { systemClock, todayVN } from "../../../lib/clock";
 import { hasAccess, type Actor } from "../../../modules/auth/permissions";
 import type { TabProps } from "./ProjectDetail";
-import { MembersTab } from "./MembersTab";
 import { BchDecisionDialog } from "./BchDecisionDialog";
 import { EmployeePicker } from "./ProjectsPage";
 import { errorMessage, viewerFor, type EmployeeSource } from "./projectShared";
@@ -328,7 +327,6 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
 /** Tab "Sơ đồ & thành viên" của dự án: sơ đồ tổ chức ở trên, danh sách thành viên (dùng cho chấm công) ở dưới. */
 export function OrgChartTab(props: TabProps) {
   const { store, data, viewer, actor, employees, setNotice } = props;
-  const [listOpen, setListOpen] = useState(false);
   const [bchOpen, setBchOpen] = useState(false);
   return (
     <div className="pj-page">
@@ -339,13 +337,6 @@ export function OrgChartTab(props: TabProps) {
       {bchOpen && <BchDecisionDialog store={store} project={data.project} members={data.members} today={data.today} employees={employees} setNotice={setNotice} onClose={() => setBchOpen(false)} />}
       <OrgChartEditor store={store} project={data.project} members={data.members} today={data.today} canEdit={viewer.isLead || viewer.canEditProject}
         canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} />
-      <section className="panel pj-section">
-        <button type="button" className="oc-header-toggle" aria-expanded={listOpen} onClick={() => setListOpen(!listOpen)}>
-          {listOpen ? <ChevronDown size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />} <b>Thành viên dự án ({data.members.length})</b>
-          <small className="muted">Vai trò, tổ, ngày vào / rời: dùng cho chấm công và quyền. Thêm người ở đây rồi bấm “Cập nhật từ dữ liệu”.</small>
-        </button>
-      </section>
-      {listOpen && <MembersTab {...props} />}
     </div>
   );
 }

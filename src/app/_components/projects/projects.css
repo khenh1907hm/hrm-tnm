@@ -242,3 +242,4 @@
 .bch-table input[type="text"], .bch-table input:not([type]) , .bch-table input[inputmode] { width: 100%; min-width: 120px; }
 .bch-table tr.muted input { opacity: .55; }
 .bch-tools { white-space: nowrap; }
+.bch-table input.bch-missing { border-color: var(--bad); background: #fef2f2; }
