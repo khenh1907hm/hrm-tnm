@@ -6,7 +6,7 @@
 import ExcelJS from "exceljs";
 import type { ApprovalRole, ApprovalStep } from "../purchases/approval";
 import { costCodeLabel, sheetTotals, type BudgetSheet, type CostCode } from "../purchases/budget";
-import type { ProjectContract } from "../purchases/contract";
+import type { ContractDraft, ProjectContract } from "../purchases/contract";
 import { lineD, lineE, type ExplanatoryReport } from "../purchases/explanatory";
 import { cheapestByItem, quoteTotal, type MaterialQuote, type MaterialRequest } from "../purchases/materials";
 import type { PurchaseOrder, PurchasePayment } from "../purchases/types";
@@ -606,5 +606,60 @@ export async function parseBudgetWorkbook(bytes: ArrayBuffer | Uint8Array, catal
     if (!best || result.lines.length > best.lines.length) best = result;
   }
   if (!best || !best.lines.length) throw new Error("BUDGET_IMPORT_EMPTY");
+  return best;
+}
+
+/* ───────────────────────── Nhập Confirm Contract từ file P-COST-01 ───────────────────────── */
+export type ImportedContract = {
+  fields: Partial<Pick<ContractDraft, "confirmation" | "issuedOn" | "description" | "quoteNo" | "quoteDate" | "quoteValue" | "confirmedValue" | "customerDocNo" | "customerDocDate" | "paymentTerms" | "customerName" | "ownerName" | "startOn" | "endOn" | "note">>;
+  projectCode: string;
+  projectName: string;
+};
+
+/** Ngày trong ô Excel (kiểu ngày, số ngày Excel, hoặc chữ dd/mm/yyyy) → YYYY-MM-DD. */
+const dateOf = (value: ExcelJS.CellValue): string | null => {
+  const raw = value && typeof value === "object" && "result" in value ? (value.result as ExcelJS.CellValue) : value;
+  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : raw.toISOString().slice(0, 10);
+  if (typeof raw === "number" && raw > 20000 && raw < 80000) return new Date(Date.UTC(1899, 11, 30) + raw * 86_400_000).toISOString().slice(0, 10);
+  const match = typeof raw === "string" ? raw.trim().match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/) : null;
+  return match ? `${match[3]}-${match[2]!.padStart(2, "0")}-${match[1]!.padStart(2, "0")}` : null;
+};
+
+/**
+ * Đọc file Confirm Contract (P-COST-01) theo mẫu công ty: ngày ban hành F12, số / tên dự án E14 / K14, miêu tả F16–F17,
+ * báo giá số E19, ngày báo giá Q19, giá trị báo giá I21, giá trị xác nhận L24, chứng từ khách G29 / P29,
+ * điều khoản thanh toán G31–G33, khách hàng E35, chủ đầu tư Q35, ngày bắt đầu / hoàn thành G37 / P37, lưu ý E50.
+ * Ô trống thì bỏ qua (giữ giá trị đang có). Tìm sheet có nhiều ô khớp nhất.
+ */
+export async function parseContractWorkbook(bytes: ArrayBuffer | Uint8Array): Promise<ImportedContract> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(bytes instanceof Uint8Array ? bytes.slice().buffer : bytes);
+  let best: ImportedContract | null = null;
+  let bestCount = 0;
+  for (const ws of workbook.worksheets) {
+    const text = (address: string) => textOf(ws.getCell(address).value).replace(/\s+/g, " ").trim();
+    const money = (address: string) => Math.max(0, Math.round(numberOf(ws.getCell(address).value)));
+    const fields: ImportedContract["fields"] = {};
+    const confirmBox = text("Q2");
+    if (/☑\s*Xác Nhận Tạm/i.test(confirmBox)) fields.confirmation = "tentative";
+    else if (/☑\s*Xác Nhận/i.test(confirmBox)) fields.confirmation = "confirmed";
+    const issued = dateOf(ws.getCell("F12").value); if (issued) fields.issuedOn = issued;
+    const description = [text("F16"), text("F17")].filter(Boolean).join(" "); if (description) fields.description = description.slice(0, 500);
+    const quoteNo = text("E19"); if (quoteNo) fields.quoteNo = quoteNo.slice(0, 200);
+    const quoteDate = dateOf(ws.getCell("Q19").value); if (quoteDate) fields.quoteDate = quoteDate;
+    const quoteValue = money("I21"); if (quoteValue) fields.quoteValue = quoteValue;
+    const confirmedValue = money("L24"); if (confirmedValue) fields.confirmedValue = confirmedValue;
+    const docNo = text("G29"); if (docNo) fields.customerDocNo = docNo.slice(0, 200);
+    const docDate = dateOf(ws.getCell("P29").value); if (docDate) fields.customerDocDate = docDate;
+    const terms = ["G31", "G32", "G33"].map(text).filter(Boolean).join(" "); if (terms) fields.paymentTerms = terms.slice(0, 2000);
+    const customer = text("E35"); if (customer) fields.customerName = customer.slice(0, 200);
+    const owner = text("Q35"); if (owner) fields.ownerName = owner.slice(0, 200);
+    const start = dateOf(ws.getCell("G37").value); if (start) fields.startOn = start;
+    const end = dateOf(ws.getCell("P37").value); if (end) fields.endOn = end;
+    const note = text("E50"); if (note) fields.note = note.slice(0, 500);
+    const count = Object.keys(fields).length;
+    if (count > bestCount) { bestCount = count; best = { fields, projectCode: text("E14"), projectName: text("K14") }; }
+  }
+  if (!best || bestCount < 2) throw new Error("CONTRACT_IMPORT_EMPTY");
   return best;
 }

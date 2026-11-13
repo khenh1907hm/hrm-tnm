@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SavedAttachments } from "../purchases/AttachmentsField";
 import { contractFiles, filesAvailable, type Attachment } from "../purchases/purchaseFiles";
-import { FilePlus2, Save, Send, Trash2 } from "lucide-react";
+import { FilePlus2, FileUp, Save, Send, Trash2 } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import { CONFIRMATION_LABELS, type Confirmation } from "../../../modules/purchases/budget";
 import {
@@ -78,6 +78,25 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
           <h2>Confirm Contract <small className="muted">(Xác nhận dự án P-COST-01)</small></h2>
           <div className="button-row">
             {canEdit && !open && <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => { setSelected(await store.newContract(projectId)); }, list.length ? "Đã lập lần sửa mới (chép từ lần trước)." : "Đã lập xác nhận dự án nháp.")}><FilePlus2 className="ico" size={16} aria-hidden="true" /> {list.length ? "Lập lần sửa hợp đồng" : "Lập xác nhận dự án"}</button>}
+            {editable && current && body && (
+              <label className="button" title="Đọc file Confirm Contract Excel theo mẫu P-COST-01 vào lần nháp này (chưa lưu: xem lại rồi bấm Lưu)">
+                <FileUp className="ico" size={16} aria-hidden="true" /> Nhập từ Excel
+                <input type="file" accept=".xlsx" hidden onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  void (async () => {
+                    try {
+                      const { parseContractWorkbook } = await import("../../../modules/procurement-forms/forms");
+                      const imported = await parseContractWorkbook(await file.arrayBuffer());
+                      setDraft({ id: current.id, body: { ...body, ...imported.fields } });
+                      const otherProject = imported.projectCode && imported.projectCode.toLowerCase() !== data.project.code.toLowerCase();
+                      setNotice(`Đã đọc ${Object.keys(imported.fields).length} mục từ ${file.name}${otherProject ? ` (lưu ý: file ghi số dự án ${imported.projectCode}, khác dự án này)` : ""}. Xem lại rồi bấm Lưu.`, otherProject ? "warning" : "success");
+                    } catch (error) { setNotice(errorMessage(error), "error"); }
+                  })();
+                }} />
+              </label>
+            )}
             {editable && <button type="button" className="button" disabled={busy || draft?.id !== current?.id} onClick={() => void save(false)}><Save className="ico" size={16} aria-hidden="true" /> Lưu</button>}
             {editable && <button type="button" className="button primary" disabled={busy} onClick={() => void save(true)}><Send className="ico" size={16} aria-hidden="true" /> Lưu và gửi ký</button>}
             {editable && <button type="button" className="button danger" disabled={busy} onClick={() => { if (window.confirm("Xóa lần xác nhận nháp này?")) void run(async () => { await store.deleteContract(current!.id); setSelected(null); }, "Đã xóa nháp."); }}><Trash2 className="ico" size={16} aria-hidden="true" /> Xóa nháp</button>}
