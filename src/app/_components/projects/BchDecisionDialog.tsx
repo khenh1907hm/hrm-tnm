@@ -51,8 +51,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
         const phone = option?.phone?.trim() || onChart?.phone?.trim() || "";
         return { key: member.id, name: member.displayName, title, phone, include: member.role !== "worker" && member.role !== "leader" };
       }));
-      // Người trên sơ đồ tổ chức đứng trước (theo thứ tự sơ đồ: công trường rồi văn phòng), bỏ Giám đốc;
-      // thành viên dự án chưa có trên sơ đồ thêm sau
+      // Người trên sơ đồ tổ chức (theo thứ tự sơ đồ: công trường rồi văn phòng), bỏ Giám đốc
       const onChartRows: Row[] = (chart?.people ?? [])
         .filter((person) => person.name.trim() && !bossNames.has(plain(person.name)) && !/gi[aá]m\s*đ[oố]c|director/i.test(`${person.titleVi} ${person.titleEn}`))
         .sort((a, b) => (a.section === b.section ? 0 : a.section === "site" ? -1 : 1))
@@ -64,8 +63,8 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
             include: person.branch !== "group",
           };
         });
-      const taken = new Set(onChartRows.map((row) => plain(row.name)));
-      const merged = [...onChartRows, ...list.filter((row) => !taken.has(plain(row.name)))];
+      // Chỉ lấy người có trên sơ đồ (thành viên dự án khác như hành chính không vào); sơ đồ chưa có ai thì mới lấy thành viên dự án
+      const merged = onChartRows.length ? onChartRows : list;
       if (!active) return;
       setRows(merged);
       if (boss[0]) setDirectorName(boss[0].name);
@@ -116,7 +115,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
           </select></label>
           <label className="field"><span>Giám đốc ký</span><input value={directorName} placeholder="Để trống = dòng chấm" onChange={(event) => setDirectorName(event.target.value)} /></label>
           <div style={{ gridColumn: "1 / -1" }}>
-            <b>Thành viên Ban chỉ huy</b> <small className="muted">Lấy từ thành viên dự án (tổ trưởng, tổ viên mặc định không chọn). Lấy người trên sơ đồ tổ chức (chức vụ tiếng Việt, số điện thoại trên sơ đồ) và thành viên dự án; ô viền đỏ là còn trống, điền tay rồi tải.</small>
+            <b>Thành viên Ban chỉ huy</b> <small className="muted">Chỉ lấy người trên sơ đồ tổ chức (bỏ Giám đốc; Quản lý nhóm mặc định không chọn), chức vụ tiếng Việt và số điện thoại theo sơ đồ. Ô viền đỏ là còn trống, điền tay rồi tải.</small>
             {!rows ? <div className="loading">Đang tải thành viên…</div> : (
               <div className="table-scroll">
                 <table className="pj-table bch-table">
