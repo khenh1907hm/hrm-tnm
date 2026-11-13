@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, ClipboardSignature, Crown, Undo2 } from "lucide-react";
 import { directorApprove, myAccount } from "../accountApi";
 import { systemClock, todayVN } from "../../../lib/clock";
-import { DOC_TYPE_LABELS, isOverdue, ROLE_LABELS, type ApprovalDocType, type ApprovalStep } from "../../../modules/purchases/approval";
+import { DOC_TYPE_LABELS, isOverdue, ROLE_LABELS, stepTitle, type ApprovalDocType, type ApprovalStep } from "../../../modules/purchases/approval";
 import { formatVnd } from "../../../modules/projects/cost";
 import { DOC_PROJECT_TAB, type PendingApproval, type PurchaseStore } from "../../../modules/purchases/store";
 import type { Notify } from "../Toast";
@@ -33,11 +33,11 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
   if (!steps || !steps.length) return null;
   const today = todayVN(systemClock);
   const sign = async (step: ApprovalStep, approve: boolean) => {
-    const note = approve ? window.prompt(`Ký ${ROLE_LABELS[step.role]}: ghi chú (có thể để trống)`) : window.prompt("Lý do trả về (ít nhất 3 ký tự):");
+    const note = approve ? window.prompt(`Ký ${stepTitle(step.role, step.assigneeName)}: ghi chú (có thể để trống)`) : window.prompt("Lý do trả về (ít nhất 3 ký tự):");
     if (note === null) return;
     try {
       await store.sign(step.id, approve, note);
-      setNotice(approve ? `Đã ký bước ${ROLE_LABELS[step.role]}.` : "Đã trả về cho người lập.", "success");
+      setNotice(approve ? `Đã ký bước ${stepTitle(step.role, step.assigneeName)}.` : "Đã trả về cho người lập.", "success");
       setAttempt((value) => value + 1);
       props.onChanged();
     } catch (error) { setNotice(errorMessage(error), "error"); }
@@ -67,7 +67,7 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
             <li key={step.id} className={`ap-step ${step.result}${step.canSign ? " mine" : ""}`}>
               <span className="ap-seq">{step.seq}</span>
               <div className="ap-body">
-                <b>{ROLE_LABELS[step.role]}{step.assigneeName ? ` · ${step.assigneeName}` : ""}</b>
+                <b>{stepTitle(step.role, step.assigneeName)}</b>
                 <small className={late ? "warn-text" : "muted"}>Mục tiêu {dmy(step.targetDate)}{late ? " · quá hạn" : ""}</small>
                 {step.signerName && <small>{step.signerName}{step.actedAt ? ` · ${new Date(step.actedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}</small>}
                 {step.note && <small className="muted">“{step.note}”</small>}

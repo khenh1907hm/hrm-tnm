@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Bell, CheckCheck, Crown, Mail, UserRound } from "lucide-react";
 import { getSupabaseClient } from "../../lib/supabase/client";
-import { DOC_TYPE_LABELS, ROLE_LABELS, type ApprovalDocType, type ApprovalRole } from "../../modules/purchases/approval";
+import { DOC_TYPE_LABELS, type ApprovalDocType, type ApprovalRole } from "../../modules/purchases/approval";
 import { DOC_PROJECT_TAB } from "../../modules/purchases/store";
 import { markNotificationsRead, myAccount, myNotifications, openAppLink, saveNotifySettings, type AppNotification, type MyAccount } from "./accountApi";
 import { projectPath, purchasePath } from "./routes";
@@ -105,7 +105,7 @@ export function TopBarActions(props: { compact?: boolean }) {
                     <button type="button" className="top-item pending" onClick={() => go(item.link, ids)}>
                       <b>{DOC_TYPE_LABELS[item.docType]}</b>
                       <span>{[item.projectCode, item.title].filter(Boolean).join(" · ")}</span>
-                      <small className="muted">Ký với vai trò {ROLE_LABELS[item.role]}{item.targetDate ? ` · hạn ${dmy(item.targetDate)}` : ""}</small>
+                      <small className="muted">Đến lượt bạn ký{item.targetDate ? ` · hạn ${dmy(item.targetDate)}` : ""}</small>
                     </button>
                   </li>
                 );

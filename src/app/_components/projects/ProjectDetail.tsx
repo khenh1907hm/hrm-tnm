@@ -11,11 +11,10 @@ import {
   type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost,
 } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
-import { CHAINS } from "../../../modules/purchases/approval";
 import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
-import { ProjectApproversPanel } from "./ProjectApproversPanel";
+import { ApprovalTreePanel } from "./ApprovalTreePanel";
 import { CONTRACT_STATE_UI, myAccount, projectApprovers, projectContractStates, type ContractState } from "../accountApi";
 import { BudgetSheetTab } from "./BudgetSheetTab";
 import { ContractTab } from "./ContractTab";
@@ -154,7 +153,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         const withApprovers = (content: ReactNode, docType: "contract" | "budget" | "purchase") => store.mode !== "live" ? content : (
           <div className="pj-with-aside">
             <div className="pj-with-aside-main">{content}</div>
-            <ProjectApproversPanel compact title="Người duyệt" projectId={project.id} roles={CHAINS[docType]} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />
+            <ApprovalTreePanel key={docType} projectId={project.id} docType={docType} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />
           </div>
         );
         if (tab === "budget") return withApprovers(<BudgetSheetTab {...tabProps} />, "budget");

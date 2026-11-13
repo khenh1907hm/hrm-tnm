@@ -195,3 +195,25 @@
 .ap-tree.compact .ap-frame-head small { display: none; }
 .ap-tree.readonly .ap-frame-add { display: none; }
 @media (max-width: 1100px) { .pj-with-aside { grid-template-columns: 1fr; } .ap-aside { position: static; max-height: none; } }
+/* Cây khối duyệt (cột phải) */
+.tb-pool { margin-top: 10px; }
+.tb-tree { display: grid; gap: 0; margin: 12px 0; }
+.tb-block { position: relative; border: 2px dashed var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 6px; background: var(--surface); margin-bottom: 18px; }
+.tb-block::after { content: "↓"; position: absolute; left: 50%; bottom: -19px; transform: translateX(-50%); color: var(--muted); font-weight: 700; }
+.tb-block.sender { border-style: solid; background: var(--soft); }
+.tb-block.leader { border-style: solid; border-color: #f59e0b; background: #fffbeb; }
+.tb-block.leader::after { display: none; }
+.tb-block.over { border-color: var(--brand); background: var(--brand-soft); }
+.tb-head { display: flex; align-items: center; gap: 6px; }
+.tb-no { width: 20px; height: 20px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; flex: none; }
+.tb-block.leader .tb-no { background: #f59e0b; }
+.tb-name { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-weight: 600; }
+.tb-tools { display: inline-flex; gap: 2px; }
+.tb-tools button { border: 0; background: transparent; color: var(--muted); padding: 2px; cursor: pointer; }
+.tb-tools button:hover { color: var(--ink); }
+.tb-tools button:disabled { opacity: .3; cursor: default; }
+.tb-mode { font-size: 12px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.tb-people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 5px; }
+.tb-people.seq { flex-direction: column; align-items: flex-start; }
+.tb-empty { font-size: 12px; }
+.tb-add { justify-self: start; display: inline-flex; align-items: center; gap: 4px; padding: 5px 10px; font-size: 13px; margin: -6px 0 18px; }

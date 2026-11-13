@@ -48,6 +48,17 @@ export function nthWorkday(from: string, n: number, holidays: ReadonlySet<string
   return day;
 }
 
+/**
+ * Tên hiển thị của một bước: bước theo cây khối của dự án mang sẵn tên khối ("Khối kỹ thuật: A / B", "Người gửi", "Lãnh đạo");
+ * bước theo quy trình chung hiện tên vai trò (kèm tên người nếu duyệt lần lượt).
+ */
+export function stepTitle(role: ApprovalRole | null, assignee: string | undefined | null): string {
+  const label = role ? ROLE_LABELS[role] : "";
+  if (!assignee) return label;
+  if (assignee === "Người gửi" || assignee.startsWith("Lãnh đạo") || assignee.includes(": ") || assignee.includes(" · ")) return assignee;
+  return label ? `${label} · ${assignee}` : assignee;
+}
+
 /** Bước quyết định: ký xong bước này thì phiếu được duyệt. */
 export const DECIDING_ROLE: ApprovalRole = "leader";
 

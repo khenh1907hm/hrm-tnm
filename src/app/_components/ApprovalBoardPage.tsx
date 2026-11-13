@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ClipboardSignature, Crown, ExternalLink, GripVertical, RefreshCw, Undo2 } from "lucide-react";
 import { systemClock, todayVN } from "../../lib/clock";
 import { normalizeText } from "../../lib/text";
-import { DOC_TYPE_LABELS, ROLE_LABELS, type ApprovalDocType } from "../../modules/purchases/approval";
+import { DOC_TYPE_LABELS, stepTitle, type ApprovalDocType } from "../../modules/purchases/approval";
 import { formatVnd } from "../../modules/projects/cost";
 import { approvalBoard, directorApprove, myAccount, openAppLink, signStep, type BoardCard, type BoardColumn } from "./accountApi";
 import { errorMessage } from "./projects/projectShared";
@@ -131,7 +131,7 @@ function BoardCardView(props: { card: BoardCard; isDirector: boolean; onDragStar
       <b className="ab-title">{card.title || "—"}</b>
       {card.amount > 0 && <span className="ab-amount">{formatVnd(card.amount)}</span>}
       {card.role && card.column !== "approved" && card.column !== "returned" && (
-        <small>Đang chờ: <b>{ROLE_LABELS[card.role]}</b>{card.assignee ? ` · ${card.assignee}` : ""}{card.targetDate ? <span className={late ? "warn-text" : "muted"}> · hạn {dmy(card.targetDate)}{late ? " (quá hạn)" : ""}</span> : null}</small>
+        <small>Đang chờ: <b>{stepTitle(card.role, card.assignee)}</b>{card.targetDate ? <span className={late ? "warn-text" : "muted"}> · hạn {dmy(card.targetDate)}{late ? " (quá hạn)" : ""}</span> : null}</small>
       )}
       <div className="ab-progress" role="img" aria-label={`Đã ký ${card.signed}/${card.total} bước`}><span style={{ width: `${card.total ? (card.signed / card.total) * 100 : 0}%` }} /></div>
       <small className="muted">Đã ký {card.signed}/{card.total}{card.creatorName ? ` · Người lập: ${card.creatorName}` : ""}</small>
@@ -168,7 +168,7 @@ function SignDialog(props: { pending: Pending; onClose: () => void; onDone: (mes
         <header><h2 id="ab-dialog-title">{title}</h2><button type="button" className="close" aria-label="Đóng" onClick={props.onClose}>×</button></header>
         <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
           <p style={{ margin: "0 0 10px" }}><b>{docLabel(card.docType)}</b><br />{[card.projectCode, card.title].filter(Boolean).join(" · ")}{card.amount > 0 ? ` · ${formatVnd(card.amount)}` : ""}</p>
-          {action === "approve" && card.role && <p className="muted" style={{ margin: "0 0 10px" }}>Bạn ký bước <b>{ROLE_LABELS[card.role]}</b>{card.assignee ? ` (${card.assignee})` : ""}. Tên và giờ ký sẽ in vào ô ký của biểu mẫu Excel.</p>}
+          {action === "approve" && card.role && <p className="muted" style={{ margin: "0 0 10px" }}>Bạn ký bước <b>{stepTitle(card.role, card.assignee)}</b>. Tên và giờ ký sẽ in vào ô ký của biểu mẫu Excel.</p>}
           {action === "director" && <p className="muted" style={{ margin: "0 0 10px" }}>Các bước trước chưa ký sẽ được bỏ qua (ghi “Giám đốc duyệt vượt cấp”), phiếu được duyệt ngay.</p>}
           <label className="field"><span>{needsReason ? "Lý do trả về *" : "Ghi chú (có thể để trống)"}</span>
             <input value={note} autoFocus maxLength={500} onChange={(event) => setNote(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") void submit(); }} />

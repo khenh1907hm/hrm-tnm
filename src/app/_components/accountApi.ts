@@ -71,6 +71,17 @@ export async function projectContractStates(): Promise<Record<string, ContractSt
   return Object.fromEntries(rows.map((row) => [str(row.project_id), (str(row.status) || "none") as ContractState]));
 }
 
+/** Cây khối duyệt của dự án: phần tử cuối là Lãnh đạo; người gửi luôn đứng đầu (tự ký khi gửi). */
+export type TreeDocType = "contract" | "budget" | "purchase";
+export type ApprovalBlock = { name: string; mode: ApprovalMode; people: string[] };
+export async function approvalTrees(projectId: string): Promise<Partial<Record<TreeDocType, ApprovalBlock[]>>> {
+  const rows = ((await rpc("project_approval_trees_of", { p_project: projectId })) ?? []) as Row[];
+  return Object.fromEntries(rows.map((row) => [str(row.doc_type), (Array.isArray(row.blocks) ? row.blocks : []) as ApprovalBlock[]]));
+}
+export async function saveApprovalTree(projectId: string, docType: TreeDocType, blocks: readonly ApprovalBlock[]) {
+  await rpc("project_approval_tree_save", { p_project: projectId, p_doc_type: docType, p_blocks: blocks });
+}
+
 /** Giám đốc: luôn ở khung Lãnh đạo của mọi dự án. */
 export async function directorPeople(): Promise<{ employeeId: string; name: string }[]> {
   return (((await rpc("director_people")) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name) }));
