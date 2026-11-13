@@ -57,6 +57,20 @@ export async function projectApprovers(projectId: string): Promise<ProjectApprov
   }));
 }
 
+/** Trạng thái Confirm Contract mới nhất của từng dự án: quyết định dự án đã "tạo thành công" chưa. */
+export type ContractState = "none" | "draft" | "submitted" | "approved" | "rejected";
+export const CONTRACT_STATE_UI: Record<ContractState, { label: string; tone: "ok" | "bad" | "wait" }> = {
+  approved: { label: "Đã duyệt Confirm Contract", tone: "ok" },
+  rejected: { label: "Confirm Contract bị từ chối", tone: "bad" },
+  submitted: { label: "Chờ duyệt Confirm Contract", tone: "wait" },
+  draft: { label: "Confirm Contract nháp, chưa gửi duyệt", tone: "wait" },
+  none: { label: "Chưa lập Confirm Contract", tone: "wait" },
+};
+export async function projectContractStates(): Promise<Record<string, ContractState>> {
+  const rows = ((await rpc("project_contract_states")) ?? []) as Row[];
+  return Object.fromEntries(rows.map((row) => [str(row.project_id), (str(row.status) || "none") as ContractState]));
+}
+
 /** Giám đốc: luôn ở khung Lãnh đạo của mọi dự án. */
 export async function directorPeople(): Promise<{ employeeId: string; name: string }[]> {
   return (((await rpc("director_people")) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name) }));

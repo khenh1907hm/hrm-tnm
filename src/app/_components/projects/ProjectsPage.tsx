@@ -9,7 +9,7 @@ import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
 import { DEFAULT_SITE_SETTINGS, PROJECT_STATUS_LABELS, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
 import { getSupabaseClient } from "../../../lib/supabase/client";
-import { directorPeople, setProjectApprovers } from "../accountApi";
+import { CONTRACT_STATE_UI, directorPeople, projectContractStates, setProjectApprovers, type ContractState } from "../accountApi";
 import { ApproverFrames, type ApproverDraft, type Participant } from "./ProjectApproversPanel";
 import type { Notify } from "../Toast";
 import { ProjectDetail } from "./ProjectDetail";
@@ -37,6 +37,14 @@ export function ProjectsPage(props: Props) {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState<ProjectStatus | "open">("open");
   const [form, setForm] = useState<Project | "new" | null>(null);
+  // Dự án chỉ "tạo thành công" khi Confirm Contract được duyệt: xanh lá = đã duyệt, đỏ = bị từ chối, xanh dương = chờ duyệt
+  const [states, setStates] = useState<Record<string, ContractState>>({});
+  useEffect(() => {
+    if (store.mode !== "live" || !projects) return;
+    let active = true;
+    void projectContractStates().then((value) => { if (active) setStates(value); }, () => undefined);
+    return () => { active = false; };
+  }, [store.mode, projects]);
 
   const apply = useCallback((result: Awaited<ReturnType<typeof fetchProjectList>>) => { setProjects(result.list); setUsage(result.usage); }, []);
   const fail = useCallback((error: unknown) => { setNotice(errorMessage(error), "error"); setProjects([]); }, [setNotice]);
@@ -91,8 +99,9 @@ export function ProjectsPage(props: Props) {
             const pct = money ? money.used / money.budget : 0;
             const level = pct >= 1 ? "over" : pct >= 0.8 ? "warn" : "";
             return (
-              <button type="button" key={project.id} className="pj-card" onClick={() => props.onOpen(project.id)}>
+              <button type="button" key={project.id} className={`pj-card${store.mode === "live" ? ` cc-${CONTRACT_STATE_UI[states[project.id] ?? "none"].tone}` : ""}`} onClick={() => props.onOpen(project.id)}>
                 <span className="pj-code">{project.code}</span>
+                {store.mode === "live" && <span className={`cc-pill cc-${CONTRACT_STATE_UI[states[project.id] ?? "none"].tone}`}>{CONTRACT_STATE_UI[states[project.id] ?? "none"].label}</span>}
                 <h3>{project.name}</h3>
                 <div className="pj-meta">
                   <span className={`pill ${STATUS_TONE[project.status]}`}>{PROJECT_STATUS_LABELS[project.status]}</span>

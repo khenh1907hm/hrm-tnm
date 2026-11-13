@@ -18,7 +18,7 @@ export const CONTRACT_ATTACHMENT_LABELS: Record<keyof ContractAttachments, strin
 /** Hồ sơ cần theo từng trường hợp (in trên mẫu). */
 export const REQUIRED_ATTACHMENTS: Record<Confirmation, readonly (keyof ContractAttachments)[]> = {
   confirmed: ["signedQuoteOrPo", "stampedQuote", "masterSchedule", "drawings"],
-  tentative: ["stampedQuote", "customerInstruction", "masterSchedule", "drawings"],
+  tentative: ["signedQuoteOrPo", "stampedQuote", "customerInstruction", "masterSchedule", "drawings"],
 };
 export const noContractAttachments = (): ContractAttachments => ({ signedQuoteOrPo: false, stampedQuote: false, customerInstruction: false, masterSchedule: false, drawings: false });
 

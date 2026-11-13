@@ -11,12 +11,12 @@ import {
   type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost,
 } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
-import { CostsTab } from "./CostsTab";
+import { CHAINS } from "../../../modules/purchases/approval";
 import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { ProjectApproversPanel } from "./ProjectApproversPanel";
-import { myAccount, projectApprovers } from "../accountApi";
+import { CONTRACT_STATE_UI, myAccount, projectApprovers, projectContractStates, type ContractState } from "../accountApi";
 import { BudgetSheetTab } from "./BudgetSheetTab";
 import { ContractTab } from "./ContractTab";
 import { MaterialsTab } from "./MaterialsTab";
@@ -70,12 +70,12 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "approvers" | "daily" | "timesheets" | "checks" | "purchases" | "costs" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Hợp đồng"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["members", "Sơ đồ & thành viên"], ["approvers", "Phân quyền & duyệt"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["costs", "Chi phí"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Confirm Contract"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["reports", "Báo cáo"]];
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
-  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", materials: "yeu-cau-vat-tu", purchases: "dat-hang", members: "so-do", approvers: "phan-quyen", daily: "bao-cao-ngay",
-  timesheets: "cham-cong", checks: "cham-cong-gps", costs: "chi-phi", reports: "bao-cao",
+  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", materials: "yeu-cau-vat-tu", purchases: "dat-hang", members: "so-do", daily: "bao-cao-ngay",
+  timesheets: "cham-cong", checks: "cham-cong-gps", reports: "bao-cao",
 };
 const tabFromUrl = (): Tab => {
   if (typeof window === "undefined") return "overview";
@@ -110,8 +110,15 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   }, [store.mode, project.id, data]);
   const viewer = useMemo(() => data ? viewerFor(actor, data.myEmployeeId, project, data.members) : null, [actor, data, project]);
   const signsHere = approverAccess.isApprover || approverAccess.isDirector;
-  const visibleTabs = TABS.filter(([key]) => ((key !== "costs" && key !== "budget" && key !== "contract") || viewer?.canSeeMoney || (signsHere && key !== "costs"))
-    && (key !== "approvers" || store.mode === "live") && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
+  const [contractState, setContractState] = useState<ContractState | null>(null);
+  useEffect(() => {
+    if (store.mode !== "live" || !data) return;
+    let active = true;
+    void projectContractStates().then((value) => { if (active) setContractState(value[project.id] ?? "none"); }, () => undefined);
+    return () => { active = false; };
+  }, [store.mode, project.id, data]);
+  const stateUi = contractState ? CONTRACT_STATE_UI[contractState] : null;
+  const visibleTabs = TABS.filter(([key]) => ((key !== "budget" && key !== "contract") || viewer?.canSeeMoney || signsHere) && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
   return (
@@ -121,6 +128,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         <div className="page-head">
           <div>
             <span className="pj-code">{project.code} · {PROJECT_STATUS_LABELS[project.status]}</span>
+            {stateUi && <span className={`cc-pill cc-${stateUi.tone}`} style={{ marginLeft: 8 }}>{stateUi.label}</span>}
             <h1>{project.name}</h1>
             <p>{[project.customerName, project.site].filter(Boolean).join(" · ")}</p>
             <p className="muted">
@@ -132,22 +140,31 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
           {viewer?.canEditProject && <button type="button" className="button" onClick={props.onEdit}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa dự án</button>}
         </div>
       </div>
+      {stateUi && stateUi.tone !== "ok" && <div className={`cc-banner cc-${stateUi.tone}`} role="status">
+        {stateUi.tone === "bad" ? "Confirm Contract bị từ chối: sửa lại ở tab Confirm Contract rồi gửi ký lại. Dự án chưa được tạo thành công." : "Dự án đang chờ: chỉ được tạo thành công khi Confirm Contract được duyệt (tab Confirm Contract, cần đính kèm Báo giá có ký)."}
+        {tab !== "contract" && <button type="button" className="link-button" onClick={() => setTab("contract")}>Mở Confirm Contract</button>}
+      </div>}
       <div className="pj-tabs" role="tablist" aria-label="Mục của dự án">
         {visibleTabs.map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}>{label}</button>)}
       </div>
       {!data || !viewer ? <div className="loading">Đang tải dữ liệu dự án…</div> : (() => {
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
         if (tab === "overview") return <OverviewTab {...tabProps} />;
-        if (tab === "budget") return <BudgetSheetTab {...tabProps} />;
-        if (tab === "contract") return <ContractTab {...tabProps} />;
+        // Confirm Contract, Ngân sách, Đặt hàng: bên phải là khung người duyệt (Admin, Giám đốc sửa được)
+        const withApprovers = (content: ReactNode, docType: "contract" | "budget" | "purchase") => store.mode !== "live" ? content : (
+          <div className="pj-with-aside">
+            <div className="pj-with-aside-main">{content}</div>
+            <ProjectApproversPanel compact title="Người duyệt" projectId={project.id} roles={CHAINS[docType]} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />
+          </div>
+        );
+        if (tab === "budget") return withApprovers(<BudgetSheetTab {...tabProps} />, "budget");
+        if (tab === "contract") return withApprovers(<ContractTab {...tabProps} />, "contract");
         if (tab === "materials") return <MaterialsTab {...tabProps} />;
         if (tab === "members") return <OrgChartTab {...tabProps} />;
-        if (tab === "approvers") return <ProjectApproversPanel projectId={project.id} canEdit={Boolean(viewer?.canEditProject || approverAccess.isDirector)} members={data.members} today={data.today} setNotice={setNotice} />;
         if (tab === "daily") return <DailyReportTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
-        if (tab === "costs") return <CostsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
-        if (tab === "purchases") return <ProjectPurchasesTab {...tabProps} />;
+        if (tab === "purchases") return withApprovers(<ProjectPurchasesTab {...tabProps} />, "purchase");
         return <ReportsTab {...tabProps} />;
       })()}
       {props.children}

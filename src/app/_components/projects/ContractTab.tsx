@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { SavedAttachments } from "../purchases/AttachmentsField";
+import { contractFiles, filesAvailable, type Attachment } from "../purchases/purchaseFiles";
 import { FilePlus2, Save, Send, Trash2 } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import { CONFIRMATION_LABELS, type Confirmation } from "../../../modules/purchases/budget";
@@ -28,6 +30,10 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const projectId = data.project.id;
+  // Tệp thật của lần xác nhận đang xem (chế độ thật); cờ hồ sơ lấy theo tệp
+  const live = filesAvailable();
+  const [files, setFiles] = useState<{ id: string; items: Attachment[] } | null>(null);
+  const onFiles = useCallback((items: Attachment[], id: string) => setFiles({ id, items }), []);
   const load = useCallback(() => store.listContracts(projectId), [store, projectId]);
   useEffect(() => {
     let active = true;
@@ -46,10 +52,15 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
     setBusy(true);
     try { await action(); setNotice(done, "success"); setDraft(null); setAttempt((value) => value + 1); } catch (error) { setNotice(errorMessage(error), "error"); } finally { setBusy(false); }
   };
+  const fileFlags = live && files && files.id === current?.id
+    ? Object.fromEntries((Object.keys(CONTRACT_ATTACHMENT_LABELS) as (keyof typeof CONTRACT_ATTACHMENT_LABELS)[]).map((key) => [key, files.items.some((item) => item.kind === key)])) as ContractDraft["attachments"]
+    : null;
   const save = (submit: boolean) => current && body && run(async () => {
-    const issue = contractIssue(body, submit);
+    const final = fileFlags ? { ...body, attachments: fileFlags } : body;
+    const issue = contractIssue(final, submit);
     if (issue) throw new Error(issue);
-    await store.saveContract(current.id, body);
+    if (submit && live && !fileFlags?.signedQuoteOrPo) throw new Error("CONTRACT_ATTACH_REQUIRED");
+    await store.saveContract(current.id, final);
     if (submit) await store.submitContract(current.id);
   }, submit ? "Đã gửi xác nhận dự án đi ký duyệt." : "Đã lưu xác nhận dự án.");
   const text = (label: string, key: "description" | "quoteNo" | "customerDocNo" | "customerName" | "ownerName", wide = false) => (
@@ -58,13 +69,13 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
   const date = (label: string, key: "issuedOn" | "quoteDate" | "customerDocDate" | "startOn" | "endOn") => (
     <label className="field"><span>{label}</span><input type="date" disabled={!editable} value={body![key] ?? ""} onChange={(event) => set({ [key]: event.target.value || (key === "issuedOn" ? body!.issuedOn : null) })} /></label>
   );
-  const missing = body ? missingAttachments(body) : [];
+  const missing = body ? missingAttachments(fileFlags ? { ...body, attachments: fileFlags } : body) : [];
 
   return (
     <div className="pj-page">
       <section className="panel pj-section">
         <div className="pj-section-head">
-          <h2>Xác nhận dự án <small className="muted">(P-COST-01)</small></h2>
+          <h2>Confirm Contract <small className="muted">(Xác nhận dự án P-COST-01)</small></h2>
           <div className="button-row">
             {canEdit && !open && <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => { setSelected(await store.newContract(projectId)); }, list.length ? "Đã lập lần sửa mới (chép từ lần trước)." : "Đã lập xác nhận dự án nháp.")}><FilePlus2 className="ico" size={16} aria-hidden="true" /> {list.length ? "Lập lần sửa hợp đồng" : "Lập xác nhận dự án"}</button>}
             {editable && <button type="button" className="button" disabled={busy || draft?.id !== current?.id} onClick={() => void save(false)}><Save className="ico" size={16} aria-hidden="true" /> Lưu</button>}
@@ -107,18 +118,22 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
               {date("Ngày hoàn thành", "endOn")}
             </div>
             <label className="field"><span>Điều khoản thanh toán của khách</span><textarea rows={3} disabled={!editable} value={body.paymentTerms} placeholder="Ví dụ: Tạm ứng 15%, thanh toán theo tiến độ tháng đến 95% sau 45 ngày ký nghiệm thu khối lượng, 5% còn lại sau 2 tháng khi phát hành bảo lãnh bảo hành" onChange={(event) => set({ paymentTerms: event.target.value })} /></label>
-            <fieldset className="exp-attach"><legend>Tài liệu đính kèm ({CONFIRMATION_LABELS[body.confirmation]})</legend>
-              {REQUIRED_ATTACHMENTS[body.confirmation].map((key) => (
+            <fieldset className="exp-attach po-terms"><legend>Tài liệu đính kèm ({CONFIRMATION_LABELS[body.confirmation]})</legend>
+              {live ? (
+                <SavedAttachments key={current.id} parentId={current.id} api={contractFiles} editable={canEdit && current.status !== "superseded"} requireSigned setNotice={setNotice}
+                  kinds={REQUIRED_ATTACHMENTS[body.confirmation].map((key) => ({ kind: key, label: CONTRACT_ATTACHMENT_LABELS[key], required: key === "signedQuoteOrPo" }))}
+                  onChanged={onFiles} />
+              ) : REQUIRED_ATTACHMENTS[body.confirmation].map((key) => (
                 <label key={key}><input type="checkbox" disabled={!editable} checked={body.attachments[key]} onChange={(event) => set({ attachments: { ...body.attachments, [key]: event.target.checked } })} /> {CONTRACT_ATTACHMENT_LABELS[key]}</label>
               ))}
             </fieldset>
-            {missing.length > 0 && <p className="warn-text">Còn thiếu hồ sơ: {missing.map((key) => CONTRACT_ATTACHMENT_LABELS[key]).join("; ")}. Vẫn gửi ký được, người ký sẽ thấy.</p>}
+            {missing.length > 0 && <p className="warn-text">Còn thiếu hồ sơ: {missing.map((key) => CONTRACT_ATTACHMENT_LABELS[key]).join("; ")}.{missing.includes("signedQuoteOrPo") ? " Báo giá có ký là bắt buộc trước khi gửi ký." : " Vẫn gửi ký được, người ký sẽ thấy."}</p>}
             <label className="field"><span>Lưu ý</span><input disabled={!editable} value={body.note} onChange={(event) => set({ note: event.target.value })} /></label>
             {current.status === "approved" && <p className="muted">Đã duyệt: giá trị hợp đồng {formatVnd(current.confirmedValue)} được gợi ý khi lập ngân sách P-COST-03 (tab Ngân sách).</p>}
           </>
         )}
       </section>
-      {current && current.status !== "draft" && <ApprovalChain store={store} docType="contract" docId={current.id} refreshKey={attempt} title={`Chuỗi ký xác nhận dự án lần ${current.revision}`} onChanged={() => setAttempt((value) => value + 1)} setNotice={setNotice} />}
+      {current && current.status !== "draft" && <ApprovalChain store={store} docType="contract" docId={current.id} refreshKey={attempt} title={`Chuỗi ký Confirm Contract lần ${current.revision}`} onChanged={() => setAttempt((value) => value + 1)} setNotice={setNotice} />}
       {current?.status === "rejected" && <p className="warn-text">Xác nhận bị trả về: sửa rồi bấm Lưu và gửi ký lại.</p>}
     </div>
   );

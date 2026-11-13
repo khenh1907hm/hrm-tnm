@@ -74,7 +74,7 @@ const DRAG_TYPE = "application/x-tnm-approver";
  * Cây khung duyệt: khung trên cùng tới dưới theo thứ tự ký; mỗi khung tối đa 2 người ngang quyền (một người duyệt là đủ).
  * Khung dưới cùng (Lãnh đạo) quyền cao nhất, Giám đốc luôn có sẵn. Kéo người từ danh sách thành viên tham gia vào khung.
  */
-export function ApproverFrames(props: { value: ApproverDraft[]; onChange: (next: ApproverDraft[]) => void; participants: readonly Participant[]; directors: readonly { employeeId: string; name: string }[]; readOnly?: boolean }) {
+export function ApproverFrames(props: { value: ApproverDraft[]; onChange: (next: ApproverDraft[]) => void; participants: readonly Participant[]; directors: readonly { employeeId: string; name: string }[]; readOnly?: boolean; roles?: readonly ApprovalRole[]; compact?: boolean }) {
   const [over, setOver] = useState<ApprovalRole | null>(null);
   const directorIds = new Set(props.directors.map((item) => item.employeeId));
   const inFrame = (role: ApprovalRole) => props.value.filter((item) => item.role === role && !(role === "leader" && directorIds.has(item.employeeId)));
@@ -132,9 +132,11 @@ export function ApproverFrames(props: { value: ApproverDraft[]; onChange: (next:
     );
   };
 
+  const roles = props.roles ?? APPROVER_ROLES;
+  const leaderAt = roles.indexOf("leader");
   return (
-    <div className="ap-tree">
-      <div className="ap-pool">
+    <div className={`ap-tree${props.compact ? " compact" : ""}${props.readOnly ? " readonly" : ""}`}>
+      {!(props.compact && props.readOnly) && <div className="ap-pool">
         <b>Thành viên tham gia</b>
         <small className="muted">{props.readOnly ? "Người trong dự án." : "Kéo tên vào khung bên cạnh (điện thoại: dùng ô “+ Thêm” trong khung)."}</small>
         <div className="ap-pool-list">
@@ -144,11 +146,9 @@ export function ApproverFrames(props: { value: ApproverDraft[]; onChange: (next:
             </span>
           )) : <small className="muted">Chưa có thành viên. Thêm người ở phần Thành viên tham gia trước.</small>}
         </div>
-      </div>
+      </div>}
       <div className="ap-frames">
-        {(["pic", "technical", "material", "accounting"] as const).map((role) => frame(role))}
-        {frame("leader", "top")}
-        {frame("admin_office", "after")}
+        {roles.map((role, index) => frame(role, role === "leader" ? "top" : leaderAt >= 0 && index > leaderAt ? "after" : ""))}
       </div>
     </div>
   );
@@ -158,7 +158,7 @@ export function ApproverFrames(props: { value: ApproverDraft[]; onChange: (next:
  * Mục "Phân quyền & duyệt" của dự án: kéo thành viên vào khung duyệt.
  * Khung có đặt người thì chỉ những người đó (cùng Admin, Giám đốc) ký; để trống thì theo khối chung của công ty.
  */
-export function ProjectApproversPanel(props: { projectId: string; canEdit: boolean; members: readonly ProjectMember[]; today: string; setNotice: Notify }) {
+export function ProjectApproversPanel(props: { projectId: string; canEdit: boolean; members: readonly ProjectMember[]; today: string; setNotice: Notify; roles?: readonly ApprovalRole[]; compact?: boolean; title?: string }) {
   const [saved, setSaved] = useState<ApproverDraft[] | null>(null);
   const [draft, setDraft] = useState<ApproverDraft[]>([]);
   const [directors, setDirectors] = useState<{ employeeId: string; name: string }[]>([]);
@@ -185,16 +185,16 @@ export function ProjectApproversPanel(props: { projectId: string; canEdit: boole
     } catch (error) { props.setNotice(errorMessage(error), "error"); } finally { setBusy(false); }
   };
   return (
-    <section className="panel pj-section">
-      <h2><ShieldCheck className="ico" size={18} aria-hidden="true" /> Phân quyền & người duyệt</h2>
-      <p className="muted">Phiếu của dự án ký từ khung trên xuống. Mỗi khung tối đa 2 người ngang quyền: một trong hai duyệt là đủ. Khung <b>Lãnh đạo</b> ở dưới cùng là quyền cao nhất,
-        xác nhận cả cây; Giám đốc luôn có sẵn ở đó và duyệt ngay được không cần các khung trên. Người được kéo vào khung xem được dự án và nhận thông báo khi đến lượt.</p>
-      <ApproverFrames value={draft} onChange={setDraft} participants={participants} directors={directors} readOnly={!props.canEdit} />
+    <section className={`panel pj-section${props.compact ? " ap-aside" : ""}`}>
+      <h2><ShieldCheck className="ico" size={18} aria-hidden="true" /> {props.title ?? "Phân quyền & người duyệt"}</h2>
+      {props.compact ? <small className="muted">Ký từ trên xuống; mỗi khung tối đa 2 người ngang quyền. Lãnh đạo là quyền cao nhất, Giám đốc luôn duyệt được.{props.canEdit ? " Kéo thành viên vào khung rồi bấm Lưu." : ""}</small> : <p className="muted">Phiếu của dự án ký từ khung trên xuống. Mỗi khung tối đa 2 người ngang quyền: một trong hai duyệt là đủ. Khung <b>Lãnh đạo</b> ở dưới cùng là quyền cao nhất,
+        xác nhận cả cây; Giám đốc luôn có sẵn ở đó và duyệt ngay được không cần các khung trên. Người được kéo vào khung xem được dự án và nhận thông báo khi đến lượt.</p>}
+      <ApproverFrames value={draft} onChange={setDraft} participants={participants} directors={directors} readOnly={!props.canEdit} {...(props.roles ? { roles: props.roles } : {})} compact={Boolean(props.compact)} />
       {props.canEdit && <div className="button-row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
         {dirty && <button type="button" className="button" disabled={busy} onClick={() => setDraft(saved)}>Hoàn tác</button>}
         <button type="button" className="button primary" disabled={busy || !dirty} onClick={() => void save()}>{busy ? "Đang lưu…" : "Lưu khung duyệt"}</button>
       </div>}
-      {!props.canEdit && <p className="muted"><small>Chỉ Admin, Giám đốc, người quản lý dự án hoặc PM sửa được khung này.</small></p>}
+      {!props.canEdit && !props.compact && <p className="muted"><small>Chỉ Admin, Giám đốc sửa được khung này.</small></p>}
     </section>
   );
 }

@@ -11,7 +11,7 @@ export const ROLE_LABELS: Record<ApprovalRole, string> = {
 export type ApprovalDocType = "budget" | "purchase" | "payment" | "explanatory" | "material" | "contract";
 export const DOC_TYPE_LABELS: Record<ApprovalDocType, string> = {
   budget: "Ngân sách (P-COST-03)", purchase: "Đơn đặt hàng (P-CC-07)", payment: "Đề nghị tạm ứng / thanh toán (P-CF-03)",
-  explanatory: "Báo cáo giải thích (P-COST-05)", material: "Yêu cầu vật tư (P-COST-08)", contract: "Xác nhận dự án (P-COST-01)",
+  explanatory: "Báo cáo giải thích (P-COST-05)", material: "Yêu cầu vật tư (P-COST-08)", contract: "Confirm Contract (P-COST-01)",
 };
 /** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 6 người (Lãnh đạo duyệt, Hành chánh nhận để phát hành PO). */
 export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {

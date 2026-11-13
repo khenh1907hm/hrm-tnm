@@ -173,3 +173,25 @@
 .ap-frame-empty { font-size: 12px; }
 .ap-frame-add { width: auto; padding: 3px 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
 @media (max-width: 760px) { .ap-tree { grid-template-columns: 1fr; } .ap-pool { position: static; } }
+/* Trạng thái Confirm Contract: xanh lá nhạt = đã duyệt, đỏ = từ chối, xanh dương = chờ duyệt */
+.pj-card.cc-ok { background: #f0fdf4; border-color: #86efac; border-left: 5px solid #22c55e; }
+.pj-card.cc-bad { background: #fef2f2; border-color: #fca5a5; border-left: 5px solid #dc2626; }
+.pj-card.cc-wait { background: #eff6ff; border-color: #93c5fd; border-left: 5px solid #2563eb; }
+.cc-pill { display: inline-block; justify-self: start; border-radius: 999px; padding: 1px 10px; font-size: 12px; font-weight: 600; }
+.cc-pill.cc-ok { background: #dcfce7; color: #166534; }
+.cc-pill.cc-bad { background: #fee2e2; color: #991b1b; }
+.cc-pill.cc-wait { background: #dbeafe; color: #1e40af; }
+.cc-banner { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+.cc-banner.cc-wait { background: #eff6ff; border: 1px solid #93c5fd; color: #1e3a8a; }
+.cc-banner.cc-bad { background: #fef2f2; border: 1px solid #fca5a5; color: #7f1d1d; }
+/* Cột phải: người duyệt */
+.pj-with-aside { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.pj-with-aside-main { min-width: 0; }
+.ap-aside { position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow: auto; }
+.ap-aside h2 { margin-bottom: 4px; }
+.ap-tree.compact { grid-template-columns: 1fr; gap: 10px; margin-top: 10px; }
+.ap-tree.compact .ap-pool { position: static; }
+.ap-tree.compact .ap-frame { padding: 8px 10px; margin-bottom: 16px; }
+.ap-tree.compact .ap-frame-head small { display: none; }
+.ap-tree.readonly .ap-frame-add { display: none; }
+@media (max-width: 1100px) { .pj-with-aside { grid-template-columns: 1fr; } .ap-aside { position: static; max-height: none; } }

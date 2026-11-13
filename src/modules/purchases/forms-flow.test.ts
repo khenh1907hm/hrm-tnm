@@ -131,7 +131,7 @@ describe("xác nhận dự án P-COST-01", () => {
     expect(contractIssue({ ...draft, customerDocNo: "" }, true)).toBe("CONTRACT_CUSTOMER_DOC_REQUIRED");
     expect(contractIssue({ ...draft, customerDocNo: "", confirmation: "tentative" }, true)).toBeNull();
     expect(contractIssue({ ...draft, endOn: "2026-10-01" }, false)).toBe("CONTRACT_BAD_DATES");
-    expect(missingAttachments({ confirmation: "tentative", attachments: { ...noContractAttachments(), stampedQuote: true } })).toEqual(["customerInstruction", "masterSchedule", "drawings"]);
+    expect(missingAttachments({ confirmation: "tentative", attachments: { ...noContractAttachments(), stampedQuote: true } })).toEqual(["signedQuoteOrPo", "customerInstruction", "masterSchedule", "drawings"]);
 
     const { store, signAll } = setup();
     const first = await store.newContract("proj-1");
