@@ -47,6 +47,8 @@ next-env.d.ts
 /public/templates/*
 # Biểu mẫu quy trình mua hàng (P-COST, P-CC, P-CF) của công ty: cần có trên máy chủ để xuất Excel
 !/public/templates/quy-trinh/
+# Mẫu Quyết định thành lập Ban chỉ huy công trường (biểu mẫu công ty, không có chữ ký / con dấu)
+!/public/templates/bch/
 
 # Ghi chú triển khai chỉ lưu trên máy
 *.local.md
