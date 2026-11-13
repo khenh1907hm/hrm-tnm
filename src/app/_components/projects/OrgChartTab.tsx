@@ -166,6 +166,8 @@ export type OrgChartEditorProps = {
   canSetTemplate: boolean;
   employees: EmployeeSource;
   setNotice: Notify;
+  /** Báo sơ đồ đang hiển thị (kể cả chưa lưu) cho phần dùng chung (vd xuất quyết định BCH). */
+  onChartChange?: (chart: OrgChart | null) => void;
 };
 
 /**
@@ -185,6 +187,8 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
   const [downloading, setDownloading] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const { onChartChange } = props;
+  useEffect(() => { onChartChange?.(chart); }, [chart, onChartChange]);
 
   /** Bổ sung số điện thoại, ảnh (và tên khi overwrite) từ hồ sơ nhân sự. */
   const enrich = useCallback(async (base: OrgChart, overwrite: boolean) => {
@@ -328,15 +332,16 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
 export function OrgChartTab(props: TabProps) {
   const { store, data, viewer, actor, employees, setNotice } = props;
   const [bchOpen, setBchOpen] = useState(false);
+  const [chart, setChart] = useState<OrgChart | null>(null);
   return (
     <div className="pj-page">
+      <OrgChartEditor store={store} project={data.project} members={data.members} today={data.today} canEdit={viewer.isLead || viewer.canEditProject}
+        canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} onChartChange={setChart} />
       <section className="panel pj-section bch-bar">
-        <div><b>Quyết định thành lập Ban chỉ huy công trường</b><br /><small className="muted">Theo mẫu công ty, lấy thành viên dự án ở dưới và thông tin dự án. Xuất Excel hoặc PDF.</small></div>
+        <div><b>Quyết định thành lập Ban chỉ huy công trường</b><br /><small className="muted">Theo mẫu công ty, lấy người trên sơ đồ tổ chức ở trên (kể cả chưa lưu), thành viên dự án và thông tin dự án. Xuất Excel hoặc PDF.</small></div>
         <button type="button" className="button primary" onClick={() => setBchOpen(true)}><FileText className="ico" size={16} aria-hidden="true" /> Xuất quyết định BCH</button>
       </section>
-      {bchOpen && <BchDecisionDialog store={store} project={data.project} members={data.members} today={data.today} employees={employees} setNotice={setNotice} onClose={() => setBchOpen(false)} />}
-      <OrgChartEditor store={store} project={data.project} members={data.members} today={data.today} canEdit={viewer.isLead || viewer.canEditProject}
-        canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} />
+      {bchOpen && <BchDecisionDialog store={store} project={data.project} members={data.members} chart={chart} today={data.today} employees={employees} setNotice={setNotice} onClose={() => setBchOpen(false)} />}
     </div>
   );
 }

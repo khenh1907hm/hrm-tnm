@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
 import type { ProjectStore } from "../../../modules/projects/store";
 import type { Project, ProjectMember } from "../../../modules/projects/types";
+import type { OrgChart } from "../../../modules/projects/orgChart";
 import { BCH_TEMPLATE, BCH_TITLES, type BchMember } from "../../../modules/projects/bchDecision";
 import { directorPeople } from "../accountApi";
 import { downloadBytes } from "../purchases/FormExport";
@@ -12,13 +13,15 @@ import { errorMessage, type EmployeeSource } from "./projectShared";
 type Row = BchMember & { key: string; include: boolean };
 const ROLE_ORDER = ["pm", "commander", "supervisor", "engineer", "leader", "member", "worker"];
 const plain = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").replace(/\s+/g, " ").trim().toLowerCase();
+/** "LÊ VĂN THẠCH" → "Lê Văn Thạch" (sơ đồ ghi tên in hoa). */
+const titleCase = (text: string) => text.trim().toLocaleLowerCase("vi").replace(/(^|\s)(\S)/g, (_, space: string, letter: string) => space + letter.toLocaleUpperCase("vi"));
 const safeName = (text: string) => text.normalize("NFC").replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 120);
 
 /**
  * Xuất "Quyết định thành lập Ban chỉ huy công trường" theo mẫu công ty, lấy thành viên dự án (bỏ tổ viên) và thông tin dự án.
  * Sửa được số quyết định, ngày, gói thầu, công trình, chức vụ, số điện thoại, thứ tự trước khi tải Excel / PDF.
  */
-export function BchDecisionDialog(props: { store: ProjectStore; project: Project; members: readonly ProjectMember[]; today: string; employees: EmployeeSource; setNotice: Notify; onClose: () => void }) {
+export function BchDecisionDialog(props: { store: ProjectStore; project: Project; members: readonly ProjectMember[]; chart: OrgChart | null; today: string; employees: EmployeeSource; setNotice: Notify; onClose: () => void }) {
   const { project } = props;
   const [number, setNumber] = useState(1);
   const [signedOn, setSignedOn] = useState(props.today);
@@ -33,8 +36,9 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
     let active = true;
     void (async () => {
       const boss = await directorPeople().catch(() => []);
-      // Số điện thoại: hồ sơ nhân sự, không có thì lấy từ sơ đồ tổ chức đã lưu
-      const chart = await props.store.getOrgChart(project.id).catch(() => null);
+      // Sơ đồ đang hiển thị (kể cả chưa lưu); chưa có thì đọc bản đã lưu
+      const chart = props.chart ?? await props.store.getOrgChart(project.id).catch(() => null);
+      const bossNames = new Set(boss.map((item) => plain(item.name)));
       const active_ = props.members.filter((member) => !member.leftOn || member.leftOn >= props.today);
       const unique = new Map<string, ProjectMember>();
       for (const member of [...active_].sort((a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role))) if (!unique.has(member.employeeId)) unique.set(member.employeeId, member);
@@ -47,12 +51,29 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
         const phone = option?.phone?.trim() || onChart?.phone?.trim() || "";
         return { key: member.id, name: member.displayName, title, phone, include: member.role !== "worker" && member.role !== "leader" };
       }));
+      // Người trên sơ đồ tổ chức đứng trước (theo thứ tự sơ đồ: công trường rồi văn phòng), bỏ Giám đốc;
+      // thành viên dự án chưa có trên sơ đồ thêm sau
+      const onChartRows: Row[] = (chart?.people ?? [])
+        .filter((person) => person.name.trim() && !bossNames.has(plain(person.name)) && !/gi[aá]m\s*đ[oố]c|director/i.test(`${person.titleVi} ${person.titleEn}`))
+        .sort((a, b) => (a.section === b.section ? 0 : a.section === "site" ? -1 : 1))
+        .map((person) => {
+          const member = list.find((row) => row.key === props.members.find((item) => item.employeeId === person.employeeId)?.id)
+            ?? list.find((row) => plain(row.name) === plain(person.name));
+          return {
+            key: `chart-${person.id}`, name: member?.name || titleCase(person.name), title: person.titleVi.trim() || member?.title || "", phone: person.phone.trim() || member?.phone || "",
+            include: person.branch !== "group",
+          };
+        });
+      const taken = new Set(onChartRows.map((row) => plain(row.name)));
+      const merged = [...onChartRows, ...list.filter((row) => !taken.has(plain(row.name)))];
       if (!active) return;
-      setRows(list);
+      setRows(merged);
       if (boss[0]) setDirectorName(boss[0].name);
     })();
     return () => { active = false; };
-  }, [props.store, props.employees, props.members, props.today, project.id]);
+    // Chỉ nạp một lần khi mở hộp thoại (sửa tay trong bảng không bị ghi đè)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const update = (key: string, patch: Partial<Row>) => setRows((list) => list?.map((row) => row.key === key ? { ...row, ...patch } : row) ?? null);
   const move = (index: number, delta: -1 | 1) => setRows((list) => { if (!list) return list; const next = [...list]; const [item] = next.splice(index, 1); next.splice(index + delta, 0, item!); return next; });
@@ -95,7 +116,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
           </select></label>
           <label className="field"><span>Giám đốc ký</span><input value={directorName} placeholder="Để trống = dòng chấm" onChange={(event) => setDirectorName(event.target.value)} /></label>
           <div style={{ gridColumn: "1 / -1" }}>
-            <b>Thành viên Ban chỉ huy</b> <small className="muted">Lấy từ thành viên dự án (tổ trưởng, tổ viên mặc định không chọn). Chức vụ, số điện thoại lấy từ vai trò, sơ đồ tổ chức và hồ sơ nhân sự; ô viền đỏ là còn trống, điền tay rồi tải.</small>
+            <b>Thành viên Ban chỉ huy</b> <small className="muted">Lấy từ thành viên dự án (tổ trưởng, tổ viên mặc định không chọn). Lấy người trên sơ đồ tổ chức (chức vụ tiếng Việt, số điện thoại trên sơ đồ) và thành viên dự án; ô viền đỏ là còn trống, điền tay rồi tải.</small>
             {!rows ? <div className="loading">Đang tải thành viên…</div> : (
               <div className="table-scroll">
                 <table className="pj-table bch-table">
