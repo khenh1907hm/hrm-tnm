@@ -96,3 +96,9 @@
 .oc-face.empty { border: calc(var(--u) * 1.5) solid #fff; background: rgba(255, 255, 255, .18); }
 .oc-modal-body { padding: 16px 20px 6px; }
 .oc-modal-body .oc-person { margin-top: 6px; }
+/* Xuất hồ sơ, chứng chỉ người trên sơ đồ (trên Quyết định BCH) */
+.ope-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.ope-head .check-field { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.ope-people { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; align-items: center; }
+.ope-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; background: var(--surface); cursor: pointer; }
+.ope-chip.off { opacity: .55; }

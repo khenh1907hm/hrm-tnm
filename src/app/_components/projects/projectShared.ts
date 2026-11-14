@@ -56,6 +56,8 @@ export type EmployeeSource = {
   get?(employeeId: string): Promise<EmployeeOption | null>;
   /** Ảnh chân dung của nhân sự (để điền sơ đồ tổ chức); không có thì null. */
   photo?(employeeId: string): Promise<Blob | null>;
+  /** Mở hộp xuất của Nhân sự cho các nhân sự này: kèm hồ sơ chung (mẫu hồ sơ) hoặc chỉ thư mục chứng chỉ (.zip). Không có = không được xuất. */
+  exportPeople?(employeeIds: readonly string[], withProfile: boolean): Promise<number>;
 } | null;
 
 /** Nhập số tiền có dấu chấm ngăn cách: "1.250.000" → 1250000. */

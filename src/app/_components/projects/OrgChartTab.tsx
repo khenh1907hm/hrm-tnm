@@ -11,6 +11,7 @@ import { systemClock, todayVN } from "../../../lib/clock";
 import { hasAccess, type Actor } from "../../../modules/auth/permissions";
 import type { TabProps } from "./ProjectDetail";
 import { BchDecisionDialog } from "./BchDecisionDialog";
+import { OrgPeopleExport } from "./OrgPeopleExport";
 import { EmployeePicker } from "./ProjectsPage";
 import { errorMessage, viewerFor, type EmployeeSource } from "./projectShared";
 import "./orgchart.css";
@@ -337,6 +338,7 @@ export function OrgChartTab(props: TabProps) {
     <div className="pj-page">
       <OrgChartEditor store={store} project={data.project} members={data.members} today={data.today} canEdit={viewer.isLead || viewer.canEditProject}
         canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} onChartChange={setChart} />
+      <OrgPeopleExport chart={chart} employees={employees} setNotice={setNotice} />
       <section className="panel pj-section bch-bar">
         <div><b>Quyết định thành lập Ban chỉ huy công trường</b><br /><small className="muted">Theo mẫu công ty: chỉ lấy người trên sơ đồ tổ chức ở trên (kể cả chưa lưu) và thông tin dự án. Xuất Excel hoặc PDF.</small></div>
         <button type="button" className="button primary" onClick={() => setBchOpen(true)}><FileText className="ico" size={16} aria-hidden="true" /> Xuất quyết định BCH</button>

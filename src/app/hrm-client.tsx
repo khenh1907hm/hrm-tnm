@@ -137,6 +137,14 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       return found.ok ? { id: found.value.id, code: found.value.code, name: found.value.name, position: found.value.position, phone: found.value.phone, hasPhoto: Boolean(found.value.photo) } : null;
     },
     photo: (employeeId: string) => photoLoaderRef.current(employeeId),
+    // Sơ đồ tổ chức dự án: xuất hồ sơ / chứng chỉ của người trên sơ đồ bằng đúng hộp xuất bên Nhân sự
+    ...(can(actor, "export") ? {
+      exportPeople: async (employeeIds: readonly string[], withProfile: boolean) => {
+        const found = (await Promise.all(employeeIds.map((id) => app.employees.get(actor, id)))).flatMap((result) => result.ok && !result.value.archivedAt ? [result.value] : []);
+        if (found.length) (withProfile ? setBatchEmployees : setCertFolderEmployees)(found);
+        return found.length;
+      },
+    } : {}),
   } : null, [app, actor]);
   const projectStore = useProjectStore(backend.mode, employeeSource);
   const purchaseStore = getPurchaseStore(backend.mode);
