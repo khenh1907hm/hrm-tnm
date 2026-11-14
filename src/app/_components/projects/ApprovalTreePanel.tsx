@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Crown, GripVertical, Plus, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import type { ProjectMember } from "../../../modules/projects/types";
-import { approvalTrees, directorPeople, saveApprovalTree, type ApprovalBlock, type ApprovalMode, type TreeDocType } from "../accountApi";
+import { approvalTrees, directorPeople, saveApprovalTree, TREE_FALLBACK, type ApprovalBlock, type ApprovalMode, type TreeDocType } from "../accountApi";
 import type { Notify } from "../Toast";
 import { participantsOf, type Participant } from "./ProjectApproversPanel";
 import { errorMessage } from "./projectShared";
@@ -10,7 +10,10 @@ import { errorMessage } from "./projectShared";
 const DRAG_TYPE = "application/x-tnm-block-person";
 const LEADER_NAME = "Lãnh đạo";
 const MODE_TEXT: Record<ApprovalMode, string> = { any: "Một trong các người duyệt là đủ", sequence: "Lần lượt từng người (trên xuống)" };
-const DOC_TEXT: Record<TreeDocType, string> = { contract: "Confirm Contract", budget: "ngân sách, báo cáo giải thích", purchase: "đơn hàng, đề nghị thanh toán, yêu cầu vật tư" };
+export const DOC_TEXT: Record<TreeDocType, string> = {
+  contract: "Confirm Contract", budget: "ngân sách (và báo cáo giải thích chưa cài riêng)", explanatory: "báo cáo giải thích",
+  material: "yêu cầu vật tư", purchase: "đơn hàng (và RFP, yêu cầu vật tư chưa cài riêng)", payment: "yêu cầu thanh toán (RFP)",
+};
 
 const blankLeader = (): ApprovalBlock => ({ name: LEADER_NAME, mode: "any", people: [] });
 
@@ -19,9 +22,10 @@ const blankLeader = (): ApprovalBlock => ({ name: LEADER_NAME, mode: "any", peop
  * Người gửi (tự ký khi gửi) → các khối tự đặt tên (một trong các người, hoặc lần lượt) → Lãnh đạo (cuối cùng, quyền cao nhất).
  * Chỉ Admin, Giám đốc sửa; người khác xem. Chưa cài thì phiếu đi theo quy trình chung của công ty.
  */
-export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocType; canEdit: boolean; members: readonly ProjectMember[]; today: string; setNotice: Notify }) {
+export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocType; canEdit: boolean; members: readonly ProjectMember[]; today: string; setNotice: Notify; embedded?: boolean; onSaved?: () => void }) {
   const [saved, setSaved] = useState<ApprovalBlock[] | null>(null);
   const [blocks, setBlocks] = useState<ApprovalBlock[]>([blankLeader()]);
+  const [inherited, setInherited] = useState<TreeDocType | null>(null);
   const [directors, setDirectors] = useState<{ employeeId: string; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState<number | null>(null);
@@ -31,13 +35,19 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
     void Promise.all([approvalTrees(projectId), directorPeople().catch(() => [])]).then(([trees, boss]) => {
       if (!active) return;
       const tree = trees[docType] ?? [];
+      // Mục chưa cài riêng: mở sẵn bản sao cây nhóm đang áp dụng để sửa tiếp
+      const group = TREE_FALLBACK[docType];
+      const fallback = !tree.length && group ? trees[group] ?? [] : [];
       setSaved(tree);
-      setBlocks(tree.length ? tree.map((block) => ({ ...block, people: [...block.people] })) : [blankLeader()]);
+      setInherited(fallback.length ? group! : null);
+      const start = tree.length ? tree : fallback;
+      setBlocks(start.length ? start.map((block) => ({ ...block, people: [...block.people] })) : [blankLeader()]);
       setDirectors(boss);
     }, () => { if (active) setSaved([]); });
     return () => { active = false; };
   }, [projectId, docType]);
-  if (!saved) return <section className="panel pj-section ap-aside"><div className="loading">Đang tải người duyệt…</div></section>;
+  const shell = `panel pj-section${props.embedded ? " ap-embedded" : " ap-aside"}`;
+  if (!saved) return <section className={shell}><div className="loading">Đang tải người duyệt…</div></section>;
 
   const participants = participantsOf(props.members, props.today);
   const nameOf = (id: string) => participants.find((person) => person.id === id)?.name ?? directors.find((item) => item.employeeId === id)?.name ?? "Người ngoài dự án";
@@ -61,14 +71,17 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
       const cleaned = next.map((block, index) => ({ ...block, name: index === next.length - 1 ? LEADER_NAME : block.name.trim() || `Khối ${index + 1}` }));
       await saveApprovalTree(projectId, docType, cleaned);
       setSaved(cleaned);
+      setInherited(null);
       setBlocks(cleaned.length ? cleaned : [blankLeader()]);
       props.setNotice(`Đã lưu cây duyệt ${DOC_TEXT[docType]}. Phiếu gửi từ bây giờ đi theo cây này.`, "success");
+      props.onSaved?.();
     } catch (error) { props.setNotice(errorMessage(error), "error"); } finally { setBusy(false); }
   };
   const reset = async () => {
-    if (!window.confirm("Bỏ cây duyệt riêng của dự án, dùng quy trình chung của công ty?")) return;
+    const group = TREE_FALLBACK[docType];
+    if (!window.confirm(group ? `Bỏ cây duyệt riêng của mục này? Phiếu sẽ đi theo cây ${DOC_TEXT[group].split(" (")[0]} (nếu có) hoặc quy trình chung của công ty.` : "Bỏ cây duyệt riêng của dự án, dùng quy trình chung của công ty?")) return;
     setBusy(true);
-    try { await saveApprovalTree(projectId, docType, []); setSaved([]); setBlocks([blankLeader()]); props.setNotice("Đã chuyển về quy trình chung.", "success"); }
+    try { await saveApprovalTree(projectId, docType, []); setSaved([]); setBlocks([blankLeader()]); props.setNotice(group ? "Đã bỏ cây riêng của mục." : "Đã chuyển về quy trình chung.", "success"); props.onSaved?.(); }
     catch (error) { props.setNotice(errorMessage(error), "error"); } finally { setBusy(false); }
   };
 
@@ -130,9 +143,11 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
   };
 
   return (
-    <section className="panel pj-section ap-aside" aria-label="Người duyệt">
-      <h2><ShieldCheck className="ico" size={18} aria-hidden="true" /> Người duyệt</h2>
-      <small className="muted">Cây duyệt {DOC_TEXT[docType]}: ký từ trên xuống, Lãnh đạo là khối cuối cùng. {saved.length ? "" : "Dự án chưa cài cây riêng: đang dùng quy trình chung của công ty."}</small>
+    <section className={shell} aria-label="Người duyệt">
+      {!props.embedded && <h2><ShieldCheck className="ico" size={18} aria-hidden="true" /> Người duyệt</h2>}
+      <small className="muted">Cây duyệt {DOC_TEXT[docType]}: ký từ trên xuống, Lãnh đạo là khối cuối cùng. {saved.length ? "" : inherited
+        ? `Mục này chưa cài riêng: đang đi theo cây ${DOC_TEXT[inherited].split(" (")[0]} (hiện bên dưới, sửa rồi lưu để thành cây riêng).`
+        : "Dự án chưa cài cây riêng: đang dùng quy trình chung của công ty."}</small>
       {!readOnly && <div className="ap-pool tb-pool">
         <b>Thành viên tham gia</b>
         <div className="ap-pool-list">

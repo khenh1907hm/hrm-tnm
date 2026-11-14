@@ -243,3 +243,12 @@
 .bch-table tr.muted input { opacity: .55; }
 .bch-tools { white-space: nowrap; }
 .bch-table input.bch-missing { border-color: var(--bad); background: #fef2f2; }
+/* Tab Quy trình duyệt: bảng loại đề xuất, mở cây ngay dưới dòng */
+.ad-table tbody tr.ad-row { cursor: pointer; }
+.ad-table tbody tr.ad-row.open { background: var(--soft); }
+.ad-table tbody tr.ad-editor, .ad-table tbody tr.ad-editor:hover { background: var(--soft); cursor: default; }
+.ad-people { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.ad-avatar { width: 26px; height: 26px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 11px; font-weight: 700; display: inline-grid; place-items: center; }
+.ad-avatar.boss { background: #f59e0b; }
+.ad-avatar.more { background: var(--line); color: var(--ink); }
+.ap-embedded { margin: 4px 0; max-width: 560px; }

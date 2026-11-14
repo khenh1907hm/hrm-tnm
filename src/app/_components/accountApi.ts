@@ -72,7 +72,9 @@ export async function projectContractStates(): Promise<Record<string, ContractSt
 }
 
 /** Cây khối duyệt của dự án: phần tử cuối là Lãnh đạo; người gửi luôn đứng đầu (tự ký khi gửi). */
-export type TreeDocType = "contract" | "budget" | "purchase";
+export type TreeDocType = "contract" | "budget" | "explanatory" | "material" | "purchase" | "payment";
+/** Mục chưa cài cây riêng thì gửi phiếu theo cây nhóm này (giống private.tree_doc_type ở máy chủ). */
+export const TREE_FALLBACK: Partial<Record<TreeDocType, TreeDocType>> = { explanatory: "budget", material: "purchase", payment: "purchase" };
 export type ApprovalBlock = { name: string; mode: ApprovalMode; people: string[] };
 export async function approvalTrees(projectId: string): Promise<Partial<Record<TreeDocType, ApprovalBlock[]>>> {
   const rows = ((await rpc("project_approval_trees_of", { p_project: projectId })) ?? []) as Row[];

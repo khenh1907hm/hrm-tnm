@@ -15,6 +15,7 @@ import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { ApprovalTreePanel } from "./ApprovalTreePanel";
+import { ApprovalsTab } from "./ApprovalsTab";
 import { CONTRACT_STATE_UI, myAccount, projectApprovers, projectContractStates, type ContractState } from "../accountApi";
 import { BudgetSheetTab } from "./BudgetSheetTab";
 import { ContractTab } from "./ContractTab";
@@ -69,11 +70,11 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Confirm Contract"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "approvals" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Confirm Contract"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["approvals", "Quy trình duyệt"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["reports", "Báo cáo"]];
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
-  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", materials: "yeu-cau-vat-tu", purchases: "dat-hang", members: "so-do", daily: "bao-cao-ngay",
+  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", materials: "yeu-cau-vat-tu", purchases: "dat-hang", approvals: "quy-trinh-duyet", members: "so-do", daily: "bao-cao-ngay",
   timesheets: "cham-cong", checks: "cham-cong-gps", reports: "bao-cao",
 };
 const tabFromUrl = (): Tab => {
@@ -117,7 +118,8 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
     return () => { active = false; };
   }, [store.mode, project.id, data]);
   const stateUi = contractState ? CONTRACT_STATE_UI[contractState] : null;
-  const visibleTabs = TABS.filter(([key]) => ((key !== "budget" && key !== "contract") || viewer?.canSeeMoney || signsHere) && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
+  const visibleTabs = TABS.filter(([key]) => ((key !== "budget" && key !== "contract" && key !== "approvals") || viewer?.canSeeMoney || signsHere || actor.role === "admin")
+    && (key !== "approvals" || store.mode === "live") && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
   return (
@@ -164,6 +166,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
         if (tab === "purchases") return withApprovers(<ProjectPurchasesTab {...tabProps} />, "purchase");
+        if (tab === "approvals") return <ApprovalsTab projectId={project.id} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />;
         return <ReportsTab {...tabProps} />;
       })()}
       {props.children}
