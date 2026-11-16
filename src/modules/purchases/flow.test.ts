@@ -45,12 +45,42 @@ describe("purchase flow", () => {
     expect(allowedActions(order("ordered"), boss).has("cancel")).toBe(true);
     expect(allowedActions(order("ordered"), requester).has("requestFinal")).toBe(true);
     expect(allowedActions(order("received"), requester, [{ status: "approved" }]).has("complete")).toBe(false);
-    expect(allowedActions(order("received"), requester, [{ status: "paid" }]).has("complete")).toBe(true);
+    expect(allowedActions(order("received"), requester, [{ status: "paid" }]).has("complete")).toBe(false);
+    const ready = { ...order("received"), stockedAt: "2026-11-20T03:00:00Z", docsCollectedAt: "2026-11-21T03:00:00Z" };
+    expect(allowedActions(ready, requester, [{ status: "paid" }]).has("complete")).toBe(true);
     expect(allowedActions(order("ordered"), accountant, [{ status: "approved" }]).has("pay")).toBe(true);
     expect(allowedActions(order("ordered"), boss, [{ status: "approved" }]).has("pay")).toBe(false);
     expect(allowedActions(order("ordered"), boss, [{ status: "requested" }]).has("decidePayment")).toBe(true);
     expect(allowedActions(order("ordered"), { ...requester, userId: "other", isProjectLead: true }).has("receive")).toBe(true);
     expect(allowedActions(order("completed"), boss).size).toBe(0);
+  });
+
+  it("PUR_06 Nhập kho: chỉ phòng ban được giao (hoặc Admin) nhập kho, thu chứng từ; nhập kho rồi thì không sửa nhận hàng", () => {
+    const received = order("received");
+    expect(allowedActions(received, requester).has("stockIn")).toBe(false);
+    expect(allowedActions(received, { ...requester, stages: new Set(["stocked"] as const) }).has("stockIn")).toBe(true);
+    expect(allowedActions(received, { ...boss, isAdmin: true }).has("stockIn")).toBe(true);
+    expect(allowedActions(received, requester).has("receive")).toBe(true);
+    const stocked = { ...received, stockedAt: "2026-11-20T03:00:00Z", docsCollectedAt: null };
+    expect(allowedActions(stocked, requester).has("receive")).toBe(false);
+    expect(allowedActions(stocked, { ...requester, stages: new Set(["stocked"] as const) }).has("stockIn")).toBe(false);
+    expect(allowedActions(stocked, requester).has("collectDocs")).toBe(false);
+    expect(allowedActions(stocked, { ...requester, stages: new Set(["final"] as const) }).has("collectDocs")).toBe(true);
+    expect(allowedActions({ ...order("ordered") }, { ...requester, userId: "kho", stages: new Set(["received"] as const) }).has("receive")).toBe(true);
+  });
+
+  it("PUR_07 giai đoạn: nhận hàng xong thì Nhập kho là bước hiện tại, rồi tới Thu thập chứng từ; hủy thì Thất bại", async () => {
+    const { stepStates, mergeStageDepartments, STAGE_DEPARTMENT_DEFAULTS } = await import("./flow");
+    const got = stepStates({ status: "received" }, []);
+    expect([got.received, got.stocked, got.final, got.completed]).toEqual(["done", "current", "todo", "todo"]);
+    const stocked = stepStates({ status: "received", stockedAt: "x" }, [{ kind: "final", status: "approved" }]);
+    expect([stocked.stocked, stocked.final, stocked.final_pay]).toEqual(["done", "current", "current"]);
+    const advance = stepStates({ status: "ordered", advanceRequired: true }, [{ kind: "advance", status: "approved" }]);
+    expect([advance.advance, advance.advance_pay]).toEqual(["done", "current"]);
+    expect(stepStates({ status: "ordered", advanceRequired: false }, []).advance_pay).toBe("skipped");
+    expect(stepStates({ status: "cancelled" }, []).failed).toBe("current");
+    expect(stepStates({ status: "completed" }, []).failed).toBe("skipped");
+    expect(mergeStageDepartments({ stocked: "material", final: "bogus" })).toEqual({ ...STAGE_DEPARTMENT_DEFAULTS, stocked: "material" });
   });
 
   it("PUR_05 payment summary: paid per kind, pending, remaining against the actual (or estimated) total", () => {

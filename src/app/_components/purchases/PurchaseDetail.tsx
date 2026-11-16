@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, PackageCheck, Pencil, Send, Truck, X } from "lucide-react";
+import { ArrowLeft, Check, FolderCheck, PackageCheck, Pencil, Send, Truck, Warehouse, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentIssue, paymentSummary, stepStates } from "../../../modules/purchases/flow";
+import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentIssue, paymentSummary, stageDepartmentLabel, stepStates, type EnforcedStage, type StageDepartments } from "../../../modules/purchases/flow";
 import { FlowStepper } from "./FlowBar";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
@@ -30,11 +30,18 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
   const [events, setEvents] = useState<PurchaseEvent[]>([]);
   const [editing, setEditing] = useState(false);
-  const [panel, setPanel] = useState<"order" | "payment" | "track" | "receive" | "issuePo" | null>(null);
+  const [panel, setPanel] = useState<"order" | "payment" | "track" | "receive" | "issuePo" | "stockIn" | null>(null);
   const [chainKey, setChainKey] = useState(0);
+  const [departments, setDepartments] = useState<StageDepartments | undefined>(undefined);
+  const [stages, setStages] = useState<ReadonlySet<EnforcedStage>>(new Set());
 
-  const fetchAll = useCallback(() => Promise.all([store.getOrder(props.orderId), store.listPayments(props.orderId), store.listEvents(props.orderId)]), [store, props.orderId]);
-  const apply = useCallback(([next, pays, logs]: Awaited<ReturnType<typeof fetchAll>>) => { setOrder(next); setPayments(pays); setEvents(logs); }, []);
+  const fetchAll = useCallback(() => Promise.all([store.getOrder(props.orderId), store.listPayments(props.orderId), store.listEvents(props.orderId), store.stagePermissions(props.orderId).catch(() => [] as EnforcedStage[])]), [store, props.orderId]);
+  const apply = useCallback(([next, pays, logs, mine]: Awaited<ReturnType<typeof fetchAll>>) => { setOrder(next); setPayments(pays); setEvents(logs); setStages(new Set(mine)); }, []);
+  useEffect(() => {
+    let active = true;
+    void store.stageDepartments().then((value) => { if (active) setDepartments(value); }, () => undefined);
+    return () => { active = false; };
+  }, [store]);
   const reload = useCallback(async () => { try { apply(await fetchAll()); props.onChanged(); } catch (error) { setNotice(errorMessage(error), "error"); } }, [fetchAll, apply, props, setNotice]);
   useEffect(() => {
     let active = true;
@@ -51,7 +58,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   if (order === null) return <section className="pj-page"><div className="panel empty-state"><p>Không tìm thấy đơn hàng, hoặc bạn không có quyền xem.</p><button type="button" className="button" onClick={props.onBack}>Về danh sách</button></div></section>;
 
   const project = order.projectId ? props.projects.find((item) => item.id === order.projectId) : null;
-  const me = { userId: props.userId, isAdmin: props.isAdmin, isProjectLead: order.projectId ? props.leadProjectIds.has(order.projectId) : false, ...props.roles };
+  const me = { userId: props.userId, isAdmin: props.isAdmin, isProjectLead: order.projectId ? props.leadProjectIds.has(order.projectId) : false, stages, ...props.roles };
+  const deptName = (stage: "received" | "stocked" | "final") => departments?.[stage] ? stageDepartmentLabel(departments[stage]) : "";
   const actions = allowedActions(order, me, payments);
   const steps = stepStates(order, payments);
   const summary = paymentSummary(order, payments);
@@ -81,7 +89,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
       </div>
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
-        <FlowStepper states={steps} cancelled={order.status === "cancelled"} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
+        <FlowStepper states={steps} departments={departments} cancelled={order.status === "cancelled"} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
         {order.status === "rejected" && <p className="warn-text">{order.usesChain ? "Bị trả về" : "Sếp từ chối"}: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
         {order.status === "cancelled" && <p className="warn-text">Đơn đã hủy: {order.decisionNote}</p>}
         <div className="po-actions">
@@ -94,8 +102,10 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           {actions.has("order") && <button type="button" className="button primary" onClick={() => setPanel("order")}><Truck className="ico" size={16} aria-hidden="true" /> Đặt hàng</button>}
           {requestKinds.length > 0 && <button type="button" className="button" onClick={() => setPanel("payment")}>Đề nghị {requestKinds.map((kind) => PAYMENT_KIND_LABELS[kind].toLowerCase()).join(" / ")}</button>}
           {actions.has("track") && order.status !== "approved" && <button type="button" className="button" onClick={() => setPanel("track")}>Cập nhật theo dõi</button>}
-          {actions.has("receive") && <button type="button" className="button primary" onClick={() => setPanel("receive")}><PackageCheck className="ico" size={16} aria-hidden="true" /> Nhận hàng, kiểm tra</button>}
-          {actions.has("complete") && <button type="button" className="button primary" onClick={() => void act(() => store.complete(order.id, ""), order.kind === "project" ? "Đã hoàn tất. Tiền thực nhận đã ghi vào chi phí vật tư của dự án." : "Đã hoàn tất đơn hàng.")}><Check className="ico" size={16} aria-hidden="true" /> Hoàn tất đơn</button>}
+          {actions.has("receive") && <button type="button" className={`button ${order.status === "received" ? "" : "primary"}`} onClick={() => setPanel("receive")}><PackageCheck className="ico" size={16} aria-hidden="true" /> {order.status === "received" ? "Sửa nhận hàng, kiểm đếm" : "Nhận hàng, kiểm đếm"}</button>}
+          {actions.has("stockIn") && <button type="button" className="button primary" onClick={() => setPanel("stockIn")}><Warehouse className="ico" size={16} aria-hidden="true" /> Nhập kho</button>}
+          {actions.has("collectDocs") && <button type="button" className="button primary" onClick={() => { const note = window.prompt("Đã thu đủ chứng từ. Ghi chú (vd: HĐ GTGT số…, BBGN, phiếu nhập kho, CO/CQ):", ""); if (note !== null) void act(() => store.collectDocs(order.id, note), "Đã ghi nhận đủ chứng từ. Đề nghị thanh toán phần còn lại (nếu còn)."); }}><FolderCheck className="ico" size={16} aria-hidden="true" /> Đã thu đủ chứng từ</button>}
+          {actions.has("complete") && <button type="button" className="button primary" onClick={() => void act(() => store.complete(order.id, ""), order.kind === "project" ? "Đã hoàn tất. Tiền thực nhận đã ghi vào chi phí vật tư của dự án." : "Đã hoàn tất đơn hàng.")}><Check className="ico" size={16} aria-hidden="true" /> Hoàn tất đơn (Thành công)</button>}
           {actions.has("cancel") && <button type="button" className="button danger" onClick={() => { const why = ask("Lý do hủy đơn (ít nhất 3 ký tự):"); if (why) void act(() => store.cancel(order.id, why), "Đã hủy đơn."); }}>Hủy đơn</button>}
         </div>
         {panel === "order" && <OrderPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact, expected, note) => act(() => store.markOrdered(order.id, supplier, contact, expected, note), "Đã đặt hàng, bắt đầu theo dõi.")} />}
@@ -104,6 +114,11 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         {actions.has("track") && order.status === "approved" && orderBlock(order, payments) && <p className="warn-text">{projectText("PO_ADVANCE_NOT_PAID")}</p>}
         {panel === "track" && <TrackPanel expected={order.expectedDelivery} onCancel={() => setPanel(null)} onSubmit={(note, expected) => act(() => store.track(order.id, note, expected), "Đã cập nhật theo dõi.")} />}
         {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note, record) => act(() => store.receive(order.id, lines, note, record), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
+        {panel === "stockIn" && <StockInPanel order={order} onCancel={() => setPanel(null)} onSubmit={(receiptNo, location, note) => act(() => store.stockIn(order.id, receiptNo, location, note), "Đã nhập kho. Tiếp theo: thu thập chứng từ để thanh toán.")} />}
+        {order.status === "received" && !order.stockedAt && !actions.has("stockIn") && deptName("stocked") && <p className="muted">Chờ <b>{deptName("stocked")}</b> nhập kho.</p>}
+        {order.status === "received" && order.stockedAt && !order.docsCollectedAt && !actions.has("collectDocs") && deptName("final") && <p className="muted">Chờ <b>{deptName("final")}</b> thu thập chứng từ.</p>}
+        {order.stockedAt && <p className="po-terms-line">Nhập kho: <b>{order.stockReceiptNo}</b> · {dateTime(order.stockedAt)}{order.stockLocation ? ` · Kho: ${order.stockLocation}` : ""}{order.stockedByName ? ` · ${order.stockedByName}` : ""}{order.stockNote ? ` · ${order.stockNote}` : ""}
+          {order.docsCollectedAt ? <> · <span className="pill ok">Đủ chứng từ {dateTime(order.docsCollectedAt)}</span>{order.docsNote ? ` · ${order.docsNote}` : ""}</> : <> · <span className="pill warn">Chưa đủ chứng từ</span></>}</p>}
         {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
         {order.poNo && <p className="po-terms-line">PO chính thức: <b>{order.poNo}</b> · phát hành {order.poIssuedAt ? dateTime(order.poIssuedAt) : "—"} · {order.supplierAcceptedAt ? <span className="pill ok">NCC đã ký nhận {dateTime(order.supplierAcceptedAt)}</span> : <span className="pill warn">Chờ NCC ký nhận</span>}{order.supplierAcceptNote ? ` · ${order.supplierAcceptNote}` : ""}{order.receiptRecordNo ? ` · Biên bản giao nhận ${order.receiptRecordNo}` : ""}</p>}
         <div className="po-forms">
@@ -308,6 +323,35 @@ function ReceivePanel(props: { order: PurchaseOrder; onCancel: () => void; onSub
         <label className="po-term"><input type="checkbox" checked={signedByBoth} onChange={(event) => setSignedByBoth(event.target.checked)} /><span><b>Biên bản đã có chữ ký của cả hai bên</b><small>Rủi ro hàng hóa chỉ chuyển sang bên mua khi có xác nhận bằng văn bản của cả hai bên (điều khoản PO).</small></span></label>
       </div>
       <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" disabled={needsRecord && (!recordNo.trim() || !signedByBoth)} onClick={() => void props.onSubmit(lines, note, { recordNo, signedByBoth })}>Lưu kết quả nhận hàng</button></div>
+    </div>
+  );
+}
+
+/** Nhập kho sau khi nhận hàng, kiểm đếm: số phiếu nhập kho (để trống thì tự cấp), vị trí kho; số lượng nhập = số đạt. */
+function StockInPanel(props: { order: PurchaseOrder; onCancel: () => void; onSubmit: (receiptNo: string, location: string, note: string) => Promise<void> }) {
+  const [receiptNo, setReceiptNo] = useState("");
+  const [location, setLocation] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="pj-page">
+      <div className="table-scroll">
+        <table className="pj-table po-items">
+          <thead><tr><th>Hàng nhập kho</th><th>ĐVT</th><th className="pj-num">SL đặt</th><th className="pj-num">SL nhận</th><th className="pj-num">SL nhập kho (đạt)</th></tr></thead>
+          <tbody>{props.order.items.map((item) => (
+            <tr key={item.id}><td>{item.name}{item.spec ? <><br /><small className="muted">{item.spec}</small></> : null}</td><td>{item.unit}</td>
+              <td className="pj-num">{item.quantity.toLocaleString("vi-VN")}</td><td className="pj-num">{item.receivedQty.toLocaleString("vi-VN")}</td>
+              <td className="pj-num"><b>{item.acceptedQty.toLocaleString("vi-VN")}</b></td></tr>
+          ))}</tbody>
+        </table>
+      </div>
+      <div className="po-inline">
+        <label className="field"><span>Số phiếu nhập kho</span><input value={receiptNo} autoFocus placeholder={`Để trống: PNK-${props.order.code}`} onChange={(event) => setReceiptNo(event.target.value)} /></label>
+        <label className="field"><span>Kho / vị trí</span><input value={location} placeholder="vd: Kho công trường, kệ A2" onChange={(event) => setLocation(event.target.value)} /></label>
+        <label className="field"><span>Ghi chú</span><input value={note} placeholder="vd: Người giao, người nhận kho" onChange={(event) => setNote(event.target.value)} /></label>
+      </div>
+      <small className="muted">Số lượng nhập kho lấy theo số đạt ở bước Nhận hàng, kiểm đếm. Sai số lượng thì sửa Nhận hàng trước, nhập kho xong không sửa được.</small>
+      <div className="button-row"><button type="button" className="button" onClick={props.onCancel}>Hủy</button><button type="button" className="button primary" disabled={busy} onClick={() => { setBusy(true); void props.onSubmit(receiptNo, location, note).finally(() => setBusy(false)); }}>Xác nhận nhập kho</button></div>
     </div>
   );
 }

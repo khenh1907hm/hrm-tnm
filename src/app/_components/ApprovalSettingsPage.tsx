@@ -2,7 +2,9 @@
 import { useEffect, useState } from "react";
 import { GitBranch } from "lucide-react";
 import { DEPARTMENTS, ROLE_LABELS, type Department } from "../../modules/purchases/approval";
-import { approvalSettings, saveApprovalSettings, type ApprovalModes } from "./accountApi";
+import { approvalSettings, saveApprovalSettings, saveStageDepartments, stageDepartmentsSettings, type ApprovalModes } from "./accountApi";
+import { StageDepartmentsEditor } from "./purchases/StageDepartmentsEditor";
+import "./purchases/purchases.css";
 import { EmployeePicker } from "./projects/ProjectsPage";
 import { ModePicker, OrderedPeople, ROLE_HINTS } from "./projects/ProjectApproversPanel";
 import { errorMessage, type EmployeeSource } from "./projects/projectShared";
@@ -97,6 +99,7 @@ export function ApprovalSettingsPage(props: { live: boolean; employees: Employee
           })}
         </div>
       </div>
+      <StageDepartmentsEditor canEdit load={stageDepartmentsSettings} save={saveStageDepartments} setNotice={props.setNotice} />
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import type { ApprovalDocType, ApprovalStep, Department, DepartmentMembers } from "./approval";
+import type { EnforcedStage, StageDepartments } from "./flow";
 import type { BudgetLine, BudgetSheet, BudgetSheetHeader, CostCode } from "./budget";
 import type { ContractDraft, ProjectContract } from "./contract";
 import type { ExplanatoryDraft, ExplanatoryReport } from "./explanatory";
@@ -37,6 +38,16 @@ export interface PurchaseStore {
   issuePo(id: string, supplier: string, contact: string): Promise<void>;
   /** Ghi nhận NCC đã ký bản sao PO gửi lại (ngày, ghi chú nơi lưu bản ký). */
   supplierAccept(id: string, note: string): Promise<void>;
+  /** Nhập kho sau khi nhận hàng, kiểm đếm; số phiếu để trống thì tự cấp PNK-<mã đơn>. Trả về số phiếu. */
+  stockIn(id: string, receiptNo: string, location: string, note: string): Promise<string>;
+  /** Đã thu đủ chứng từ để thanh toán (sau nhập kho). */
+  collectDocs(id: string, note: string): Promise<void>;
+  /** Phòng ban phụ trách từng giai đoạn (đã gộp mặc định). */
+  stageDepartments(): Promise<StageDepartments>;
+  /** Admin / Giám đốc: lưu phòng ban phụ trách từng giai đoạn. */
+  setStageDepartments(value: StageDepartments): Promise<void>;
+  /** Giai đoạn của đơn mà người đăng nhập làm được theo phòng ban được giao. */
+  stagePermissions(id: string): Promise<EnforcedStage[]>;
   complete(id: string, note: string): Promise<void>;
   cancel(id: string, note: string): Promise<void>;
 

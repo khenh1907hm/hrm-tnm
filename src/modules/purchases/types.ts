@@ -71,6 +71,15 @@ export type PurchaseOrder = {
   supplierAcceptNote: string;
   /** Số biên bản giao nhận có chữ ký hai bên (rủi ro chuyển sang bên mua khi có xác nhận bằng văn bản của cả hai bên). */
   receiptRecordNo: string;
+  /** Nhập kho (sau nhận hàng, kiểm đếm): ngày, số phiếu nhập kho, vị trí kho, ghi chú, người nhập. */
+  stockedAt: string | null;
+  stockReceiptNo: string;
+  stockLocation: string;
+  stockNote: string;
+  stockedByName: string;
+  /** Đã thu đủ chứng từ (hóa đơn GTGT, biên bản giao nhận, phiếu nhập kho…) để thanh toán. */
+  docsCollectedAt: string | null;
+  docsNote: string;
 };
 
 export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note" | "budgetCode" | "advanceRequired" | "advancePct" | "prepayRequired"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };

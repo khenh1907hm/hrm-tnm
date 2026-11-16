@@ -32,7 +32,7 @@ const order: PurchaseOrder = {
   totalEstimate: 40_000_000, totalActual: null, decisionNote: "", submittedAt: "2026-11-11T03:00:00Z", approvedAt: "2026-11-12T03:00:00Z", orderedAt: null, receivedAt: null, completedAt: null, createdAt: "2026-11-11T02:00:00Z",
   items: [{ id: "i1", name: "Tủ MSB 400A", spec: "IP54", unit: "bộ", quantity: 2, unitPrice: 20_000_000, receivedQty: 0, acceptedQty: 0, inspectionNote: "" }],
   budgetCode: "175", budgetA: 100_000_000, budgetB: 50_000_000, usesChain: true, advanceRequired: true, advancePct: 30, prepayRequired: false,
-  poNo: "PO-Pr25001-01-001", poIssuedAt: "2026-11-12T04:00:00Z", supplierAcceptedAt: null, supplierAcceptNote: "", receiptRecordNo: "",
+  poNo: "PO-Pr25001-01-001", poIssuedAt: "2026-11-12T04:00:00Z", supplierAcceptedAt: null, supplierAcceptNote: "", receiptRecordNo: "", stockedAt: null, stockReceiptNo: "", stockLocation: "", stockNote: "", stockedByName: "", docsCollectedAt: null, docsNote: "",
 };
 const payment = (id: string, amount: number, extra: Partial<PurchasePayment> = {}): PurchasePayment => ({
   id, orderId: "o1", kind: "final", amount, payee: "Công ty TNHH ABC", note: "", status: "requested", requestedAt: "2026-11-15T02:00:00Z", approvedAt: null, paidAt: null, paidMethod: "",

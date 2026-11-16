@@ -3,6 +3,7 @@ import { getSupabaseClient } from "../../lib/supabase/client";
 import { dispatchNotificationEmails } from "../../lib/approvalEmailDispatch";
 export { dispatchNotificationEmails };
 import type { ApprovalRole } from "../../modules/purchases/approval";
+import { mergeStageDepartments, type StageDepartments } from "../../modules/purchases/flow";
 
 /**
  * Gọi các hàm máy chủ cho góc phải (thông báo, hồ sơ), người duyệt theo dự án và Giám đốc duyệt ngay.
@@ -120,6 +121,13 @@ export async function approvalSettings(): Promise<ApprovalSettings> {
 }
 export async function saveApprovalSettings(departments: Record<string, string[]>, modes: ApprovalModes) {
   await rpc("approval_settings_save", { p_departments: departments, p_modes: modes });
+}
+/** Phòng ban phụ trách từng giai đoạn đơn hàng (đã gộp mặc định). */
+export async function stageDepartmentsSettings(): Promise<StageDepartments> {
+  return mergeStageDepartments((await rpc("purchase_stage_departments")) as Record<string, string> | null);
+}
+export async function saveStageDepartments(stages: StageDepartments) {
+  await rpc("approval_settings_save", { p_departments: null, p_modes: null, p_stages: stages });
 }
 
 /** Một phiếu trên bảng "Đơn phiếu cần duyệt của tôi". */

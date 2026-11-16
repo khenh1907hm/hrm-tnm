@@ -1,4 +1,5 @@
 import { dispatchNotificationEmails } from "../../lib/approvalEmailDispatch";
+import { mergeStageDepartments, type EnforcedStage } from "../../modules/purchases/flow";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseEvent, PurchaseItem, PurchaseOrder, PurchasePayment } from "../../modules/purchases/types";
@@ -29,6 +30,8 @@ const orderFromRow = (row: Row): PurchaseOrder => ({
   budgetCode: strOrNull(row.budget_code), budgetA: row.budget_a === null || row.budget_a === undefined ? null : num(row.budget_a),
   budgetB: row.budget_b === null || row.budget_b === undefined ? null : num(row.budget_b), usesChain: Boolean(row.uses_chain),
   poNo: str(row.po_no), poIssuedAt: strOrNull(row.po_issued_at), supplierAcceptedAt: strOrNull(row.supplier_accepted_at), supplierAcceptNote: str(row.supplier_accept_note), receiptRecordNo: str(row.receipt_record_no),
+  stockedAt: strOrNull(row.stocked_at), stockReceiptNo: str(row.stock_receipt_no), stockLocation: str(row.stock_location), stockNote: str(row.stock_note), stockedByName: str(row.stocked_by_name),
+  docsCollectedAt: strOrNull(row.docs_collected_at), docsNote: str(row.docs_note),
   advanceRequired: Boolean(row.advance_required), advancePct: row.advance_pct === null || row.advance_pct === undefined ? null : num(row.advance_pct), prepayRequired: Boolean(row.prepay_required),
 });
 const sheetFromRow = (row: Row): BudgetSheet => ({
@@ -149,6 +152,12 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     },
     async issuePo(id, supplier, contact) { await rpc("purchase_issue_po", { p_order: id, p_supplier: supplier, p_contact: contact }); },
     async supplierAccept(id, note) { await rpc("purchase_supplier_accept", { p_order: id, p_note: note }); },
+    async stockIn(id, receiptNo, location, note) { return str(await rpc("purchase_stock_in", { p_order: id, p_receipt_no: receiptNo, p_location: location, p_note: note })); },
+    async collectDocs(id, note) { await rpc("purchase_collect_docs", { p_order: id, p_note: note }); },
+    // Máy chủ chưa có hàm (chưa chạy migration) thì dùng mặc định / không có quyền thêm
+    async stageDepartments() { return mergeStageDepartments((await rpc("purchase_stage_departments", {}).catch(() => null)) as Record<string, string> | null); },
+    async setStageDepartments(value) { await rpc("approval_settings_save", { p_departments: null, p_modes: null, p_stages: value }); },
+    async stagePermissions(id) { return (((await rpc("purchase_stage_permissions", { p_order: id }).catch(() => [])) ?? []) as string[]).filter((key): key is EnforcedStage => key === "received" || key === "stocked" || key === "final"); },
     async complete(id, note) { await rpc("purchase_complete", { p_order: id, p_note: note }); },
     async cancel(id, note) { await rpc("purchase_cancel", { p_order: id, p_note: note }); },
 

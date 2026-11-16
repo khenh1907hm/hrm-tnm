@@ -19,15 +19,17 @@ import { DEPARTMENTS, emptyDepartments, ROLE_LABELS, type Department, type Depar
 import { projectPath } from "../routes";
 import "../projects/projects.css";
 import "./purchases.css";
+import { StageDepartmentsEditor } from "./StageDepartmentsEditor";
+import { mergeStageDepartments, type StageDepartments } from "../../../modules/purchases/flow";
 
 type Tab = "todo" | "mine" | "all";
-type Context = { roles: PurchaseRoles; userId: string; projects: Project[]; leadProjectIds: Set<string>; approvers: PurchaseApprover[] };
+type Context = { roles: PurchaseRoles; userId: string; projects: Project[]; leadProjectIds: Set<string>; approvers: PurchaseApprover[]; stageDepartments: StageDepartments };
 
 async function loadContext(store: PurchaseStore, projectStore: ProjectStore, actor: Actor): Promise<Context> {
-  const [roles, userId, projects, approvers, me] = await Promise.all([store.myRoles(), store.myUserId(), projectStore.listProjects(), store.approvers(), projectStore.myEmployeeId()]);
+  const [roles, userId, projects, approvers, me, stageDepartments] = await Promise.all([store.myRoles(), store.myUserId(), projectStore.listProjects(), store.approvers(), projectStore.myEmployeeId(), store.stageDepartments().catch(() => mergeStageDepartments(null))]);
   const leadProjectIds = new Set<string>();
   for (const project of projects) if (viewerFor(actor, me, project, await projectStore.listMembers(project.id)).isLead) leadProjectIds.add(project.id);
-  return { roles, userId, projects, leadProjectIds, approvers };
+  return { roles, userId, projects, leadProjectIds, approvers, stageDepartments };
 }
 
 /** Việc người này cần làm với đơn: sếp duyệt đơn / khoản chi, kế toán chi, người lập xử lý bước tiếp. */
@@ -55,7 +57,7 @@ export function PurchaseList(props: { orders: PurchaseOrder[]; projects: readonl
               {!props.hideProject && <td>{project ? `${project.code}` : PURCHASE_KIND_LABELS[order.kind]}{order.kind === "office" && order.department ? <><br /><small className="muted">{order.department}</small></> : null}</td>}
               <td>{order.requesterName}</td>
               <td className="pj-num">{formatVnd(order.totalActual ?? order.totalEstimate)}</td>
-              <td><MiniProgress status={order.status} />
+              <td><MiniProgress status={order.status} order={order} />
                 {pays.some((payment) => payment.status === "requested") && <><br /><small className="warn-text">Có khoản chi chờ duyệt</small></>}
                 {pays.some((payment) => payment.status === "approved") && <><br /><small className="warn-text">Có khoản chờ chi</small></>}</td>
             </tr>
@@ -84,6 +86,7 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
   const fetchAll = useCallback(() => Promise.all([loadContext(store, props.projectStore, props.actor), store.listOrders(), store.listPendingPayments()]), [store, props.projectStore, props.actor]);
   const apply = useCallback(([nextContext, nextOrders, nextPending]: Awaited<ReturnType<typeof fetchAll>>) => { setContext(nextContext); setOrders(nextOrders); setPending(nextPending); }, []);
   const reload = useCallback(async () => { try { apply(await fetchAll()); setRefreshKey((value) => value + 1); } catch (error) { setNotice(errorMessage(error), "error"); } }, [fetchAll, apply, setNotice]);
+  const loadStages = useCallback(() => store.stageDepartments(), [store]);
   useEffect(() => {
     if (!props.ready) return;
     let active = true;
@@ -109,14 +112,15 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
       <div className="page-head">
         <div><h1>Đặt hàng</h1><p>Mua hàng cho dự án và văn phòng. Người duyệt: <b>{approverNames}</b>.</p></div>
         <div className="button-row">
-          {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setDeptSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Bộ phận ký duyệt</button>}
+          {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setDeptSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Phòng ban &amp; giai đoạn</button>}
           {props.actor.role === "admin" && <button type="button" className="button" onClick={() => setSettings((value) => !value)}><Settings2 className="ico" size={16} aria-hidden="true" /> Người duyệt đơn văn phòng</button>}
           <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus className="ico" size={16} aria-hidden="true" /> Đơn hàng mới</button>
         </div>
       </div>
-      <section className="panel pj-section" aria-label="Quy trình đặt hàng"><FlowLegend /></section>
+      <section className="panel pj-section" aria-label="Quy trình đặt hàng"><FlowLegend departments={context.stageDepartments} /></section>
       {context.approvers.some((item) => !item.hasAccount) && <p className="list-notice is-warn">{context.approvers.filter((item) => !item.hasAccount).map((item) => item.name).join(", ")} chưa có tài khoản liên kết hồ sơ nên chưa duyệt được. Admin vào Tài khoản & phân quyền để cấp và liên kết.</p>}
       {deptSettings && <DepartmentSettings store={store} employees={props.employees} onSaved={() => { setDeptSettings(false); void reload(); }} setNotice={setNotice} />}
+      {deptSettings && <StageDepartmentsEditor canEdit load={loadStages} save={async (value) => { await store.setStageDepartments(value); void reload(); }} setNotice={setNotice} />}
       <MyApprovals store={store} refreshKey={refreshKey} onOpenOrder={(id) => props.onOpen(id)} projectHref={(projectId) => projectPath(projectId)} />
       {settings && <ApproverSettings store={store} approvers={context.approvers} employees={props.employees} onSaved={() => { setSettings(false); void reload(); }} setNotice={setNotice} />}
       <div className="pj-tabs" role="tablist" aria-label="Lọc đơn">

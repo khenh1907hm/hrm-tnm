@@ -1,6 +1,6 @@
 import { systemClock, todayVN, type Clock } from "../../lib/clock";
 import type { ProjectStore } from "../../modules/projects/store";
-import { actualTotal, estimateTotal, orderBlock, paymentIssue, poBlock } from "../../modules/purchases/flow";
+import { actualTotal, estimateTotal, mergeStageDepartments, orderBlock, paymentIssue, poBlock } from "../../modules/purchases/flow";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseApprover, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseStatus } from "../../modules/purchases/types";
 import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type DepartmentMembers } from "../../modules/purchases/approval";
@@ -47,8 +47,11 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   // Đơn cũ trong localStorage chưa có các trường của quy trình mới
   data.orders = data.orders.map((order) => ({ ...order, budgetCode: order.budgetCode ?? null, budgetA: order.budgetA ?? null, budgetB: order.budgetB ?? null, usesChain: order.usesChain ?? false,
     advanceRequired: order.advanceRequired ?? false, advancePct: order.advancePct ?? null, prepayRequired: order.prepayRequired ?? false,
-    poNo: order.poNo ?? "", poIssuedAt: order.poIssuedAt ?? null, supplierAcceptedAt: order.supplierAcceptedAt ?? null, supplierAcceptNote: order.supplierAcceptNote ?? "", receiptRecordNo: order.receiptRecordNo ?? "" }));
+    poNo: order.poNo ?? "", poIssuedAt: order.poIssuedAt ?? null, supplierAcceptedAt: order.supplierAcceptedAt ?? null, supplierAcceptNote: order.supplierAcceptNote ?? "", receiptRecordNo: order.receiptRecordNo ?? "",
+    stockedAt: order.stockedAt ?? (order.status === "completed" ? order.completedAt : null), stockReceiptNo: order.stockReceiptNo ?? "", stockLocation: order.stockLocation ?? "", stockNote: order.stockNote ?? "", stockedByName: order.stockedByName ?? "",
+    docsCollectedAt: order.docsCollectedAt ?? (order.status === "completed" ? order.completedAt : null), docsNote: order.docsNote ?? "" }));
   data.payments = data.payments.map((payment) => ({ ...payment, rfpNo: payment.rfpNo ?? "", invoiceNo: payment.invoiceNo ?? "", invoiceDate: payment.invoiceDate ?? null, vatAmount: payment.vatAmount ?? 0, usesChain: payment.usesChain ?? false }));
+  let stageDepartments = mergeStageDepartments(null);
   let rfpSeq = data.payments.filter((payment) => payment.rfpNo).length;
   const sheetOf = (id: string) => data.sheets.find((sheet) => sheet.id === id) ?? fail("BUDGET_NOT_FOUND");
   const projectSheets = (projectId: string) => data.sheets.filter((sheet) => sheet.projectId === projectId);
@@ -112,7 +115,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const saved: PurchaseOrder = existing
         ? { ...existing, ...draft, id: existing.id, items, totalEstimate: estimateTotal(items) }
         : {
-          budgetA: null, budgetB: null, usesChain: false, poNo: "", poIssuedAt: null, supplierAcceptedAt: null, supplierAcceptNote: "", receiptRecordNo: "",
+          budgetA: null, budgetB: null, usesChain: false, poNo: "", poIssuedAt: null, supplierAcceptedAt: null, supplierAcceptNote: "", receiptRecordNo: "", stockedAt: null, stockReceiptNo: "", stockLocation: "", stockNote: "", stockedByName: "", docsCollectedAt: null, docsNote: "",
           ...draft, id: newId(), code: `DH-${month}-${String(++data.seq).padStart(4, "0")}`, requesterId: me, requesterName: "Admin demo", expectedDelivery: null, status: "draft",
           totalEstimate: estimateTotal(items), totalActual: null, decisionNote: "", submittedAt: null, approvedAt: null, orderedAt: null, receivedAt: null, completedAt: null, createdAt: now(), items,
         };
@@ -202,6 +205,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
     },
     async receive(id, lines, note, record) {
       const order = orderOf(id); expect(order, "ordered", "received");
+      if (order.stockedAt) fail("PO_ALREADY_STOCKED");
       // PRC-35: đơn dự án cần biên bản giao nhận có chữ ký hai bên
       if (order.usesChain && (!record || !record.recordNo.trim() || !record.signedByBoth)) fail("PO_RECEIPT_RECORD_REQUIRED");
       if (record?.recordNo.trim()) order.receiptRecordNo = record.recordNo.trim();
@@ -214,8 +218,28 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       Object.assign(order, { status: "received", receivedAt: order.receivedAt ?? now(), totalActual: actualTotal(order.items) });
       log(id, "receive", [record?.recordNo.trim() ? `Biên bản giao nhận ${record.recordNo.trim()} (hai bên đã ký)` : "", note.trim()].filter(Boolean).join(" · ")); return done();
     },
+    async stockIn(id, receiptNo, location, note) {
+      const order = orderOf(id); expect(order, "received");
+      if (order.stockedAt) fail("PO_BAD_STATUS");
+      const no = receiptNo.trim() || `PNK-${order.code}`;
+      Object.assign(order, { stockedAt: now(), stockReceiptNo: no, stockLocation: location.trim(), stockNote: note.trim(), stockedByName: "Admin demo" });
+      log(id, "stock_in", [no, location.trim(), note.trim()].filter(Boolean).join(" · ")); persist(); return no;
+    },
+    async collectDocs(id, note) {
+      const order = orderOf(id); expect(order, "received");
+      if (!order.stockedAt) fail("PO_NOT_STOCKED");
+      if (order.docsCollectedAt) fail("PO_BAD_STATUS");
+      Object.assign(order, { docsCollectedAt: now(), docsNote: note.trim() });
+      log(id, "collect_docs", note); return done();
+    },
+    async stageDepartments() { return { ...stageDepartments }; },
+    async setStageDepartments(value) { stageDepartments = mergeStageDepartments(value); },
+    // Người dùng demo là Admin: làm được mọi giai đoạn
+    async stagePermissions() { return ["received", "stocked", "final"]; },
     async complete(id, note) {
       const order = orderOf(id); expect(order, "received");
+      if (!order.stockedAt) fail("PO_NOT_STOCKED");
+      if (!order.docsCollectedAt) fail("PO_DOCS_NOT_COLLECTED");
       if (data.payments.some((payment) => payment.orderId === id && (payment.status === "requested" || payment.status === "approved"))) fail("PO_PAYMENTS_PENDING");
       if (order.kind === "project" && order.projectId && (order.totalActual ?? 0) > 0 && options.projects) {
         await options.projects.saveExpense({ projectId: order.projectId, spentOn: todayVN(clock), category: "material", description: `Đơn hàng ${order.code}: ${order.title}`.slice(0, 500), supplier: order.supplier, amount: order.totalActual!, status: "approved" });
