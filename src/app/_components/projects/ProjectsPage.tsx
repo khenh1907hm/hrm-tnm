@@ -7,7 +7,7 @@ import type { Actor } from "../../../modules/auth/permissions";
 import { budgetSummary, formatPct } from "../../../modules/projects/budget";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
-import { DEFAULT_SITE_SETTINGS, PROJECT_STATUS_LABELS, type Project, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
+import { DEFAULT_SITE_SETTINGS, MEMBER_ROLE_LABELS, PROJECT_STATUS_LABELS, type Project, type ProjectMember, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
 import { getSupabaseClient } from "../../../lib/supabase/client";
 import { CONTRACT_STATE_UI, directorPeople, projectContractStates, setProjectApprovers, type ContractState } from "../accountApi";
 import { ApproverFrames, type ApproverDraft, type Participant } from "./ProjectApproversPanel";
@@ -152,6 +152,19 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   const [memberPicker, setMemberPicker] = useState(0);
   const [approvers, setApprovers] = useState<ApproverDraft[]>([]);
   const [directors, setDirectors] = useState<{ employeeId: string; name: string }[]>([]);
+  const [error, setError] = useState("");
+  // Khi sửa: thành viên đang có trong dự án và những người đánh dấu bỏ (áp dụng khi bấm Lưu)
+  const [existing, setExisting] = useState<ProjectMember[] | null>(props.initial ? null : []);
+  const [dropped, setDropped] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!props.initial) return;
+    let active = true;
+    void props.store.listMembers(props.initial.id).then((list) => { if (active) setExisting(list); }, (caught: unknown) => { if (active) { setExisting([]); setError(errorMessage(caught)); } });
+    return () => { active = false; };
+  }, [props.initial, props.store]);
+  const isCurrent = (member: ProjectMember) => member.leftOn === null || member.leftOn >= today;
+  const kept = (existing ?? []).filter((member) => !dropped.has(member.id));
+  const hasReports = (member: ProjectMember) => kept.some((other) => other.parentId === member.id && isCurrent(other));
   useEffect(() => {
     if (props.initial || !getSupabaseClient()) return;
     let active = true;
@@ -161,7 +174,6 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   // Người kéo vào khung duyệt: PM và các thành viên tham gia
   const pmOption: Participant | null = draft.pmEmployeeId && pmName ? { id: draft.pmEmployeeId, code: pmName.split(" · ")[0] ?? "", name: pmName.split(" · ")[1] ?? pmName } : null;
   const participants = [...(pmOption ? [pmOption] : []), ...members.filter((member) => member.id !== pmOption?.id)];
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
@@ -188,9 +200,52 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
         const keep = new Set(participants.map((person) => person.id));
         const chosen = approvers.filter((item) => keep.has(item.employeeId));
         if (chosen.length && getSupabaseClient()) await setProjectApprovers(saved.id, chosen.map(({ role, employeeId }) => ({ role, employeeId })), {});
+      } else if (existing) {
+        await applyMemberChanges(saved);
       }
       props.onSaved(saved);
     } catch (caught) { setError(errorMessage(caught)); } finally { setBusy(false); }
+  };
+
+  /**
+   * Sửa dự án: bỏ người đã đánh dấu (người đã có chấm công thì ghi ngày rời = hôm nay thay vì xóa, giữ lịch sử),
+   * thêm người mới với vai trò Thành viên, đứng dưới PM. Xong bước nào cập nhật danh sách bước đó, nên lỗi giữa chừng rồi bấm Lưu lại không bị trùng.
+   */
+  const applyMemberChanges = async (saved: Project) => {
+    let current = [...(existing ?? [])];
+    const sync = () => setExisting([...current]);
+    try {
+      for (const target of current.filter((member) => dropped.has(member.id))) {
+        const leaf = current.find((member) => member.id === target.id)!;
+        // Người đứng dưới (đã rời, hoặc cũng đang bị bỏ) chuyển lên quản lý của người này để xóa được
+        for (const child of current.filter((member) => member.parentId === leaf.id)) {
+          const moved = await props.store.saveMember({ ...child, parentId: leaf.parentId });
+          current = current.map((member) => member.id === moved.id ? moved : member);
+        }
+        try {
+          await props.store.removeMember(leaf.id);
+          current = current.filter((member) => member.id !== leaf.id);
+        } catch (caught) {
+          if (!(caught instanceof Error) || !caught.message.includes("MEMBER_HAS_TIMESHEETS")) throw caught;
+          const left = await props.store.saveMember({ ...leaf, leftOn: leaf.leftOn !== null && leaf.leftOn < today ? leaf.leftOn : today });
+          current = current.map((member) => member.id === left.id ? left : member);
+        }
+        setDropped((set) => { const next = new Set(set); next.delete(leaf.id); return next; });
+        sync();
+      }
+      const pm = current.find((member) => member.role === "pm" && isCurrent(member)) ?? null;
+      const joinedOn = today > saved.plannedStart ? today : saved.plannedStart;
+      for (const person of members) {
+        const before = current.find((member) => member.employeeId === person.id);
+        // Người từng rời dự án được thêm lại thì chỉ xóa ngày rời
+        const next = before
+          ? await props.store.saveMember({ ...before, leftOn: null })
+          : await props.store.saveMember({ projectId: saved.id, employeeId: person.id, displayName: person.name, employeeCode: person.code, role: "member", parentId: pm?.id ?? null, team: "", subcontractId: null, joinedOn, leftOn: null });
+        current = before ? current.map((member) => member.id === next.id ? next : member) : [...current, next];
+        setMembers((list) => list.filter((item) => item.id !== person.id));
+        sync();
+      }
+    } catch (caught) { sync(); throw caught; }
   };
 
   return (
@@ -219,16 +274,35 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           </fieldset>
           <SiteFields draft={draft} set={set} />
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú</span><input value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
-          {!props.initial && <fieldset className="pj-create-block">
+          <fieldset className="pj-create-block">
             <legend>Thành viên tham gia dự án</legend>
-            <p className="muted"><small>Ai tham gia dự án (kỹ thuật, vật tư, kế toán…) thì thêm vào đây: họ xem được dự án và kéo được vào khung duyệt bên dưới. Vai trò chấm công (Chỉ huy trưởng, Tổ trưởng…) xếp sau ở mục Sơ đồ & thành viên nếu cần.</small></p>
-            <EmployeePicker key={memberPicker} label="Thêm người" source={props.employees} exclude={new Set([...members.map((member) => member.id), ...(draft.pmEmployeeId ? [draft.pmEmployeeId] : [])])}
-              onPick={(option) => { if (!option) return; setMembers((list) => [...list, { id: option.id, code: option.code, name: option.name }]); setMemberPicker((value) => value + 1); }} />
-            {members.length > 0 && <ul className="pj-create-list">{members.map((member) => (
-              <li key={member.id}><span className="pill">Thành viên</span> {member.code} · {member.name}
-                <button type="button" className="link-button" onClick={() => { setMembers((list) => list.filter((other) => other.id !== member.id)); setApprovers((list) => list.filter((item) => item.employeeId !== member.id)); }}>Bỏ</button></li>
-            ))}</ul>}
-          </fieldset>}
+            <p className="muted"><small>{props.initial
+              ? "Thêm hoặc bỏ người tham gia, thay đổi áp dụng khi bấm Lưu dự án. Người mới vào với vai trò Thành viên, đứng dưới PM; người đã có chấm công thì không xóa mà ghi ngày rời dự án là hôm nay. Đổi vai trò, tổ, quản lý trực tiếp ở mục Sơ đồ & thành viên."
+              : "Ai tham gia dự án (kỹ thuật, vật tư, kế toán…) thì thêm vào đây: họ xem được dự án và kéo được vào khung duyệt bên dưới. Vai trò chấm công (Chỉ huy trưởng, Tổ trưởng…) xếp sau ở mục Sơ đồ & thành viên nếu cần."}</small></p>
+            {existing === null ? <p className="muted">Đang tải thành viên…</p> : <>
+              <EmployeePicker key={memberPicker} label="Thêm người" source={props.employees}
+                exclude={new Set([...members.map((member) => member.id), ...(draft.pmEmployeeId && !props.initial ? [draft.pmEmployeeId] : []), ...(existing ?? []).filter((member) => dropped.has(member.id) || (isCurrent(member) && member.leftOn === null)).map((member) => member.employeeId)])}
+                onPick={(option) => { if (!option) return; setMembers((list) => [...list, { id: option.id, code: option.code, name: option.name }]); setMemberPicker((value) => value + 1); }} />
+              {(existing.some(isCurrent) || members.length > 0) && <ul className="pj-create-list">
+                {existing.filter(isCurrent).map((member) => {
+                  const out = dropped.has(member.id);
+                  const blocked = !out && hasReports(member);
+                  return (
+                    <li key={member.id} style={out ? { opacity: 0.55 } : undefined}><span className="pill">{MEMBER_ROLE_LABELS[member.role]}</span> {out ? <s>{member.employeeCode} · {member.displayName}</s> : <>{member.employeeCode} · {member.displayName}</>}
+                      {out ? <><small className="muted">sẽ bỏ khi lưu</small><button type="button" className="link-button" onClick={() => setDropped((set) => { const next = new Set(set); next.delete(member.id); return next; })}>Giữ lại</button></>
+                        : member.leftOn !== null ? <small className="muted">rời dự án {formatDateVn(member.leftOn)}</small>
+                        : blocked ? <small className="muted" title="Chuyển những người đứng dưới sang quản lý khác ở mục Sơ đồ & thành viên trước">đang quản lý người khác</small>
+                        : <button type="button" className="link-button" onClick={() => setDropped((set) => new Set(set).add(member.id))}>Bỏ</button>}
+                    </li>
+                  );
+                })}
+                {members.map((member) => (
+                  <li key={member.id}><span className="pill">{props.initial ? "Mới" : "Thành viên"}</span> {member.code} · {member.name}
+                    <button type="button" className="link-button" onClick={() => { setMembers((list) => list.filter((other) => other.id !== member.id)); setApprovers((list) => list.filter((item) => item.employeeId !== member.id)); }}>Bỏ</button></li>
+                ))}
+              </ul>}
+            </>}
+          </fieldset>
           {!props.initial && getSupabaseClient() && <fieldset className="pj-create-block">
             <legend>Người duyệt của dự án</legend>
             <p className="muted"><small>Kéo người tham gia vào khung, ký từ trên xuống. Mỗi khung tối đa 2 người ngang quyền (một người duyệt là đủ). Khung Lãnh đạo dưới cùng là quyền cao nhất, Giám đốc luôn có sẵn. Khung để trống thì dùng khối chung của công ty.</small></p>
