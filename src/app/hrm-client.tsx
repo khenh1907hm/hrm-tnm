@@ -1,7 +1,6 @@
 "use client";
 
 import { TopBarActions } from "./_components/TopBarActions";
-import { ApprovalBoardPage } from "./_components/ApprovalBoardPage";
 import { ApprovalSettingsPage } from "./_components/ApprovalSettingsPage";
 import { BugReportsPage } from "./_components/BugReports";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -27,6 +26,8 @@ import { ExportPdfDialog, prepareExportDialog, type ExportDialogInit } from "./_
 import { FilePreviewModal, type PreviewFile } from "./_components/FilePreviewModal";
 import { SettingsPanel } from "./_components/SettingsPanel";
 import { SideNav } from "./_components/SideNav";
+import { SectionTabs } from "./_components/SectionTabs";
+import { MyWorkPage } from "./_components/MyWorkPage";
 import { SignaturesView } from "./_components/SignaturesView";
 import { emptyEmployee, issueText, type App, type ExpiringCertificateRow, type PageView, type SignatureRow } from "./_components/shared";
 import { useReportTemplates } from "./_components/useReportTemplates";
@@ -460,6 +461,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
         {backend.mode === "live" && <TopBarActions email={backend.email} onSignOut={() => void backend.signOut()} onNotice={(message) => setNotice(message, "success")} />}
+        {!detail && <SectionTabs actor={actor} view={view} onNavigate={(key) => navigate(key)} />}
         {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} employeeProjects={employeeProjects} onOpenProject={openProject} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void loadSelectedEmployees().then(setBatchEmployees)} onExportCertificates={() => void loadSelectedEmployees().then(setCertFolderEmployees)} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
@@ -509,7 +511,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
         {view === "purchases" && <PurchasesPage store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
         {view === "bugReports" && actor.role === "admin" && <BugReportsPage setNotice={setNotice} />}
-        {view === "approvals" && <ApprovalBoardPage live={backend.mode === "live"} setNotice={setNotice} />}
+        {view === "approvals" && <MyWorkPage live={backend.mode === "live"} actor={actor} store={purchaseStore} certCount={certRows.length} onNavigate={(key) => navigate(key)} onOpenOrder={(id) => openPurchase(id)} setNotice={setNotice} />}
         {view === "approvalSettings" && actor.role === "admin" && <ApprovalSettingsPage live={backend.mode === "live"} employees={employeeSource} setNotice={setNotice} />}
         {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}
         {view === "accounts" && actor.role === "admin" && <AccountsView employees={employeeSource} actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}

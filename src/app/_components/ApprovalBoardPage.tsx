@@ -72,8 +72,8 @@ export function ApprovalBoardPage(props: { live: boolean; setNotice: Notify }) {
     <section className="pj-page ab-page">
       <div className="page-head">
         <div>
-          <h1><ClipboardSignature className="ico" size={22} aria-hidden="true" /> Đơn phiếu cần duyệt của tôi</h1>
-          <p>Ngân sách, đơn đặt hàng, đề nghị thanh toán, yêu cầu vật tư, báo cáo giải thích, xác nhận dự án bạn liên quan. Kéo thẻ sang cột “Đã duyệt” để ký.</p>
+          <h2 className="ab-title"><ClipboardSignature className="ico" size={19} aria-hidden="true" /> Phiếu cần duyệt</h2>
+          <p>Ngân sách, đơn đặt hàng, yêu cầu thanh toán (RFP), yêu cầu vật tư, báo cáo giải thích, Confirm Contract bạn liên quan. Kéo thẻ sang cột “Đã duyệt” để ký.</p>
         </div>
         <button type="button" className="button" onClick={() => { setCards(null); void load(); }}><RefreshCw className="ico" size={16} aria-hidden="true" /> Tải lại</button>
       </div>

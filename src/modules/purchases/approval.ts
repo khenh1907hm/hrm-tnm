@@ -14,7 +14,7 @@ export const DOC_TYPE_LABELS: Record<ApprovalDocType, string> = {
   budget: "Ngân sách (P-COST-03)", purchase: "Đơn đặt hàng (P-CC-07)", payment: "Đề nghị tạm ứng / thanh toán (P-CF-03)",
   explanatory: "Báo cáo giải thích (P-COST-05)", material: "Yêu cầu vật tư (P-COST-08)", contract: "Confirm Contract (P-COST-01)",
 };
-/** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 5 người (Lãnh đạo duyệt; P. Vật tư phát hành PO sau đó). */
+/** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 5 người (Lãnh đạo duyệt; người lập phát hành PO sau đó). */
 export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {
   budget: ["pic", "technical", "leader"],
   purchase: ["pic", "technical", "material", "accounting", "leader"],

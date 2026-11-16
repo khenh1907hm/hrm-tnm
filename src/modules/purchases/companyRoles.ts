@@ -9,7 +9,7 @@ export const COMPANY_ROLES: readonly { key: CompanyRole; label: string; hint: st
   { key: "accounting", label: "Kế toán", hint: "Chi tiền khoản đã duyệt; mặc định có trong mọi dự án" },
   { key: "intake", label: "Người duyệt đầu vào", hint: "Thuộc kế toán: kiểm soát chất lượng đầu vào (đơn nháp, RFP, hàng về); mặc định có trong mọi dự án" },
   { key: "sales", label: "Kinh doanh", hint: "Khách hàng, báo giá, Confirm Contract" },
-  { key: "warehouse", label: "Kho (kiêm Vật tư)", hint: "Phát hành PO, theo dõi đơn, nhận hàng, nhập kho" },
+  { key: "warehouse", label: "Kho (kiêm Vật tư)", hint: "Nhận hàng, kiểm đếm, nhập kho (PO, theo dõi đơn do người lập nắm)" },
 ];
 export const COMPANY_ROLE_LABELS = Object.fromEntries(COMPANY_ROLES.map((role) => [role.key, role.label])) as Record<CompanyRole, string>;
 /** Mọi dự án luôn có các chức danh này (không cần thêm vào dự án). */

@@ -47,8 +47,9 @@ export const ASSIGNABLE_STAGES = FLOW_STEPS.map((step) => step.key).filter((key)
 export type StageDepartment = "" | "pic" | Department;
 export type StageDepartments = Record<AssignableStage, StageDepartment>;
 export const STAGE_DEPARTMENT_DEFAULTS: StageDepartments = {
-  draft: "pic", submitted: "pic", approved: "leader", po: "material", advance: "material", advance_pay: "accounting", ordered: "material",
-  prepayment: "material", prepayment_pay: "accounting", received: "warehouse", stocked: "warehouse", final: "material", final_pay: "accounting",
+  // Người lập / phụ trách nắm đơn từ nháp tới PO, theo dõi, chứng từ; chỉ nhận hàng, nhập kho giao cho Kho
+  draft: "pic", submitted: "pic", approved: "leader", po: "pic", advance: "pic", advance_pay: "accounting", ordered: "pic",
+  prepayment: "pic", prepayment_pay: "accounting", received: "warehouse", stocked: "warehouse", final: "pic", final_pay: "accounting",
 };
 export const STAGE_DEPARTMENT_OPTIONS: readonly StageDepartment[] = ["pic", "technical", "material", "warehouse", "accounting", "leader", ""];
 export const stageDepartmentLabel = (value: StageDepartment) => value === "" ? "Không giao" : value === "pic" ? "Người lập / Phụ trách" : ROLE_LABELS[value];
@@ -153,9 +154,9 @@ export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterI
   if (me.isApprover && status === "submitted" && !order.usesChain) { actions.add("approve"); actions.add("reject"); }
   // PRC-31: NCC cần tạm ứng thì phải chi xong tạm ứng mới sang Đặt hàng, theo dõi
   if (handler && status === "approved" && !orderBlock(order, payments)) actions.add("order");
-  // PRC-34: P. Vật tư phát hành PO, rồi ghi nhận NCC ký nhận
-  if (order.usesChain && status === "approved" && !order.poIssuedAt && (me.isPoIssuer || me.isAdmin)) actions.add("issuePo");
-  if (order.usesChain && status === "approved" && order.poIssuedAt && !order.supplierAcceptedAt && (handler || me.isPoIssuer)) actions.add("supplierAccept");
+  // PRC-34: người lập / phụ trách dự án phát hành PO, rồi ghi nhận NCC ký nhận (Kho / Vật tư làm thay được)
+  if (order.usesChain && status === "approved" && !order.poIssuedAt && (handler || me.isProjectLead || me.isPoIssuer)) actions.add("issuePo");
+  if (order.usesChain && status === "approved" && order.poIssuedAt && !order.supplierAcceptedAt && (handler || me.isProjectLead || me.isPoIssuer)) actions.add("supplierAccept");
   if (status === "approved" || status === "ordered" || status === "received") {
     actions.add("track");
     if (handler || me.isPayer) {
@@ -249,7 +250,7 @@ export function nextHint(order: Pick<PurchaseOrder, "status" | "requesterId"> & 
     case "rejected": return mine ? "Sếp đã trả về: sửa theo góp ý rồi lập lại." : "Sếp đã trả về cho người lập sửa.";
     case "submitted": return "Đang chờ sếp duyệt.";
     case "approved": return order.usesChain && !order.poIssuedAt
-      ? "Đã duyệt. P. Vật tư phát hành PO chính thức (P-CC-08) gửi nhà cung cấp."
+      ? "Đã duyệt. Người lập phát hành PO chính thức (P-CC-08) gửi nhà cung cấp."
       : order.usesChain && !order.supplierAcceptedAt
         ? "PO đã phát hành. Khi NCC ký bản sao PO gửi lại, bấm NCC đã ký xác nhận PO."
         : "advanceRequired" in order && order.advanceRequired

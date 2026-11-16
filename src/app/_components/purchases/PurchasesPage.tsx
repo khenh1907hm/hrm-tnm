@@ -165,7 +165,7 @@ function DepartmentSettings(props: { store: PurchaseStore; employees: EmployeeSo
   return (
     <section className="panel pj-section" aria-labelledby="po-dept-title">
       <h2 id="po-dept-title"><Settings2 className="ico" size={18} aria-hidden="true" /> Bộ phận ký duyệt</h2>
-      <p className="muted">Đơn hàng dự án ký lần lượt: Phụ trách (PM của dự án) → P. Kỹ thuật → P. Vật tư → Kế toán → Lãnh đạo; sau đó P. Vật tư phát hành PO. Yêu cầu vật tư: Kho → P. Vật tư → P. Kỹ thuật → Lãnh đạo. Ngân sách: Phụ trách → P. Kỹ thuật → Lãnh đạo. Bộ phận chưa có ai thì bước đó được bỏ qua. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
+      <p className="muted">Đơn hàng dự án ký lần lượt: Phụ trách (PM của dự án) → P. Kỹ thuật → P. Vật tư → Kế toán → Lãnh đạo; sau đó người lập phát hành PO, theo dõi đơn; Kho nhận hàng, nhập kho. Yêu cầu vật tư: Kho → P. Vật tư → P. Kỹ thuật → Lãnh đạo. Ngân sách: Phụ trách → P. Kỹ thuật → Lãnh đạo. Bộ phận chưa có ai thì bước đó được bỏ qua. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
       <div className="dept-grid">
         {DEPARTMENTS.map((department) => (
           <div key={department} className="dept-card">

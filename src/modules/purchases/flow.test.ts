@@ -69,6 +69,14 @@ describe("purchase flow", () => {
     expect(allowedActions({ ...order("ordered") }, { ...requester, userId: "kho", stages: new Set(["received"] as const) }).has("receive")).toBe(true);
   });
 
+  it("PUR_08 PO do người lập nắm: người lập phát hành PO và ghi nhận NCC ký; người khác (không phụ trách) thì không", () => {
+    const approved = { ...order("approved"), usesChain: true, poIssuedAt: null, supplierAcceptedAt: null };
+    expect(allowedActions(approved, requester).has("issuePo")).toBe(true);
+    expect(allowedActions(approved, { ...requester, userId: "other" }).has("issuePo")).toBe(false);
+    expect(allowedActions(approved, { ...requester, userId: "pm", isProjectLead: true }).has("issuePo")).toBe(true);
+    expect(allowedActions({ ...approved, poIssuedAt: "2026-11-20T03:00:00Z" }, requester).has("supplierAccept")).toBe(true);
+  });
+
   it("PUR_07 giai đoạn: nhận hàng xong thì Nhập kho là bước hiện tại, rồi tới Thu thập chứng từ; hủy thì Thất bại", async () => {
     const { stepStates, mergeStageDepartments, STAGE_DEPARTMENT_DEFAULTS } = await import("./flow");
     const got = stepStates({ status: "received" }, []);

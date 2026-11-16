@@ -3,7 +3,7 @@ import { EMPLOYEE_VIEWS, parseRoute, projectPath, routePath, VIEW_PATHS } from "
 
 describe("routes", () => {
   it("trang gốc mở danh sách nhân sự", () => {
-    expect(parseRoute("/")).toEqual({ view: "employees", employeeId: null });
+    expect(parseRoute("/")).toEqual({ view: "approvals", employeeId: null });
   });
 
   it("mỗi màn hình có URL riêng và đọc lại đúng", () => {

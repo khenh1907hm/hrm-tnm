@@ -620,3 +620,22 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .employee-projects .project-pill:hover{filter:brightness(.95);text-decoration:underline}
 .employee-projects .project-pill-name{font-weight:500}
 @media (max-width:900px){.employee-projects .project-pill-name{display:none}}
+
+/* Tab của phần nhiều màn hình (Nhân sự, Tài liệu, Cài đặt) */
+.section-tabs{display:flex;flex-wrap:wrap;gap:2px;border-bottom:1px solid var(--line);margin:0 0 18px}
+.section-tabs a{padding:9px 14px;color:var(--muted);text-decoration:none;font-weight:500;border-bottom:2px solid transparent;margin-bottom:-1px;font-size:14px}
+.section-tabs a:hover{color:var(--ink)}
+.section-tabs a.is-active{color:var(--brand);border-bottom-color:var(--brand);font-weight:600}
+@media (max-width:640px){.section-tabs{flex-wrap:nowrap;overflow-x:auto}.section-tabs a{white-space:nowrap;padding:8px 10px}}
+/* Việc của tôi */
+.mywork-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:22px}
+.mywork-tile{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:14px 16px;cursor:pointer;color:var(--ink)}
+.mywork-tile:hover{border-color:var(--brand)}
+.mywork-tile b{font-size:24px;line-height:1}
+.mywork-label{display:grid;font-weight:600;font-size:14px}
+.mywork-label small{font-weight:400;color:var(--muted);font-size:12px}
+.mywork-tile.tone-bad svg,.mywork-tile.tone-bad b{color:var(--bad)}
+.mywork-tile.tone-warn svg,.mywork-tile.tone-warn b{color:var(--warn)}
+.mywork-tile.tone-info svg,.mywork-tile.tone-info b{color:var(--info)}
+.mywork-tile.is-zero b{color:var(--muted)}
+.ab-title{font-size:18px;margin:0}

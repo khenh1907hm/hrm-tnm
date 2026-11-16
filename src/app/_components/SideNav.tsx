@@ -1,22 +1,32 @@
 "use client";
-import { Bug, BadgeCheck, BellRing, ClipboardCheck, ClipboardSignature, GitBranch, Coins, FileSpreadsheet, FolderKanban, History, PanelLeftClose, PanelLeftOpen, PenLine, Settings, ShieldCheck, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon } from "lucide-react";
+import { BellRing, ClipboardCheck, FileSpreadsheet, FolderKanban, Inbox, PanelLeftClose, PanelLeftOpen, Settings, ShoppingCart, Users, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
 import { ChangePasswordModal } from "./ChangePasswordModal";
-import { canOpenView, routePath } from "./routes";
+import { NAV_SECTIONS, openViews, sectionOf, type NavSection, type NavSectionKey } from "./navSections";
+import { routePath } from "./routes";
 import type { PageView } from "./shared";
 
-type NavItem = readonly [PageView, string, LucideIcon];
-const NAV_GROUPS: readonly { label: string; items: readonly NavItem[] }[] = [
-  { label: "Nhân sự", items: [["employees", "Nhân sự", Users], ["alerts", "Chứng chỉ hết hạn", BellRing], ["signatures", "Thư viện chữ ký", PenLine]] },
-  { label: "Dự án", items: [["projects", "Dự án", FolderKanban], ["timesheet", "Chấm công", ClipboardCheck], ["laborRates", "Đơn giá & lịch làm việc", Coins]] },
-  { label: "Mua hàng", items: [["purchases", "Đặt hàng", ShoppingCart], ["approvals", "Đơn phiếu cần duyệt", ClipboardSignature]] },
-  { label: "Tài liệu", items: [["reports", "FORM Báo cáo (Excel)", FileSpreadsheet], ["skills", "Kho Skill AI", Sparkles], ["tools", "Công cụ", Wrench]] },
-  { label: "Hệ thống", items: [["certTypes", "Loại chứng chỉ", BadgeCheck], ["settings", "Cài đặt email", Settings], ["accounts", "Tài khoản & phân quyền", ShieldCheck], ["approvalSettings", "Quy trình duyệt", GitBranch], ["bugReports", "Báo lỗi", Bug], ["audit", "Nhật ký thay đổi", History]] },
-];
+/** Biểu tượng từng phần của thanh bên (xem navSections.ts). */
+const SECTION_ICONS: Record<NavSectionKey, LucideIcon> = {
+  inbox: Inbox, people: Users, certs: BellRing, projects: FolderKanban, timesheet: ClipboardCheck, purchases: ShoppingCart, docs: FileSpreadsheet, settings: Settings,
+};
 const COLLAPSED_KEY = "tnm.sideNav.collapsed";
 const ROLE_LABELS: Record<Actor["role"], string> = { admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên" };
+
+/** Các phần người này mở được, gom theo nhóm (giữ thứ tự); bấm phần là mở màn hình đầu tiên họ được vào. */
+function groupsOf(actor: Actor): [string, { section: NavSection; target: PageView }[]][] {
+  const groups: [string, { section: NavSection; target: PageView }[]][] = [];
+  for (const section of NAV_SECTIONS) {
+    const target = openViews(actor, section)[0];
+    if (!target) continue;
+    const last = groups[groups.length - 1];
+    if (last && last[0] === section.group) last[1].push({ section, target });
+    else groups.push([section.group, [{ section, target }]]);
+  }
+  return groups;
+}
 
 /** Hai chữ đầu của email, làm hình đại diện. */
 const initialsOf = (email: string | null) => (email ?? "?").replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
@@ -43,25 +53,27 @@ export function SideNav(props: { mode: "demo" | "live"; email: string | null; on
         </button>
       </div>
       <nav aria-label="Chức năng">
-        {NAV_GROUPS.map((group) => {
-          const items = group.items.filter(([key]) => canOpenView(actor, key));
-          if (!items.length) return null;
-          return <div className="nav-group" key={group.label}>
-            <span className="nav-group-label">{group.label}</span>
-            {items.map(([key, label, Icon]) => (
-              <a className={view === key ? "nav-item active" : "nav-item"} key={key} href={routePath(key)} aria-current={view === key ? "page" : undefined} title={collapsed ? label : undefined} onClick={(event) => {
-                // Giữ Ctrl/Cmd/Shift hoặc chuột giữa thì để trình duyệt mở tab mới
-                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-                event.preventDefault();
-                onNavigate(key);
-              }}>
-                <Icon size={18} aria-hidden="true" />
-                <span className="nav-label">{label}</span>
-                {key === "alerts" && alertCount > 0 && <span className="badge" aria-label={`${alertCount} chứng chỉ cần chú ý`}>{alertCount}</span>}
-              </a>
-            ))}
-          </div>;
-        })}
+        {groupsOf(actor).map(([group, sections]) => (
+          <div className="nav-group" key={group || "top"}>
+            {group && <span className="nav-group-label">{group}</span>}
+            {sections.map(({ section, target }) => {
+              const Icon = SECTION_ICONS[section.key];
+              const active = sectionOf(view)?.key === section.key;
+              return (
+                <a className={active ? "nav-item active" : "nav-item"} key={section.key} href={routePath(target)} aria-current={active ? "page" : undefined} title={collapsed ? section.label : undefined} onClick={(event) => {
+                  // Giữ Ctrl/Cmd/Shift hoặc chuột giữa thì để trình duyệt mở tab mới
+                  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  event.preventDefault();
+                  onNavigate(target);
+                }}>
+                  <Icon size={18} aria-hidden="true" />
+                  <span className="nav-label">{section.label}</span>
+                  {section.key === "certs" && alertCount > 0 && <span className="badge" aria-label={`${alertCount} chứng chỉ cần chú ý`}>{alertCount}</span>}
+                </a>
+              );
+            })}
+          </div>
+        ))}
       </nav>
       {props.mode === "demo" ? (
         <div className="side-foot">

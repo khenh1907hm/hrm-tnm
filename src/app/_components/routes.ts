@@ -55,9 +55,9 @@ export function canOpenView(actor: Actor, view: PageView): boolean {
   return needed === "admin" ? actor.role === "admin" : hasAccess(actor, needed);
 }
 
-/** Trang mở đầu của người này: màn hình đầu tiên họ được vào (Kho Skill AI luôn mở được). */
+/** Trang mở đầu của người này: Việc của tôi (ai cũng mở được). */
 export function firstOpenView(actor: Actor): PageView {
-  return (["employees", "signatures", "tools"] as const).find((view) => canOpenView(actor, view)) ?? "skills";
+  return (["approvals", "employees", "signatures", "tools"] as const).find((view) => canOpenView(actor, view)) ?? "skills";
 }
 
 /** Tiêu đề tab trình duyệt theo màn hình. */
@@ -76,7 +76,7 @@ export const VIEW_TITLES: Record<PageView, string> = {
   timesheet: "Chấm công",
   laborRates: "Đơn giá & lịch làm việc",
   purchases: "Đặt hàng",
-  approvals: "Đơn phiếu cần duyệt của tôi",
+  approvals: "Việc của tôi",
   approvalSettings: "Quy trình duyệt",
   bugReports: "Báo lỗi",
 };
@@ -89,7 +89,7 @@ export function parseRoute(pathname: string): AppRoute | null {
   let parts: string[];
   try { parts = pathname.split("/").filter(Boolean).map((part) => decodeURIComponent(part)); }
   catch { return null; } // URL hỏng kiểu "/nhan-su/%E0"
-  if (!parts.length) return { view: "employees", employeeId: null };
+  if (!parts.length) return { view: "approvals", employeeId: null };
   const view = (Object.keys(VIEW_PATHS) as PageView[]).find((key) => VIEW_PATHS[key] === `/${parts[0]}`);
   if (!view) return null;
   if (parts.length === 1) return { view, employeeId: null };
