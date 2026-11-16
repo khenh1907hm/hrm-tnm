@@ -19,8 +19,8 @@ type Data = {
 const empty = (): Data => ({
   orders: [], payments: [], events: [], approvers: [{ employeeId: "demo-boss", name: "Nguyễn Gia Luân", hasAccount: true }], seq: 0, sheets: [], steps: [],
   explanatory: [], materials: [], quotes: [], contracts: [],
-  departments: { leader: ["demo-boss"], technical: ["demo-kt"], material: ["demo-vt"], accounting: ["demo-ke"], admin_office: ["demo-hc"] },
-  names: { "demo-boss": "Nguyễn Gia Luân", "demo-kt": "Trưởng P. Kỹ thuật (mẫu)", "demo-vt": "Trưởng P. Vật tư (mẫu)", "demo-ke": "Kế toán (mẫu)", "demo-hc": "Hành chánh (mẫu)" },
+  departments: { leader: ["demo-boss"], technical: ["demo-kt"], material: ["demo-vt"], warehouse: ["demo-kho"], accounting: ["demo-ke"] },
+  names: { "demo-boss": "Nguyễn Gia Luân", "demo-kt": "Trưởng P. Kỹ thuật (mẫu)", "demo-vt": "Trưởng P. Vật tư (mẫu)", "demo-ke": "Kế toán (mẫu)", "demo-kho": "Thủ kho (mẫu)" },
 });
 const fail = (code: string): never => { throw new Error(code); };
 const clone = <T>(value: T): T => structuredClone(value);
@@ -98,7 +98,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   return {
     mode: "demo",
     async myUserId() { return me; },
-    async myRoles() { return { isApprover: true, isPayer: true, seesAll: true, isAdminOffice: true }; },
+    async myRoles() { return { isApprover: true, isPayer: true, seesAll: true, isPoIssuer: true }; },
     async approvers() { return clone(data.approvers); },
     async setApprovers(employeeIds) { data.approvers = employeeIds.map((employeeId) => data.approvers.find((item) => item.employeeId === employeeId) ?? { employeeId, name: employeeId, hasAccount: false }); return done(); },
 

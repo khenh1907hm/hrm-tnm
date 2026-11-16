@@ -2,43 +2,44 @@
  * Chuỗi ký theo bộ phận dùng chung cho ngân sách (P-COST-03) và đơn đặt hàng nháp (P-CC-07).
  * Đặc tả: docs/dac-ta-mua-hang-du-an.md mục 2.1, 3.5, quy tắc PRC-04.
  */
-export type Department = "technical" | "material" | "accounting" | "leader" | "admin_office";
-export type ApprovalRole = "pic" | Department;
-export const DEPARTMENTS: readonly Department[] = ["leader", "technical", "material", "accounting", "admin_office"];
+export type Department = "technical" | "material" | "warehouse" | "accounting" | "leader";
+/** admin_office (Hành chánh): khối cũ đã bỏ, chỉ còn trong lịch sử ký. */
+export type ApprovalRole = "pic" | Department | "admin_office";
+export const DEPARTMENTS: readonly Department[] = ["leader", "technical", "material", "warehouse", "accounting"];
 export const ROLE_LABELS: Record<ApprovalRole, string> = {
-  pic: "Phụ trách", technical: "P. Kỹ thuật", material: "P. Vật tư", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
+  pic: "Phụ trách", technical: "P. Kỹ thuật", material: "P. Vật tư", warehouse: "Kho", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
 };
 export type ApprovalDocType = "budget" | "purchase" | "payment" | "explanatory" | "material" | "contract";
 export const DOC_TYPE_LABELS: Record<ApprovalDocType, string> = {
   budget: "Ngân sách (P-COST-03)", purchase: "Đơn đặt hàng (P-CC-07)", payment: "Đề nghị tạm ứng / thanh toán (P-CF-03)",
   explanatory: "Báo cáo giải thích (P-COST-05)", material: "Yêu cầu vật tư (P-COST-08)", contract: "Confirm Contract (P-COST-01)",
 };
-/** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 6 người (Lãnh đạo duyệt, Hành chánh nhận để phát hành PO). */
+/** Thứ tự ký theo ô ký trên mẫu: ngân sách 3 người; đơn nháp 5 người (Lãnh đạo duyệt; P. Vật tư phát hành PO sau đó). */
 export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {
   budget: ["pic", "technical", "leader"],
-  purchase: ["pic", "technical", "material", "accounting", "leader", "admin_office"],
+  purchase: ["pic", "technical", "material", "accounting", "leader"],
   /** Đề nghị tạm ứng / thanh toán (P-CF-03): Lãnh đạo ký xong thì Kế toán chi. */
   payment: ["pic", "technical", "material", "leader"],
   /** P-COST-05: ô ký Phụ trách → P. Kỹ thuật → P. Vật tư → P. HC-KT (Kế toán) → LĐ. */
   explanatory: ["pic", "technical", "material", "accounting", "leader"],
-  /** P-COST-08: người yêu cầu lập → Phòng Vật tư, Kho → P. Kỹ thuật → Lãnh đạo. */
-  material: ["material", "technical", "leader"],
-  /** P-COST-01: Phụ trách → P. Kỹ thuật → VT-Kho → Lãnh đạo → Kế toán (lên số dự án, kiểm tra HĐ) → Hành chánh. */
-  contract: ["pic", "technical", "material", "leader", "accounting", "admin_office"],
+  /** P-COST-08: người yêu cầu lập → Kho (kiểm tồn) → P. Vật tư → P. Kỹ thuật → Lãnh đạo. */
+  material: ["warehouse", "material", "technical", "leader"],
+  /** P-COST-01: Phụ trách → P. Kỹ thuật → VT-Kho → Lãnh đạo → Kế toán (lên số dự án, kiểm tra HĐ). */
+  contract: ["pic", "technical", "material", "leader", "accounting"],
 };
 /**
  * Ngày mục tiêu theo mẫu (ngày làm việc thứ mấy kể từ ngày gửi), không cộng dồn từng bước:
- *  - P-CC-07: Phụ trách, P. Kỹ thuật ngày 1; P. Vật tư ngày 2; Kế toán, Lãnh đạo, Hành chánh ngày 3 (mẫu ghi 01/01, 01/01, 02/01, 03/01…; sơ đồ tổng quan: nháp 1 ngày, duyệt 1 ngày, phát hành 1 ngày).
+ *  - P-CC-07: Phụ trách, P. Kỹ thuật ngày 1; P. Vật tư ngày 2; Kế toán, Lãnh đạo ngày 3 (mẫu ghi 01/01, 01/01, 02/01, 03/01…; sơ đồ tổng quan: nháp 1 ngày, duyệt 1 ngày, phát hành 1 ngày).
  *  - P-COST-03: sơ đồ tổng quan "Làm ngân sách 2 ngày": Phụ trách, P. Kỹ thuật ngày 1; Lãnh đạo ngày 2.
  *  - P-CF-03: "Đề nghị thanh toán 1 ngày, Duyệt 1 ngày": Phụ trách, P. Kỹ thuật, P. Vật tư ngày 1; Lãnh đạo ngày 2.
  */
 export const TARGET_DAY: Record<ApprovalDocType, Partial<Record<ApprovalRole, number>>> = {
   budget: { pic: 1, technical: 1, leader: 2 },
-  purchase: { pic: 1, technical: 1, material: 2, accounting: 3, leader: 3, admin_office: 3 },
+  purchase: { pic: 1, technical: 1, material: 2, accounting: 3, leader: 3 },
   payment: { pic: 1, technical: 1, material: 1, leader: 2 },
   explanatory: { pic: 1, technical: 1, material: 1, accounting: 2, leader: 2 },
-  material: { material: 1, technical: 1, leader: 1 },
-  contract: { pic: 1, technical: 1, material: 1, leader: 1, accounting: 1, admin_office: 1 },
+  material: { warehouse: 1, material: 1, technical: 1, leader: 1 },
+  contract: { pic: 1, technical: 1, material: 1, leader: 1, accounting: 1 },
 };
 
 /** Ngày làm việc thứ n sau ngày gửi. */
@@ -64,7 +65,7 @@ export const DECIDING_ROLE: ApprovalRole = "leader";
 
 /** Người thuộc từng bộ phận (mã hồ sơ nhân sự). Admin cấu hình. */
 export type DepartmentMembers = Record<Department, string[]>;
-export const emptyDepartments = (): DepartmentMembers => ({ leader: [], technical: [], material: [], accounting: [], admin_office: [] });
+export const emptyDepartments = (): DepartmentMembers => ({ leader: [], technical: [], material: [], warehouse: [], accounting: [] });
 
 export type StepResult = "pending" | "signed" | "returned" | "skipped";
 export type ApprovalStep = {
@@ -97,7 +98,7 @@ export function nextWorkday(iso: string, holidays: ReadonlySet<string> = new Set
  */
 export function buildSteps(docType: ApprovalDocType, docId: string, submittedOn: string, departments: DepartmentMembers, newId: () => string, holidays: ReadonlySet<string> = new Set()): ApprovalStep[] {
   return CHAINS[docType].map((role, index) => {
-    const skipped = role !== "pic" && !departments[role].length;
+    const skipped = role !== "pic" && !(departments[role as Department] ?? []).length;
     const targetDate = nthWorkday(submittedOn, TARGET_DAY[docType][role] ?? index + 1, holidays);
     return { id: newId(), docType, docId, seq: index + 1, role, targetDate, result: skipped ? "skipped" : "pending", signerName: "", note: "", actedAt: null };
   });
@@ -116,6 +117,7 @@ export function holdsRole(role: ApprovalRole, me: Signer): boolean {
   if (me.isAdmin) return true;
   if (role === "pic") return me.isPicOfDoc;
   if (role === "leader" && me.isPurchaseApprover) return true;
+  if (role === "admin_office") return false;
   return me.employeeId !== null && me.departments[role].includes(me.employeeId);
 }
 

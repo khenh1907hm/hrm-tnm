@@ -81,7 +81,7 @@ describe("yêu cầu vật tư P-COST-08 và hỏi giá", () => {
     expect(materialIssue({ items: [{ ...request.items[0]!, quantity: 0 }] }, false)).toBe("MR_BAD_QUANTITY");
     expect(materialIssue({ items: [{ ...request.items[0]!, unit: " " }] }, true)).toBe("MR_UNIT_REQUIRED");
     expect(materialIssue({ items: [{ ...request.items[0]!, budgetCode: "999" }] }, false)).toBe("BUDGET_UNKNOWN_CODE");
-    expect(CHAINS.material).toEqual(["material", "technical", "leader"]);
+    expect(CHAINS.material).toEqual(["warehouse", "material", "technical", "leader"]);
   });
 
   it("PRC_52 bảng so sánh: giá thấp nhất từng dòng, cảnh báo một báo giá từ 50 triệu", () => {

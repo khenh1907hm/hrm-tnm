@@ -85,9 +85,9 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     async myUserId() { const { data } = await client.auth.getUser(); return data.user?.id ?? ""; },
     async myRoles() {
       const row = ((await rpc("purchase_my_roles", {})) as Row[] | null)?.[0];
-      // Bộ phận Hành chánh (phát hành PO); máy chủ chưa có hàm thì coi như không
+      // P. Vật tư phát hành PO; máy chủ chưa có hàm thì coi như không
       const departments = ((await rpc("procurement_my_departments", {}).catch(() => [])) ?? []) as string[];
-      return { isApprover: Boolean(row?.is_approver), isPayer: Boolean(row?.is_payer), seesAll: Boolean(row?.sees_all), isAdminOffice: departments.includes("admin_office") };
+      return { isApprover: Boolean(row?.is_approver), isPayer: Boolean(row?.is_payer), seesAll: Boolean(row?.sees_all), isPoIssuer: departments.includes("material") };
     },
     async approvers() { return (((await rpc("purchase_approvers", {})) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name), hasAccount: Boolean(row.has_account) })); },
     async setApprovers(employeeIds) { await check(client.from("purchase_settings").update({ approver_employee_ids: employeeIds, updated_at: new Date().toISOString() }).eq("id", 1)); },

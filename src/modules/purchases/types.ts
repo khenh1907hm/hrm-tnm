@@ -105,7 +105,7 @@ export type PurchasePayment = {
 export type PurchaseEvent = { id: string; orderId: string; at: string; actorName: string; action: string; note: string };
 
 /** Vai trò của người đăng nhập với đặt hàng (hàm purchase_my_roles). */
-export type PurchaseRoles = { isApprover: boolean; isPayer: boolean; seesAll: boolean; /** Thuộc bộ phận Hành chánh (phát hành PO). */ isAdminOffice?: boolean };
+export type PurchaseRoles = { isApprover: boolean; isPayer: boolean; seesAll: boolean; /** Thuộc P. Vật tư (phát hành PO). */ isPoIssuer?: boolean };
 export type PurchaseApprover = { employeeId: string; name: string; hasAccount: boolean };
 
 export type ReceiveLine = { id: string; receivedQty: number; acceptedQty: number; note: string };

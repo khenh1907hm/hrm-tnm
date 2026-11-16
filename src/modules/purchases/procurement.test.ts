@@ -51,7 +51,7 @@ describe("procurement phase A", () => {
     // P-CC-07: Phụ trách, Kỹ thuật ngày 1; Vật tư ngày 2; Kế toán, Lãnh đạo, Hành chánh ngày 3 (gửi thứ Sáu 13/11, bỏ Chủ nhật)
     expect(steps.map((step) => [step.role, step.result, step.targetDate])).toEqual([
       ["pic", "pending", "2026-11-14"], ["technical", "pending", "2026-11-14"], ["material", "skipped", "2026-11-16"],
-      ["accounting", "pending", "2026-11-17"], ["leader", "pending", "2026-11-17"], ["admin_office", "skipped", "2026-11-17"],
+      ["accounting", "pending", "2026-11-17"], ["leader", "pending", "2026-11-17"],
     ]);
     expect(buildSteps("payment", "rfp", "2026-11-13", departments, () => "x").map((step) => step.targetDate)).toEqual(["2026-11-14", "2026-11-14", "2026-11-14", "2026-11-16"]);
     expect(buildSteps("budget", "b", "2026-11-13", departments, () => "x").map((step) => step.targetDate)).toEqual(["2026-11-14", "2026-11-14", "2026-11-16"]);
@@ -164,7 +164,7 @@ describe("procurement phase A", () => {
     expect((await store.getOrder(order.id))?.status).toBe("ordered");
   });
 
-  it("PRC_34 project orders: administration issues the PO (numbered per project, signs the administration step) and the supplier must sign it back before advance or ordering", async () => {
+  it("PRC_34 project orders: the materials department issues the PO (numbered per project, no administration step) and the supplier must sign it back before advance or ordering", async () => {
     expect(poBlock({ usesChain: false })).toBeNull();
     expect(poBlock({ usesChain: true, poIssuedAt: null })).toBe("PO_NOT_ISSUED");
     expect(poBlock({ usesChain: true, poIssuedAt: "x", supplierAcceptedAt: null })).toBe("PO_NOT_ACCEPTED");
@@ -183,7 +183,7 @@ describe("procurement phase A", () => {
     await expect(store.supplierAccept(order.id, "")).rejects.toThrow("PO_BAD_STATUS");
     await store.issuePo(order.id, "Công ty ABC", "Ông A");
     expect(await store.getOrder(order.id)).toMatchObject({ poNo: "PO-DA-001", supplier: "Công ty ABC", supplierAcceptedAt: null });
-    expect((await store.listSteps("purchase", order.id)).find((step) => step.role === "admin_office")?.result).toBe("signed");
+    expect((await store.listSteps("purchase", order.id)).some((step) => step.role === "admin_office")).toBe(false);
     await expect(store.markOrdered(order.id, "Công ty ABC", "", null, "")).rejects.toThrow("PO_NOT_ACCEPTED");
     await store.supplierAccept(order.id, "Bản ký lưu ở HC");
     await store.markOrdered(order.id, "Công ty ABC", "", null, "");

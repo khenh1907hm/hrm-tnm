@@ -8,14 +8,15 @@ import type { Notify } from "../Toast";
 import { errorMessage } from "./projectShared";
 
 /** Thứ tự vai trò ký theo chuỗi duyệt của công ty. */
-export const APPROVER_ROLES: readonly ApprovalRole[] = ["pic", "technical", "material", "accounting", "leader", "admin_office"];
+export const APPROVER_ROLES: readonly ApprovalRole[] = ["pic", "technical", "material", "warehouse", "accounting", "leader"];
 export const ROLE_HINTS: Record<ApprovalRole, string> = {
   pic: "Ngoài PM của dự án",
   technical: "Ký ngân sách, đơn hàng, báo cáo giải thích",
-  material: "Ký yêu cầu vật tư, đơn hàng",
+  material: "Ký yêu cầu vật tư, đơn hàng; phát hành PO",
+  warehouse: "Ký đầu tiên trên yêu cầu vật tư (kiểm tồn kho)",
   accounting: "Ký đơn hàng, xác nhận dự án",
   leader: "Quyền cao nhất: xác nhận cả cây, ký là phiếu được duyệt",
-  admin_office: "Sau khi duyệt: nhận đơn để phát hành PO",
+  admin_office: "Khối cũ, đã bỏ",
 };
 export const MODE_LABELS: Record<ApprovalMode, string> = { any: "Một người trong khối duyệt là đủ", sequence: "Lần lượt từng người (theo cấp, từ trên xuống)" };
 /** Tối đa người trong một khung (ngang quyền: một trong số họ duyệt là đủ). */

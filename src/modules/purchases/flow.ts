@@ -78,7 +78,7 @@ export type PurchaseAction =
  * Người lập: sửa và lập đơn khi nháp / bị từ chối; đặt hàng, đề nghị chi, nhận hàng, hoàn tất. Sếp: duyệt đơn, duyệt khoản chi,
  * và làm được mọi việc của người lập trừ sửa đơn. Kế toán (payer): chi khoản đã duyệt. Hủy: người lập trước khi đặt hàng, sếp hoặc Admin khi chưa xong.
  */
-export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterId"> & Partial<Pick<PurchaseOrder, "usesChain" | "advanceRequired" | "prepayRequired" | "poIssuedAt" | "supplierAcceptedAt">>, me: { userId: string; isAdmin: boolean; isProjectLead?: boolean; isAdminOffice?: boolean } & PurchaseRoles, payments: readonly (Pick<PurchasePayment, "status"> & Partial<Pick<PurchasePayment, "kind" | "usesChain">>)[] = []): Set<PurchaseAction> {
+export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterId"> & Partial<Pick<PurchaseOrder, "usesChain" | "advanceRequired" | "prepayRequired" | "poIssuedAt" | "supplierAcceptedAt">>, me: { userId: string; isAdmin: boolean; isProjectLead?: boolean; isPoIssuer?: boolean } & PurchaseRoles, payments: readonly (Pick<PurchasePayment, "status"> & Partial<Pick<PurchasePayment, "kind" | "usesChain">>)[] = []): Set<PurchaseAction> {
   const actions = new Set<PurchaseAction>();
   const mine = order.requesterId === me.userId;
   const handler = mine || me.isApprover || me.isAdmin;
@@ -87,9 +87,9 @@ export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterI
   if (me.isApprover && status === "submitted" && !order.usesChain) { actions.add("approve"); actions.add("reject"); }
   // PRC-31: NCC cần tạm ứng thì phải chi xong tạm ứng mới sang Đặt hàng, theo dõi
   if (handler && status === "approved" && !orderBlock(order, payments)) actions.add("order");
-  // PRC-34: Hành chánh phát hành PO, rồi ghi nhận NCC ký nhận
-  if (order.usesChain && status === "approved" && !order.poIssuedAt && (me.isAdminOffice || me.isAdmin)) actions.add("issuePo");
-  if (order.usesChain && status === "approved" && order.poIssuedAt && !order.supplierAcceptedAt && (handler || me.isAdminOffice)) actions.add("supplierAccept");
+  // PRC-34: P. Vật tư phát hành PO, rồi ghi nhận NCC ký nhận
+  if (order.usesChain && status === "approved" && !order.poIssuedAt && (me.isPoIssuer || me.isAdmin)) actions.add("issuePo");
+  if (order.usesChain && status === "approved" && order.poIssuedAt && !order.supplierAcceptedAt && (handler || me.isPoIssuer)) actions.add("supplierAccept");
   if (status === "approved" || status === "ordered" || status === "received") {
     actions.add("track");
     if (handler || me.isPayer) {
@@ -143,7 +143,7 @@ export function paymentSummary(order: Pick<PurchaseOrder, "totalEstimate" | "tot
 
 export const EVENT_LABELS: Record<string, string> = {
   create: "Lập đơn từ phiếu yêu cầu vật tư", submit: "Lập đơn, gửi duyệt", approve: "Duyệt đơn", reject: "Trả về / từ chối đơn",
-  issue_po: "Hành chánh phát hành PO", supplier_accept: "NCC ký xác nhận PO",
+  issue_po: "Phát hành PO", supplier_accept: "NCC ký xác nhận PO",
   "payment_sign:pic": "Phụ trách ký đề nghị thanh toán", "payment_sign:technical": "P. Kỹ thuật ký đề nghị thanh toán", "payment_sign:material": "P. Vật tư ký đề nghị thanh toán",
   "sign:pic": "Phụ trách ký", "sign:technical": "P. Kỹ thuật ký", "sign:material": "P. Vật tư ký", "sign:accounting": "Kế toán ký", "sign:leader": "Lãnh đạo ký", "sign:admin_office": "Hành chánh ký nhận", order: "Đặt hàng", track: "Cập nhật theo dõi",
   receive: "Nhận hàng, kiểm tra", complete: "Hoàn tất đơn", cancel: "Hủy đơn",
@@ -174,7 +174,7 @@ export function nextHint(order: Pick<PurchaseOrder, "status" | "requesterId"> & 
     case "rejected": return mine ? "Sếp đã trả về: sửa theo góp ý rồi lập lại." : "Sếp đã trả về cho người lập sửa.";
     case "submitted": return "Đang chờ sếp duyệt.";
     case "approved": return order.usesChain && !order.poIssuedAt
-      ? "Đã duyệt. Hành chánh phát hành PO chính thức (P-CC-08) gửi nhà cung cấp."
+      ? "Đã duyệt. P. Vật tư phát hành PO chính thức (P-CC-08) gửi nhà cung cấp."
       : order.usesChain && !order.supplierAcceptedAt
         ? "PO đã phát hành. Khi NCC ký bản sao PO gửi lại, bấm NCC đã ký xác nhận PO."
         : "advanceRequired" in order && order.advanceRequired

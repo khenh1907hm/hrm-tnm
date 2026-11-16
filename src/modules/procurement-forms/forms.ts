@@ -501,10 +501,14 @@ export async function buildMaterialRequest(input: MaterialFormInput): Promise<Ui
   }
   let row = 13 + rows + 1;
   if (request.note) { ws.mergeCells(`A${row}:I${row}`); ws.getCell(`A${row}`).value = `Ghi chú: ${request.note}`; ws.getCell(`A${row}`).alignment = { wrapText: true }; row += 2; }
-  // Ô ký: Lãnh đạo, P. Kỹ thuật, Phòng Vật tư - Kho, Người yêu cầu
+  // Ô ký: Lãnh đạo, P. Kỹ thuật, Phòng Vật tư - Kho (gộp người ký của Kho và P. Vật tư), Người yêu cầu
+  const kho = stepOf(input.steps, "warehouse");
+  const vt = stepOf(input.steps, "material");
+  const vtKho = kho?.result === "signed" && vt?.result === "signed" ? { ...vt, signerName: [kho.signerName, vt.signerName].filter(Boolean).join(", ") }
+    : vt?.result === "signed" ? vt : kho?.result === "signed" ? kho : vt ?? kho;
   const signs: [string, string, SignStep | undefined | "requester"][] = [
     ["A", "Lãnh Đạo", stepOf(input.steps, "leader")], ["D", "P. Kỹ Thuật", stepOf(input.steps, "technical")],
-    ["F", "Phòng Vật Tư, Kho", stepOf(input.steps, "material")], ["I", "Người Yêu Cầu", "requester"],
+    ["F", "Phòng Vật Tư, Kho", vtKho], ["I", "Người Yêu Cầu", "requester"],
   ];
   for (const [col, label, step] of signs) {
     const end = col === "A" ? "B" : col === "D" ? "E" : col === "F" ? "H" : "I";

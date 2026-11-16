@@ -10,7 +10,7 @@ import type { Notify } from "./Toast";
 import "./projects/projects.css";
 
 /** Thứ tự khối theo chuỗi ký của đơn đặt hàng. */
-const ORDER: readonly Department[] = ["technical", "material", "accounting", "leader", "admin_office"];
+const ORDER: readonly Department[] = ["technical", "material", "warehouse", "accounting", "leader"];
 
 /**
  * Trang Admin "Quy trình duyệt": ai thuộc từng khối ký duyệt (dùng chung cho mọi dự án chưa đặt người riêng),
@@ -67,7 +67,8 @@ export function ApprovalSettingsPage(props: { live: boolean; employees: Employee
         </div>
       </div>
       <div className="panel pj-section">
-        <p className="muted">Chuỗi ký đơn đặt hàng dự án: <b>Phụ trách (PM)</b> → P. Kỹ thuật → P. Vật tư → Kế toán → <b>Lãnh đạo</b> (ký là duyệt) → Hành chánh.
+        <p className="muted">Chuỗi ký đơn đặt hàng dự án: <b>Phụ trách (PM)</b> → P. Kỹ thuật → P. Vật tư → Kế toán → <b>Lãnh đạo</b> (ký là duyệt); sau đó P. Vật tư phát hành PO.
+          Yêu cầu vật tư: Kho (kiểm tồn) → P. Vật tư → P. Kỹ thuật → <b>Lãnh đạo</b>.
           Khối chưa có ai thì bước đó được bỏ qua. Khối có từ 2 người: chọn <b>một người duyệt là đủ</b>, hoặc <b>lần lượt từng cấp</b> (cấp 1 ký xong mới tới cấp 2; khối Lãnh đạo thì người cuối ký mới là duyệt).
           Giám đốc luôn duyệt ngay được. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
         <div className="ap-editor">
