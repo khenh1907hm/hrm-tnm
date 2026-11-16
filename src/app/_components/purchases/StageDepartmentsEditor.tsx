@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Workflow } from "lucide-react";
-import { ASSIGNABLE_STAGES, FLOW_STEPS, STAGE_DEPARTMENT_DEFAULTS, STAGE_DEPARTMENT_OPTIONS, stageDepartmentLabel, type StageDepartment, type StageDepartments } from "../../../modules/purchases/flow";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
+import { ChevronDown, ChevronRight, Workflow } from "lucide-react";
+import { ASSIGNABLE_STAGES, type AssignableStage, FLOW_STEPS, STAGE_DEPARTMENT_DEFAULTS, STAGE_DEPARTMENT_OPTIONS, stageDepartmentLabel, type StageDepartment, type StageDepartments } from "../../../modules/purchases/flow";
 import { errorMessage } from "../projects/projectShared";
 import type { Notify } from "../Toast";
 import { STEP_ICONS } from "./FlowBar";
@@ -12,8 +12,11 @@ const LABEL = Object.fromEntries(FLOW_STEPS.map((step) => [step.key, step.label]
  * Phòng ban phụ trách từng giai đoạn của quy trình mua hàng (Đơn hàng nháp → … → Nhập kho → … → Thành công / Thất bại).
  * Nhận hàng, Nhập kho, Thu thập chứng từ: chỉ phòng ban được giao (cùng người lập, sếp, Admin) bấm được; giai đoạn khác dùng để hiển thị ai làm.
  */
-export function StageDepartmentsEditor(props: { load: () => Promise<StageDepartments>; save: (value: StageDepartments) => Promise<void>; setNotice: Notify; canEdit: boolean }) {
+export function StageDepartmentsEditor(props: { load: () => Promise<StageDepartments>; save: (value: StageDepartments) => Promise<void>; setNotice: Notify; canEdit: boolean;
+  /** Giai đoạn có cây duyệt: bấm vào để xem, sắp xếp người duyệt (trả về tên phiếu và nội dung khi mở). */
+  tree?: (stage: AssignableStage) => { title: string; render: () => ReactNode } | null }) {
   const [value, setValue] = useState<StageDepartments | null>(null);
+  const [open, setOpen] = useState<AssignableStage | null>(null);
   const [saved, setSaved] = useState("");
   const [busy, setBusy] = useState(false);
   const { load, setNotice } = props;
@@ -38,15 +41,24 @@ export function StageDepartmentsEditor(props: { load: () => Promise<StageDepartm
       <ol className="po-stage-editor">
         {ASSIGNABLE_STAGES.map((stage) => {
           const Icon = STEP_ICONS[stage];
+          const tree = props.tree?.(stage) ?? null;
+          const isOpen = open === stage && tree;
           return (
-            <li key={stage}>
+            <Fragment key={stage}>
+            <li className={`${tree ? "has-tree" : ""}${isOpen ? " is-open" : ""}`}>
               <Icon size={15} aria-hidden="true" className="muted" />
-              <span>{LABEL[stage]}{(stage === "received" || stage === "stocked" || stage === "final") && <small className="pill warn" style={{ marginLeft: 6 }}>giới hạn quyền</small>}</span>
+              <span>{tree
+                ? <button type="button" className="po-stage-toggle" aria-expanded={Boolean(isOpen)} onClick={() => setOpen(isOpen ? null : stage)}>
+                    {isOpen ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />} {LABEL[stage]} <small className="pill">duyệt: {tree.title}</small></button>
+                : LABEL[stage]}
+                {(stage === "received" || stage === "stocked" || stage === "final") && <small className="pill warn" style={{ marginLeft: 6 }}>giới hạn quyền</small>}</span>
               <select aria-label={`Phòng ban phụ trách ${LABEL[stage]}`} value={value[stage]} disabled={!props.canEdit}
                 onChange={(event) => setValue({ ...value, [stage]: event.target.value as StageDepartment })}>
                 {STAGE_DEPARTMENT_OPTIONS.map((option) => <option key={option || "none"} value={option}>{stageDepartmentLabel(option)}</option>)}
               </select>
             </li>
+            {isOpen && <li className="po-stage-tree">{tree.render()}</li>}
+            </Fragment>
           );
         })}
         <li className="muted"><CircleDot /> <span>Thành công / Thất bại</span><small>Kết quả cuối của đơn</small></li>

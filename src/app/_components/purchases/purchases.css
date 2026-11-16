@@ -123,3 +123,20 @@
 .po-stage-editor li:last-child { border-bottom: 0; }
 .po-stage-editor select { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; width: 100%; }
 @media (max-width: 640px) { .po-stage-editor li { grid-template-columns: 22px 1fr; } .po-stage-editor select, .po-stage-editor li > small { grid-column: 2; } }
+.po-stage-editor li.has-tree:hover { background: var(--soft); }
+.po-stage-editor li.is-open { background: var(--brand-soft); }
+.po-stage-toggle { border: 0; background: none; padding: 0; font: inherit; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; text-align: left; }
+.po-stage-toggle:hover { color: var(--brand); }
+.po-stage-editor li.po-stage-tree { display: block; padding: 12px 8px 16px 32px; background: var(--soft); }
+/* Cây duyệt mặc định của công ty */
+.ct-editor { display: grid; gap: 0; max-width: 760px; }
+.ct-editor .ap-frame.leader { border-style: solid; border-color: var(--brand); }
+.ct-editor .ap-frame.leader::after { display: none; }
+.ct-head { justify-content: space-between; }
+.ct-name { flex: 1 1 200px; font-weight: 700; border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; background: var(--surface); }
+.ct-tools { display: inline-flex; gap: 4px; }
+.ct-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.ct-add select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--surface); }
+.ct-add .emp-picker { flex: 1 1 220px; margin: 0; }
+.ct-add .emp-picker > span:first-child:empty { display: none; }
+.ct-note { font-size: 12.5px; margin: 6px 0 10px; display: flex; gap: 6px; align-items: flex-start; }

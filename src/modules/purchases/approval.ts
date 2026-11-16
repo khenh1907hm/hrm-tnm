@@ -7,7 +7,7 @@ export type Department = "technical" | "material" | "warehouse" | "accounting" |
 export type ApprovalRole = "pic" | Department | "admin_office";
 export const DEPARTMENTS: readonly Department[] = ["leader", "technical", "material", "warehouse", "accounting"];
 export const ROLE_LABELS: Record<ApprovalRole, string> = {
-  pic: "Phụ trách", technical: "P. Kỹ thuật", material: "P. Vật tư", warehouse: "Kho", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
+  pic: "Phụ trách", technical: "P. Kỹ thuật", material: "Kho (Vật tư)", warehouse: "Kho", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
 };
 export type ApprovalDocType = "budget" | "purchase" | "payment" | "explanatory" | "material" | "contract";
 export const DOC_TYPE_LABELS: Record<ApprovalDocType, string> = {

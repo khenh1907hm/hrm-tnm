@@ -85,6 +85,16 @@ export async function saveApprovalTree(projectId: string, docType: TreeDocType, 
   await rpc("project_approval_tree_save", { p_project: projectId, p_doc_type: docType, p_blocks: blocks });
 }
 
+/** Cây duyệt mặc định của công ty (áp cho mọi dự án chưa có cây riêng) và người giữ từng chức danh. */
+export type CompanyApprovalSettings = { trees: Partial<Record<TreeDocType, ApprovalBlock[]>>; departments: Record<string, string[]>; names: Record<string, string> };
+export async function companyApprovalSettings(): Promise<CompanyApprovalSettings> {
+  const value = ((await rpc("company_approval_settings")) ?? {}) as { trees?: Record<string, ApprovalBlock[]>; departments?: Record<string, string[]>; names?: Record<string, string> };
+  return { trees: value.trees ?? {}, departments: value.departments ?? {}, names: value.names ?? {} };
+}
+export async function saveCompanyTree(docType: TreeDocType, blocks: readonly ApprovalBlock[]) {
+  await rpc("company_approval_tree_save", { p_doc_type: docType, p_blocks: blocks });
+}
+
 /** Giám đốc: luôn ở khung Lãnh đạo của mọi dự án. */
 export async function directorPeople(): Promise<{ employeeId: string; name: string }[]> {
   return (((await rpc("director_people")) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name) }));

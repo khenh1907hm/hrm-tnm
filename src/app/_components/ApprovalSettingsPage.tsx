@@ -1,105 +1,159 @@
 "use client";
-import { useEffect, useState } from "react";
-import { GitBranch } from "lucide-react";
-import { DEPARTMENTS, ROLE_LABELS, type Department } from "../../modules/purchases/approval";
-import { approvalSettings, saveApprovalSettings, saveStageDepartments, stageDepartmentsSettings, type ApprovalModes } from "./accountApi";
-import { StageDepartmentsEditor } from "./purchases/StageDepartmentsEditor";
-import "./purchases/purchases.css";
+import { useCallback, useEffect, useState } from "react";
+import { BadgeCheck, FileStack, GitBranch } from "lucide-react";
+import { COMPANY_ROLES, DEFAULT_PROJECT_ROLES, type CompanyRole } from "../../modules/purchases/companyRoles";
+import type { AssignableStage } from "../../modules/purchases/flow";
+import { approvalSettings, companyApprovalSettings, saveApprovalSettings, saveStageDepartments, stageDepartmentsSettings, type ApprovalBlock, type ApprovalModes, type CompanyApprovalSettings, type TreeDocType } from "./accountApi";
+import { CompanyTreeEditor } from "./CompanyTreeEditor";
 import { EmployeePicker } from "./projects/ProjectsPage";
-import { ModePicker, OrderedPeople, ROLE_HINTS } from "./projects/ProjectApproversPanel";
+import { ModePicker, OrderedPeople } from "./projects/ProjectApproversPanel";
 import { errorMessage, type EmployeeSource } from "./projects/projectShared";
+import { StageDepartmentsEditor } from "./purchases/StageDepartmentsEditor";
 import type { Notify } from "./Toast";
 import "./projects/projects.css";
+import "./purchases/purchases.css";
 
-/** Thứ tự khối theo chuỗi ký của đơn đặt hàng. */
-const ORDER: readonly Department[] = ["technical", "material", "warehouse", "accounting", "leader"];
+type Roles = Record<CompanyRole, string[]>;
+const emptyRoles = (): Roles => Object.fromEntries(COMPANY_ROLES.map((role) => [role.key, []])) as unknown as Roles;
+
+/** Giai đoạn mua hàng nào dùng cây duyệt nào (bấm vào giai đoạn để sắp xếp người duyệt). */
+const STAGE_TREE: Partial<Record<AssignableStage, { docType: TreeDocType; title: string }>> = {
+  draft: { docType: "purchase", title: "Đơn hàng (P-CC-07)" },
+  submitted: { docType: "purchase", title: "Đơn hàng (P-CC-07)" },
+  approved: { docType: "purchase", title: "Đơn hàng (P-CC-07)" },
+  advance: { docType: "payment", title: "Yêu cầu thanh toán RFP (P-CF-03)" },
+  prepayment: { docType: "payment", title: "Yêu cầu thanh toán RFP (P-CF-03)" },
+  final: { docType: "payment", title: "Yêu cầu thanh toán RFP (P-CF-03)" },
+};
+const OTHER_FORMS: readonly { docType: TreeDocType; title: string; hint: string }[] = [
+  { docType: "contract", title: "Confirm Contract (P-COST-01)", hint: "Xác nhận dự án" },
+  { docType: "budget", title: "Ngân sách (P-COST-03)", hint: "Báo cáo giải thích chưa cài riêng cũng đi theo cây này" },
+  { docType: "explanatory", title: "Báo cáo giải thích (P-COST-05)", hint: "" },
+  { docType: "material", title: "Yêu cầu vật tư (P-COST-08)", hint: "Chưa cài riêng thì đi theo cây Đơn hàng" },
+];
 
 /**
- * Trang Admin "Quy trình duyệt": ai thuộc từng khối ký duyệt (dùng chung cho mọi dự án chưa đặt người riêng),
- * và khối nhiều người thì một người duyệt là đủ hay lần lượt từng cấp.
+ * Trang Admin "Quy trình duyệt": (1) chức danh của công ty (ai giữ chức danh nào, ai không có là Kỹ sư);
+ * (2) giai đoạn mua hàng, bấm vào giai đoạn để xem và sắp xếp cây duyệt mặc định cho mọi dự án; (3) cây duyệt các phiếu khác.
  */
 export function ApprovalSettingsPage(props: { live: boolean; employees: EmployeeSource; setNotice: Notify }) {
-  const [departments, setDepartments] = useState<Record<Department, string[]> | null>(null);
+  const [roles, setRoles] = useState<Roles | null>(null);
+  const [allDepartments, setAllDepartments] = useState<Record<string, string[]>>({});
   const [modes, setModes] = useState<ApprovalModes>({});
   const [names, setNames] = useState<Record<string, string>>({});
+  const [company, setCompany] = useState<CompanyApprovalSettings | null>(null);
   const [saved, setSaved] = useState("");
   const [busy, setBusy] = useState(false);
   const [pickerKey, setPickerKey] = useState(0);
+  const [openForm, setOpenForm] = useState<TreeDocType | null>(null);
 
   const { live, setNotice } = props;
   useEffect(() => {
     if (!live) return;
     let active = true;
-    void approvalSettings().then((value) => {
+    void Promise.all([approvalSettings(), companyApprovalSettings().catch(() => null)]).then(([value, tree]) => {
       if (!active) return;
-      const next = Object.fromEntries(DEPARTMENTS.map((key) => [key, [...(value.departments[key] ?? [])]])) as Record<Department, string[]>;
-      setDepartments(next);
+      const next = emptyRoles();
+      for (const role of COMPANY_ROLES) next[role.key] = [...(value.departments[role.key] ?? [])];
+      setRoles(next);
+      setAllDepartments(value.departments);
       setModes(value.modes);
-      setNames(value.names);
+      setNames({ ...(tree?.names ?? {}), ...value.names });
+      setCompany(tree ?? { trees: {}, departments: value.departments, names: {} });
       setSaved(JSON.stringify([next, value.modes]));
-    }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setDepartments(Object.fromEntries(DEPARTMENTS.map((key) => [key, []])) as unknown as Record<Department, string[]>); } });
+    }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setRoles(emptyRoles()); setCompany({ trees: {}, departments: {}, names: {} }); } });
     return () => { active = false; };
   }, [live, setNotice]);
+  const loadStages = useCallback(() => stageDepartmentsSettings(), []);
 
   if (!props.live) return <section className="pj-page"><div className="panel empty-state"><p>Quy trình duyệt chỉ cấu hình được ở chế độ thật (đã đăng nhập).</p></div></section>;
-  if (!departments) return <div className="loading">Đang tải quy trình duyệt…</div>;
-  const dirty = JSON.stringify([departments, modes]) !== saved;
-  const setList = (key: Department, list: string[]) => setDepartments({ ...departments, [key]: list });
+  if (!roles || !company) return <div className="loading">Đang tải quy trình duyệt…</div>;
+  const dirty = JSON.stringify([roles, modes]) !== saved;
+  const setList = (key: CompanyRole, list: string[]) => setRoles({ ...roles, [key]: list });
   const save = async () => {
     setBusy(true);
     try {
       const cleanModes = Object.fromEntries(Object.entries(modes).filter(([, value]) => value === "sequence")) as ApprovalModes;
+      // Giữ các khối cũ không còn trên màn hình; Kho kiêm Vật tư nên khối Vật tư để trống (máy chủ lấy người của Kho)
+      const departments = { ...allDepartments, ...roles, material: [] as string[] };
       await saveApprovalSettings(departments, cleanModes);
+      setAllDepartments(departments);
+      setCompany({ ...company, departments });
       setModes(cleanModes);
-      setSaved(JSON.stringify([departments, cleanModes]));
-      props.setNotice("Đã lưu quy trình duyệt. Phiếu gửi từ bây giờ sẽ đi theo cấu hình mới.", "success");
+      setSaved(JSON.stringify([roles, cleanModes]));
+      props.setNotice("Đã lưu chức danh. Phiếu gửi từ bây giờ lấy người theo chức danh mới.", "success");
     } catch (error) { props.setNotice(errorMessage(error), "error"); } finally { setBusy(false); }
   };
+  const treeEditor = (docType: TreeDocType, title: string) => (
+    <CompanyTreeEditor key={docType} docType={docType} title={title} initial={company.trees[docType] ?? []} names={names} departments={{ ...company.departments, ...roles }}
+      employees={props.employees} canEdit setNotice={props.setNotice}
+      onSaved={(blocks: ApprovalBlock[]) => setCompany({ ...company, trees: { ...company.trees, [docType]: blocks } })} />
+  );
+  const defaultPeople = DEFAULT_PROJECT_ROLES.flatMap((key) => roles[key].map((id) => names[id] ?? id));
 
   return (
     <section className="pj-page">
       <div className="page-head">
         <div>
           <h1><GitBranch className="ico" size={22} aria-hidden="true" /> Quy trình duyệt</h1>
-          <p>Ai được duyệt ở từng khối, áp dụng cho mọi dự án (dự án nào đặt người riêng ở mục “Phân quyền & duyệt” thì dùng người của dự án).</p>
-        </div>
-        <div className="button-row">
-          {dirty && <button type="button" className="button" disabled={busy} onClick={() => { const [d, m] = JSON.parse(saved) as [Record<Department, string[]>, ApprovalModes]; setDepartments(d); setModes(m); }}>Hoàn tác</button>}
-          <button type="button" className="button primary" disabled={busy || !dirty} onClick={() => void save()}>{busy ? "Đang lưu…" : "Lưu quy trình"}</button>
+          <p>Chức danh của công ty và cây duyệt mặc định cho mọi dự án. Dự án nào cần khác thì sửa riêng ở tab “Quy trình duyệt” của dự án.</p>
         </div>
       </div>
-      <div className="panel pj-section">
-        <p className="muted">Chuỗi ký đơn đặt hàng dự án: <b>Phụ trách (PM)</b> → P. Kỹ thuật → P. Vật tư → Kế toán → <b>Lãnh đạo</b> (ký là duyệt); sau đó P. Vật tư phát hành PO.
-          Yêu cầu vật tư: Kho (kiểm tồn) → P. Vật tư → P. Kỹ thuật → <b>Lãnh đạo</b>.
-          Khối chưa có ai thì bước đó được bỏ qua. Khối có từ 2 người: chọn <b>một người duyệt là đủ</b>, hoặc <b>lần lượt từng cấp</b> (cấp 1 ký xong mới tới cấp 2; khối Lãnh đạo thì người cuối ký mới là duyệt).
-          Giám đốc luôn duyệt ngay được. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
+
+      <section className="panel pj-section" aria-labelledby="roles-title">
+        <div className="page-head" style={{ marginBottom: 0 }}>
+          <h2 id="roles-title"><BadgeCheck className="ico" size={18} aria-hidden="true" /> Chức danh</h2>
+          <div className="button-row">
+            {dirty && <button type="button" className="button" disabled={busy} onClick={() => { const [r, m] = JSON.parse(saved) as [Roles, ApprovalModes]; setRoles(r); setModes(m); }}>Hoàn tác</button>}
+            <button type="button" className="button primary" disabled={busy || !dirty} onClick={() => void save()}>{busy ? "Đang lưu…" : "Lưu chức danh"}</button>
+          </div>
+        </div>
+        <p className="muted">Ai không có chức danh nào là <b>Kỹ sư</b>. <b>Giám đốc, Kế toán, Người duyệt đầu vào</b> mặc định có trong mọi dự án (thấy và ký phiếu của mọi dự án, không cần thêm vào dự án)
+          {defaultPeople.length ? <>: {defaultPeople.join(", ")}</> : null}. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
         <div className="ap-editor">
-          {ORDER.map((key) => {
-            const list = departments[key];
-            const mode = modes[key] ?? "any";
+          {COMPANY_ROLES.map((role) => {
+            const list = roles[role.key];
+            const mode = modes[role.key as keyof ApprovalModes] ?? "any";
             return (
-              <div key={key} className="ap-editor-row">
-                <div className="ap-editor-role"><b>{ROLE_LABELS[key]}</b><small className="muted">{ROLE_HINTS[key]}</small></div>
+              <div key={role.key} className="ap-editor-row">
+                <div className="ap-editor-role"><b>{role.label}</b><small className="muted">{role.hint}</small></div>
                 <div className="ap-editor-people">
                   {list.length ? (
-                    <OrderedPeople roleLabel={ROLE_LABELS[key]} sequence={mode === "sequence"} people={list.map((id) => ({ id, label: names[id] ?? id }))}
-                      onMove={(index, delta) => { const next = [...list]; const [moved] = next.splice(index, 1); next.splice(index + delta, 0, moved!); setList(key, next); }}
-                      onRemove={(index) => setList(key, list.filter((_, i) => i !== index))} />
-                  ) : <small className="muted">Chưa có ai (bỏ qua bước này)</small>}
-                  {list.length > 1 && <ModePicker name={`gmode-${key}`} value={mode} onChange={(next) => setModes({ ...modes, [key]: next })} />}
-                  <EmployeePicker key={`${key}-${pickerKey}`} label="" source={props.employees} exclude={new Set(list)} onPick={(option) => {
+                    <OrderedPeople roleLabel={role.label} sequence={mode === "sequence"} people={list.map((id) => ({ id, label: names[id] ?? id }))}
+                      onMove={(index, delta) => { const next = [...list]; const [moved] = next.splice(index, 1); next.splice(index + delta, 0, moved!); setList(role.key, next); }}
+                      onRemove={(index) => setList(role.key, list.filter((_, i) => i !== index))} />
+                  ) : <small className="muted">Chưa có ai</small>}
+                  {list.length > 1 && <ModePicker name={`gmode-${role.key}`} value={mode} onChange={(next) => setModes({ ...modes, [role.key]: next })} />}
+                  <EmployeePicker key={`${role.key}-${pickerKey}`} label="" source={props.employees} exclude={new Set(list)} onPick={(option) => {
                     if (!option) return;
                     setNames((current) => ({ ...current, [option.id]: option.name }));
-                    setList(key, [...list, option.id]);
+                    setList(role.key, [...list, option.id]);
                     setPickerKey((value) => value + 1);
                   }} />
                 </div>
               </div>
             );
           })}
+          <div className="ap-editor-row"><div className="ap-editor-role"><b>Kỹ sư</b><small className="muted">Mặc định</small></div><div className="ap-editor-people"><small className="muted">Mọi người còn lại (không có chức danh ở trên).</small></div></div>
         </div>
-      </div>
-      <StageDepartmentsEditor canEdit load={stageDepartmentsSettings} save={saveStageDepartments} setNotice={props.setNotice} />
+      </section>
+
+      <StageDepartmentsEditor canEdit load={loadStages} save={saveStageDepartments} setNotice={props.setNotice}
+        tree={(stage) => { const item = STAGE_TREE[stage]; return item ? { title: item.title, render: () => treeEditor(item.docType, item.title) } : null; }} />
+
+      <section className="panel pj-section" aria-labelledby="forms-title">
+        <h2 id="forms-title"><FileStack className="ico" size={18} aria-hidden="true" /> Cây duyệt các phiếu khác</h2>
+        <ol className="po-stage-editor">
+          {OTHER_FORMS.map((form) => (
+            <li key={form.docType} className={`has-tree${openForm === form.docType ? " is-open" : ""}`} style={{ gridTemplateColumns: "1fr" }}>
+              <button type="button" className="po-stage-toggle" aria-expanded={openForm === form.docType} onClick={() => setOpenForm(openForm === form.docType ? null : form.docType)}>
+                {openForm === form.docType ? "▾" : "▸"} {form.title} <small className="muted">{company.trees[form.docType]?.length ? "đã cài" : "chưa cài (theo quy trình chung)"}{form.hint ? ` · ${form.hint}` : ""}</small>
+              </button>
+              {openForm === form.docType && <div className="po-stage-tree" style={{ display: "block" }}>{treeEditor(form.docType, form.title)}</div>}
+            </li>
+          ))}
+        </ol>
+      </section>
     </section>
   );
 }
