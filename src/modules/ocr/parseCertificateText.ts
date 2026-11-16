@@ -121,7 +121,11 @@ function parseCccd(source: string, result: ParsedCertificate) {
   const numbers = [...source.matchAll(/(?<![\d])(0\d{11})(?![\d])/g)].map((match) => match[1]!);
   // Dòng MRZ 1 = "IDVNM" + 9 số cuối CCCD + chữ số kiểm tra + 12 số CCCD (OCR có khi cắt cụt phần sau)
   const mrz = /[i1l|]dvnm(\d{10,})/.exec(source)?.[1] ?? "";
-  const number = numbers.find((value) => source.includes(`${value}<`) || (mrz && mrz.startsWith(value.slice(3)))) ?? agreed(numbers, 2);
+  // Số đọc thẳng từ dòng MRZ 1: 9 số cuối in hai lần ("IDVNM<9 số><kiểm tra><12 số><<") nên tự đối chiếu được; OCR hay đọc 0 → o, 1 → l
+  const fromMrz = /[i1l|]dvnm([\dol]{9})[\dol]([\dol]{12})</.exec(source.replace(/[ \t]/g, ""));
+  const mrzDigits = fromMrz ? [fromMrz[1]!, fromMrz[2]!].map((part) => part.replace(/o/g, "0").replace(/l/g, "1")) : [];
+  const mrzNumber = mrzDigits.length && /^0\d{11}$/.test(mrzDigits[1]!) && mrzDigits[1]!.slice(3) === mrzDigits[0] ? mrzDigits[1] : undefined;
+  const number = numbers.find((value) => source.includes(`${value}<`) || (mrz && mrz.startsWith(value.slice(3)))) ?? mrzNumber ?? agreed(numbers, 2);
   if (number) result.number = number;
   const expiry = dateAfterLabel(source, /(co gia tri den|date of expiry|gia tri den)/) ?? cccdExpiryFromMrz(source);
   if (expiry) result.expiryDate = expiry;
@@ -134,18 +138,46 @@ const ATLD_FIELDS: readonly [RegExp, string][] = [
   [/lam viec tren cao/, "Làm việc trên cao"],
   [/linh vuc dien/, "Lĩnh vực điện"],
   [/cong trinh[\s\S]{0,20}?xay d/, "Công trình xây dựng"],
+  [/khong\s*gian\s*kin|h[o0]\s*pit/, "Không gian kín (Hố PIT)"],
+  [/han\s*,?\s*cat\s*kim\s*loai/, "Hàn, cắt kim loại"],
+  [/xe\s*nang/, "Vận hành xe nâng"],
 ];
 
+/**
+ * Ngày cuối của khóa huấn luyện: "Từ ngày 14/05/2026 đến ngày 16/05/2026" (thẻ), "từ ngày 08 tháng 6 năm 2024 đến ngày
+ * 09 tháng 6 năm 2024" (giấy chứng nhận). OCR hay đọc "đến" thành "đếm". Bỏ cụm "có giá trị (2 năm từ ngày …) đến ngày …":
+ * đó là hạn, không phải thời gian học.
+ */
+function trainingEndDate(source: string): string | undefined {
+  const dates: string[] = [];
+  // Dừng trước "ngay" để ngày viết bằng chữ ("ngày 09 tháng 6 năm 2024") vẫn khớp WORDED_DATE; thẻ mẫu cũ ghi "đến 03/04/2025" không có "ngày"
+  for (const match of source.matchAll(/de[nm]\s*(?=ngay|\d{1,2}\s*\/)/g)) {
+    const at = match.index ?? 0;
+    const before = source.slice(Math.max(0, at - 80), at);
+    // "có giá trị đến ngày" (hạn), hoặc "có giá trị 2 năm từ ngày … đến ngày …" (hạn viết thành khoảng) thì bỏ
+    if (/gia\s*tri\s*$/.test(before)) continue;
+    const near = before.slice(-45);
+    const from = [...near.matchAll(/tu\s*ngay/g)].pop();
+    if (!from) continue;
+    const beforeFrom = before.slice(0, before.length - near.length + (from.index ?? 0));
+    if (/gia\s*tri\s*\d*\s*nam[\s,.:]*$/.test(beforeFrom)) continue;
+    const iso = firstDate(source, at + match[0].length, 40);
+    if (iso) dates.push(iso);
+  }
+  return agreed(dates, dates.length > 1 ? 2 : 1);
+}
+
 function parseAtld(source: string, result: ParsedCertificate) {
-  // Hạn: thẻ "Thẻ này có giá trị đến ngày: 28/04/2027"; giấy chứng nhận "có giá trị 2 năm từ ngày … đến ngày 10 tháng 6 năm 2026".
-  // Không dùng "Từ ngày … đến ngày …" đứng một mình: đó là thời gian học.
-  const expiry = dateAfterLabel(source, /gia tri den\s*ngay\s*:?/) ?? dateAfterLabel(source, /gia tri\s*\d\s*nam[\s\S]{0,60}?den\s*(?=ngay)/, 40);
+  // Hạn: thẻ "Thẻ này có giá trị đến ngày: 28/04/2027" (OCR có khi dính "giá triđến"); giấy chứng nhận "có giá trị 2 năm từ ngày … đến ngày 10 tháng 6 năm 2026".
+  const expiry = dateAfterLabel(source, /gia\s*tri\s*den\s*ngay\s*:?/) ?? dateAfterLabel(source, /gia tri\s*\d\s*nam[\s\S]{0,60}?den\s*(?=ngay)/, 40);
   if (expiry) result.expiryDate = expiry;
-  // Ngày cấp: dòng "Tp. Hồ Chí Minh, ngày 28/04/2025" (thẻ) hoặc "…, ngày 10 tháng 6 năm 2024" (giấy chứng nhận)
+  // Ngày cấp = ngày cuối của khóa huấn luyện ("Từ ngày … đến ngày …"). Không đọc được thì lấy dòng
+  // "Tp. Hồ Chí Minh, ngày 28/04/2025" (thẻ) hoặc "…, ngày 10 tháng 6 năm 2024" (giấy chứng nhận).
+  const trainingEnd = trainingEndDate(source);
   const issued = [...source.matchAll(/(chi minh|hcm)[^\n]{0,8}?(?=ngay)/g)]
     .map((match) => firstDate(source, (match.index ?? 0) + match[0].length, 30))
     .filter((iso): iso is string => Boolean(iso) && (!result.expiryDate || iso! < result.expiryDate));
-  const issue = agreed(issued, issued.length > 1 ? 2 : 1);
+  const issue = trainingEnd ?? agreed(issued, issued.length > 1 ? 2 : 1);
   if (issue) result.issueDate = issue;
 
   const groups = [...source.matchAll(/nhom\s*([1-6])(?!\d)/g)].map((match) => match[1]!);
@@ -163,9 +195,13 @@ function parseAtld(source: string, result: ParsedCertificate) {
     const lineStart = source.lastIndexOf("\n", match.index ?? 0) + 1;
     if (/^\d{2}[A-Z]\d{4,6}$/.test(core)) candidates.push({ core, middle: match[2]!, main: !source.startsWith(READ_AGAIN, lineStart) });
   }
-  // Số thẻ in hai bản + các lần đọc lại dòng số: cần ít nhất 2 lần khớp nhau, và có trong lượt đọc cả trang
+  // Số thẻ in hai bản + các lần đọc lại dòng số: cần ít nhất 2 lần khớp nhau, và có trong lượt đọc cả trang.
+  // Thẻ chỉ in số một lần (dấu mộc đè làm các lần đọc lại ra rác): nhận khi mọi lần đọc ra đúng một số duy nhất
+  // và số đó có trong lượt đọc cả trang; có hai số khác nhau thì vẫn để trống.
   const winner = agreed(candidates.map((item) => item.core), 2);
-  const core = winner && candidates.some((item) => item.core === winner && item.main) ? winner : undefined;
+  const distinct = [...new Set(candidates.map((item) => item.core))];
+  const chosen = winner ?? (distinct.length === 1 ? distinct[0] : undefined);
+  const core = chosen && candidates.some((item) => item.core === chosen && item.main) ? chosen : undefined;
   if (core) {
     const certificate = candidates.find((item) => item.core === core && item.middle.startsWith("n"));
     const year = result.issueDate?.slice(0, 4);
@@ -193,13 +229,20 @@ function parseElectrical(source: string, result: ParsedCertificate) {
   if (expiry) result.expiryDate = expiry;
 }
 
+/** Ô chữ trong mã sản phẩm "IB" của số hợp đồng Bảo Minh: OCR hay đọc thành số ("2618", "261B"). */
+const LETTER_LOOKALIKE: Readonly<Record<string, string>> = { "1": "I", "l": "I", "|": "I", "8": "B", "0": "O", "5": "S" };
+
 function parseInsurance(source: string, result: ParsedCertificate) {
-  const number = agreedNumber(source, /s[o0]\s*[:.]?\s*([a-z]-\d{2}\/[a-z0-9]+\/[a-z0-9]+\/\d+\/\d+)/, (match) => match[1]!.toUpperCase());
+  // PJICO "Số: P-25/BTA/P56/6201/000024"; Bảo Minh "SỐ HỢP ĐỒNG : AD0070/26IB08203" (số nằm riêng một ô, không có chữ "Số")
+  const number = agreedNumber(source, /s[o0]\s*[:.]?\s*([a-z]-\d{2}\/[a-z0-9]+\/[a-z0-9]+\/\d+\/\d+)/, (match) => match[1]!.toUpperCase())
+    ?? agreedNumber(source, /(?<![a-z0-9])([a-z]{2}\d{4})\s*\/\s*(\d{2})([a-z0-9|]{2})(\d{5})(?!\d)/, (match) =>
+      `${match[1]!.toUpperCase()}/${match[2]}${[...match[3]!].map((char) => LETTER_LOOKALIKE[char] ?? char.toUpperCase()).join("")}${match[4]}`);
   if (number) result.number = number;
-  // Thời hạn bảo hiểm "Từ 00:00 h ngày 01/01/2026 đến 23:59 h ngày 31/12/2026": ngày cấp = ngày bắt đầu được bảo hiểm
-  const from = dateAfterLabel(source, /tu\s*\d{1,2}[:.]\d{2}\s*h?\s*/, 25);
+  // Thời hạn bảo hiểm: ngày cấp = ngày bắt đầu được bảo hiểm.
+  // PJICO "Từ 00:00 h ngày 01/01/2026 đến 23:59 h ngày 31/12/2026"; Bảo Minh "Thời hạn bảo hiểm: Từ ngày 07/11/2026 cho đến ngày 04/02/2027"
+  const from = dateAfterLabel(source, /tu\s*\d{1,2}[:.]\d{2}\s*h?\s*/, 25) ?? dateAfterLabel(source, /thoi han bao hiem\s*[:|]?\s*tu\s*(?=ngay)/, 30);
   if (from) result.issueDate = from;
-  const to = dateAfterLabel(source, /den\s*\d{1,2}[:.]\d{2}\s*h?\s*/, 25);
+  const to = dateAfterLabel(source, /den\s*\d{1,2}[:.]\d{2}\s*h?\s*/, 25) ?? dateAfterLabel(source, /thoi han bao hiem[^\n]{0,60}?den\s*(?=ngay)/, 30);
   if (to) result.expiryDate = to;
 }
 

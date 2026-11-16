@@ -9,8 +9,10 @@ giao diện ở `src/app/_components/CertificateFormModal.tsx`.
 ## Nguyên tắc: thà để trống còn hơn điền sai
 
 - **Số chứng chỉ**: chỉ điền khi ít nhất **2 lần đọc khớp nhau** và số đó **có trong lượt đọc cả trang** (hai nguồn độc lập).
-  Các lần đọc: lượt đọc cả trang (thẻ in hai bản thì có hai lần) + 4 lần đọc lại riêng dòng số (cắt sát dòng, phóng 2–3 lần,
-  ảnh xám và kênh mực đỏ, chỉ cho phép chữ in hoa/số/dấu ngăn cách). Hòa hoặc lệch nhau → để trống.
+  Các lần đọc: 2 lượt đọc cả trang — ảnh thường và **ảnh kênh đỏ** (dấu mộc đỏ thành nền sáng, đọc được các dòng bị
+  dấu đè: số thẻ, "Từ ngày … đến ngày …", "có giá trị đến") — (thẻ in hai bản thì mỗi lượt có hai lần) + 4 lần đọc lại
+  riêng mỗi dòng số (cắt sát dòng, phóng 2–3 lần, ảnh xám và kênh mực đỏ, chỉ cho phép chữ in hoa/số/dấu ngăn cách).
+  Hòa hoặc lệch nhau → để trống. Mỗi trang đọc 2 lượt nên thời gian đọc khoảng gấp đôi.
 - **Ngày**: in ở nhiều chỗ (thẻ in hai bản) thì các chỗ phải khớp nhau. Ngày cấp ở tương lai, sau ngày hết hạn, hoặc
   CCCD cấp trước 2016 → bỏ.
 - Ô đã có chữ thì không đè. Ô tự điền có viền xanh để đối chiếu với giấy gốc trước khi lưu.
@@ -20,11 +22,11 @@ giao diện ở `src/app/_components/CertificateFormModal.tsx`.
 
 | Loại (key) | Nhận ra bằng | Lấy được | Để trống (nhập tay) |
 |---|---|---|---|
-| Căn cước công dân (`custom-ctype-cccd`) | "Căn cước", dòng MRZ "IDVNM…" | **Số** (khớp 9 số cuối trong MRZ), **ngày hết hạn** (MRZ: chữ số kiểm tra + trùng ngày-tháng sinh, sửa được 1 chữ số đọc nhầm), **ngày cấp** (mặt sau, phía trên: định vị theo khối MRZ, đọc lại riêng vùng ngày, nhiều lần đọc phải khớp) | — |
-| An toàn lao động – thẻ (`atld`) | "Thẻ an toàn lao động" | **Số thẻ** `…/YYYY/TATLĐ` (năm lấy theo ngày cấp), **ngày cấp** (dòng "Tp. Hồ Chí Minh, ngày …"), **ngày hết hạn** ("có giá trị đến ngày", không lấy thời gian học "Từ ngày … đến ngày …"), **nhóm**, **lĩnh vực** Nhóm 3 → tên phân biệt "Nhóm 3 - Làm việc trên cao / Lĩnh vực điện / Công trình xây dựng" | Số thẻ khi cả hai bản in bị dấu mộc đè (vd thẻ lĩnh vực điện) |
-| An toàn lao động – giấy chứng nhận Nhóm 1 (`atld`) | "Huấn luyện an toàn, vệ sinh lao động" | **Số** `…/N1/YYYY`, **ngày cấp**, **hạn** ("có giá trị 2 năm từ ngày … đến ngày …" viết bằng chữ), **nhóm** | — |
+| Căn cước công dân (`custom-ctype-cccd`) | "Căn cước", dòng MRZ "IDVNM…" | **Số** (khớp 9 số cuối trong MRZ; mặt trước đọc hỏng thì lấy thẳng từ dòng MRZ khi hai phần 9 số cuối khớp nhau, sửa O→0), **ngày hết hạn** (MRZ: chữ số kiểm tra + trùng ngày-tháng sinh, sửa được 1 chữ số đọc nhầm), **ngày cấp** (mặt sau, phía trên: định vị theo khối MRZ, đọc lại riêng vùng ngày, nhiều lần đọc phải khớp) | — |
+| An toàn lao động – thẻ (`atld`) | "Thẻ an toàn lao động" | **Số thẻ** `…/YYYY/TATLĐ` (năm lấy theo ngày cấp; thẻ chỉ in số một lần thì nhận khi mọi lần đọc ra đúng một số), **ngày cấp** = **ngày cuối khóa học** ("Từ ngày … đến ngày …", chịu được "đếm ngày"; không đọc được thì lấy dòng "Tp. Hồ Chí Minh, ngày …"), **ngày hết hạn** ("có giá trị đến ngày", chịu được "giá triđến"), **nhóm**, **lĩnh vực** Nhóm 3 → tên phân biệt "Nhóm 3 - Làm việc trên cao / Lĩnh vực điện / Công trình xây dựng" | Số thẻ khi bị dấu mộc đè mà các lần đọc ra hai số khác nhau |
+| An toàn lao động – giấy chứng nhận Nhóm 1 (`atld`) | "Huấn luyện an toàn, vệ sinh lao động" | **Số** `…/N1/YYYY`, **ngày cấp** = ngày cuối khóa học ("từ ngày … đến ngày …", không lấy cụm "có giá trị 2 năm từ … đến …"), **hạn** ("có giá trị 2 năm từ ngày … đến ngày …" viết bằng chữ), **nhóm** | — |
 | An toàn điện – thẻ bậc (`elec`) | "Thẻ an toàn điện", "Bậc an toàn" | **Ngày cấp** ("Cấp ngày"), **bậc** → tên phân biệt "Bậc 3/5" | Số thẻ (dấu mộc đè); hạn (thẻ không ghi) |
-| Bảo hiểm tai nạn (`ins`) | "Bảo hiểm" + "Hợp đồng" | **Số hợp đồng**, **ngày cấp** = ngày bắt đầu bảo hiểm, **hạn** ("Từ 00:00 h ngày … đến 23:59 h ngày …") | — |
+| Bảo hiểm tai nạn (`ins`) | "Bảo hiểm" + "Hợp đồng" | **Số hợp đồng** (PJICO "Số: P-25/BTA/…"; Bảo Minh "AD0070/26IB08203", sửa "2618"/"261B" → "26IB"), **ngày cấp** = ngày bắt đầu bảo hiểm, **hạn** (PJICO "Từ 00:00 h ngày … đến 23:59 h ngày …"; Bảo Minh "Thời hạn bảo hiểm: Từ ngày … cho đến ngày …") | — |
 | Khám sức khỏe (`health`) | "Giấy khám sức khỏe" | Nhận ra loại | Số (viết tay mực đỏ), ngày khám (viết tay); hạn (giấy không ghi) |
 | Sức khỏe làm việc trên cao (`custom-ctype-height-health`) | "Chứng chỉ hành nghề" + "làm việc trên cao" | Nhận ra loại | Số (giấy để trống), ngày (viết tay) |
 | Bằng cấp chuyên môn (`custom-ctype-degree`) | "Tốt nghiệp", "văn bằng" | Số bằng khi các lần đọc khớp nhau | Số khi OCR đọc lệch (ảnh mờ), ngày (viết tay); bằng không có hạn |

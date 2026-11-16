@@ -81,14 +81,33 @@ function inkCrop(source: HTMLCanvasElement, box: Box, scale: number, mode: "gray
   return canvas;
 }
 
+/**
+ * Ảnh kênh đỏ: dấu mộc đỏ đè lên chữ thành nền sáng, chữ mực đen/xanh vẫn đậm. Thẻ ATLĐ có dấu mộc đè lên các dòng
+ * "Từ ngày … đến ngày …", số thẻ, "có giá trị đến" nên lượt đọc thường hay bỏ sót cả dòng.
+ */
+function redChannel(source: HTMLCanvasElement): HTMLCanvasElement {
+  const canvas = crop(source, 0, 0, source.width, source.height, 1);
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) return canvas;
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  for (let index = 0; index < image.data.length; index += 4) {
+    const channel = Math.max(0, Math.min(255, Math.round(((image.data[index] ?? 0) - 128) * 1.6 + 128)));
+    image.data[index] = channel; image.data[index + 1] = channel; image.data[index + 2] = channel;
+  }
+  context.putImageData(image, 0, 0);
+  return canvas;
+}
+
 /** Bộ ký tự khi đọc lại dòng số chứng chỉ: chữ in hoa, số, dấu ngăn cách. */
 const NUMBER_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZĐ/-. :";
-/** Dòng có số chứng chỉ: "Số: …", "Số 24F…" (không dấu hai chấm), "…/TATLĐ", "…/N1/…", "…/GKSK", "…/TTS/…". */
-const NUMBER_LINE = /(^|[^a-z])s[o0]\s*[:.]?\s*[a-z]?[\s-]*\d|\/\s*tat|\/\s*n\d\s*\/|gksk|tts\//;
+/** Số hợp đồng bảo hiểm Bảo Minh "AD0070/26IB08203" (đứng riêng một ô, không có chữ "Số" phía trước). */
+const BAO_MINH_NUMBER = /[a-z]{2}\d{4}\s*\/\s*\d{2}[a-z0-9|]{2}\d{5}/;
+/** Dòng có số chứng chỉ: "Số: …", "Số 24F…" (không dấu hai chấm), "…/TATLĐ", "…/N1/…", "…/GKSK", "…/TTS/…", số hợp đồng Bảo Minh. */
+const NUMBER_LINE = new RegExp(`(^|[^a-z])s[o0]\\s*[:.]?\\s*[a-z]?[\\s-]*\\d|\\/\\s*tat|\\/\\s*n\\d\\s*\\/|gksk|tts\\/|${BAO_MINH_NUMBER.source}`);
 /** Dòng số quyết định, số "căn cứ" văn bản: không phải số chứng chỉ, không đọc lại. */
 const NOT_CERTIFICATE_NUMBER = /\/\s*q[dđ]|can cu|nghi dinh|thong tu|giay chung nhan so/;
 /** Dòng ghi đúng dạng số chứng chỉ đọc lại trước (giới hạn 6 dòng mỗi trang). */
-const CERTIFICATE_NUMBER_SHAPE = /\/\s*tat|\/\s*n\d\s*\/|gksk|tts\/|[a-z]-\d{2}\//;
+const CERTIFICATE_NUMBER_SHAPE = new RegExp(`\\/\\s*tat|\\/\\s*n\\d\\s*\\/|gksk|tts\\/|[a-z]-\\d{2}\\/|${BAO_MINH_NUMBER.source}`);
 const plainText = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[đĐ]/g, "d").toLowerCase();
 
 /**
@@ -204,7 +223,16 @@ export async function readDocumentText(file: Blob, signal?: AbortSignal, progres
         const issueLine = await readCccdIssueLine(worker, original, linesOf(data).flatMap((line) => line.words)).catch(() => null);
         if (issueLine) texts.push(issueLine);
       }
-      texts.push(...await rereadNumberLines(worker, original, linesOf(data)).catch(() => []));
+      // Lượt đọc kênh đỏ (bỏ dấu mộc đỏ): là một lượt đọc cả trang độc lập, bộ phân tích bỏ phiếu giữa hai lượt
+      const red = redChannel(original);
+      const redData = (await worker.recognize(red, {}, { text: true, blocks: true })).data;
+      red.width = 0; red.height = 0;
+      texts.push(redData.text);
+      // Dòng số chỉ thấy ở lượt kênh đỏ cũng được đọc lại; dòng trùng vị trí với lượt thường thì bỏ để không đọc hai lần
+      const mainLines = linesOf(data);
+      const sameRow = (a: Box, b: Box) => Math.abs((a.y0 + a.y1) / 2 - (b.y0 + b.y1) / 2) < (a.y1 - a.y0) && a.x0 < b.x1 && b.x0 < a.x1;
+      const redOnly = linesOf(redData).filter((line) => !mainLines.some((main) => sameRow(main.bbox, line.bbox) && NUMBER_LINE.test(plainText(main.text))));
+      texts.push(...await rereadNumberLines(worker, original, [...mainLines, ...redOnly]).catch(() => []));
       original.width = 0; original.height = 0;
       canvas.width = 0; canvas.height = 0;
     }
