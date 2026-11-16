@@ -219,6 +219,7 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
     },
 
     async listMembers(projectId) { return (await rows(client.from("project_members").select("*").eq("project_id", projectId))).map(memberFromRow); },
+    async listMembershipsFor(employeeIds) { return employeeIds.length ? (await rows(client.from("project_members").select("*").in("employee_id", [...employeeIds]))).map(memberFromRow) : []; },
     async listMembershipsOf(employeeId) { return (await rows(client.from("project_members").select("*").eq("employee_id", employeeId))).map(memberFromRow); },
     async saveMember(input) {
       const payload = { project_id: input.projectId, employee_id: input.employeeId, display_name: input.displayName, employee_code: input.employeeCode, role: input.role, parent_id: input.parentId, team: input.team.trim(), subcontract_id: input.subcontractId, joined_on: input.joinedOn, left_on: input.leftOn };

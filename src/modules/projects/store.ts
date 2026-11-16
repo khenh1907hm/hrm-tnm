@@ -27,6 +27,8 @@ export interface ProjectStore {
   listMembers(projectId: string): Promise<ProjectMember[]>;
   /** Mọi dự án có người này (để biết tài khoản đang đăng nhập làm tổ trưởng ở đâu). */
   listMembershipsOf(employeeId: string): Promise<ProjectMember[]>;
+  /** Mọi lần tham gia dự án của nhiều nhân sự một lượt (cột Dự án ở danh sách nhân sự). */
+  listMembershipsFor(employeeIds: readonly string[]): Promise<ProjectMember[]>;
   saveMember(member: Omit<ProjectMember, "id"> & { id?: string }): Promise<ProjectMember>;
   removeMember(id: string): Promise<void>;
   listMemberRates(projectId: string): Promise<MemberRate[] | null>;

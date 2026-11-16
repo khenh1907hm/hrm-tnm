@@ -53,6 +53,8 @@ import { ProjectsPage } from "./_components/projects/ProjectsPage";
 import { TimesheetPage } from "./_components/projects/TimesheetPage";
 import { LaborRatesPage } from "./_components/projects/LaborRatesPage";
 import { useProjectStore } from "./_components/projects/useProjectStore";
+import { projectsByEmployee, type EmployeeProject } from "../modules/projects/employeeProjects";
+import { systemClock, todayVN } from "../lib/clock";
 import type { EmployeeSource } from "./_components/projects/projectShared";
 
 /** Chọn màn hình theo trạng thái: đang tải, đăng nhập (chế độ thật) hoặc vào app. */
@@ -148,6 +150,17 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   } : null, [app, actor]);
   const projectStore = useProjectStore(backend.mode, employeeSource);
   const purchaseStore = getPurchaseStore(backend.mode);
+  // Cột "Dự án" ở danh sách nhân sự: dự án mỗi người đang tham gia (một lượt cho cả trang)
+  const [employeeProjects, setEmployeeProjects] = useState<Record<string, EmployeeProject[]> | null>(null);
+  useEffect(() => {
+    if (view !== "employees" || !projectStore.ready || !rows.length) return;
+    let active = true;
+    const ids = rows.map((employee) => employee.id);
+    void Promise.all([projectStore.store.listMembershipsFor(ids), projectStore.store.listProjects()]).then(([members, projects]) => {
+      if (active) setEmployeeProjects(projectsByEmployee(members, projects, todayVN(systemClock)));
+    }, () => { if (active) setEmployeeProjects({}); });
+    return () => { active = false; };
+  }, [view, rows, projectStore.ready, projectStore.store]);
   const openPurchase = useCallback((orderId: string | null) => {
     const path = orderId ? purchasePath(orderId) : routePath("purchases");
     if (path !== window.location.pathname) window.history.pushState(null, "", path);
@@ -447,7 +460,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       <SideNav mode={backend.mode} email={backend.email} onSignOut={() => void backend.signOut()} view={view} onNavigate={(key) => navigate(key)} alertCount={certRows.length} actor={actor} onActorChange={setActor} onPreviewEmployee={backend.previewEmployee} />
       <main className="main-content">
         {backend.mode === "live" && <TopBarActions email={backend.email} onSignOut={() => void backend.signOut()} onNotice={(message) => setNotice(message, "success")} />}
-        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void loadSelectedEmployees().then(setBatchEmployees)} onExportCertificates={() => void loadSelectedEmployees().then(setCertFolderEmployees)} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
+        {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} employeeProjects={employeeProjects} onOpenProject={openProject} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void loadSelectedEmployees().then(setBatchEmployees)} onExportCertificates={() => void loadSelectedEmployees().then(setCertFolderEmployees)} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
         {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
         {detail && <EmployeeDetailView
           app={app}

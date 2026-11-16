@@ -613,3 +613,10 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .tool-fold-body>*,.gh-guide>*,.mcp-guide>*,.mcp-steps>li{min-width:0}.mcp-cmd{max-width:100%}.gh-guide{display:grid;gap:6px;font-size:14px}.gh-guide>p{margin:0}.gh-guide h3{font-size:15px;margin:14px 0 2px}.gh-guide h3:first-of-type{margin-top:6px}.gh-guide .mcp-steps{margin-top:4px}.gh-list{margin:4px 0;padding-left:20px;display:grid;gap:6px;font-size:13px}.gh-list code{font-size:12px;background:rgba(127,127,127,.12);padding:1px 4px;border-radius:4px}.mcp-guide{display:grid;gap:10px}.mcp-guide>p{margin:0;font-size:14px}
 @media (prefers-reduced-motion:reduce){.tool-fold-chevron{transition:none}}
 @media (max-width:640px){.tool-fold>summary{padding:12px}.tool-fold-body{padding:12px}.tool-fold-text b{font-size:15px}.mcp-actions .button{flex:1;justify-content:center}}
+
+/* Danh sách nhân sự: cột Dự án */
+.employee-projects{display:flex;flex-wrap:wrap;gap:4px;max-width:320px}
+.employee-projects .project-pill{border:0;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.employee-projects .project-pill:hover{filter:brightness(.95);text-decoration:underline}
+.employee-projects .project-pill-name{font-weight:500}
+@media (max-width:900px){.employee-projects .project-pill-name{display:none}}

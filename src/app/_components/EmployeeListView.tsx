@@ -5,6 +5,7 @@ import { can, type Actor } from "../../modules/auth/permissions";
 import type { CertificateChecklistSummary } from "../../modules/certificates/checklist";
 import { POSITIONS, type Employee, type EmploymentStatus } from "../../modules/employees/types";
 import { issueText } from "./shared";
+import type { EmployeeProject } from "../../modules/projects/employeeProjects";
 
 export type EmployeeFilters = {
   query: string;
@@ -106,6 +107,9 @@ export function EmployeeListView(props: {
   /** Dữ liệu có thể chưa mới nhất (tải ngầm lỗi). */
   stale: boolean;
   certificateHealth: Record<string, CertificateChecklistSummary>;
+  /** Dự án đang tham gia của từng người trên trang (null = đang tải). */
+  employeeProjects: Record<string, EmployeeProject[]> | null;
+  onOpenProject: (projectId: string) => void;
   alertCount: number;
   signatureCount: number;
   filters: EmployeeFilters;
@@ -236,7 +240,7 @@ export function EmployeeListView(props: {
       <div className={`table-scroll employee-table${props.loading && rows.length ? " is-loading" : ""}`}>
         <table><thead><tr>
           <th className="select-col"><input type="checkbox" aria-label="Chọn tất cả nhân sự trong trang" checked={allVisibleSelected} ref={(element) => { if (element) element.indeterminate = !allVisibleSelected && someVisibleSelected; }} onChange={(event) => toggleAll(event.target.checked)} /></th>
-          {sortHeader("code", "Mã NV")}{sortHeader("name", "Họ và tên")}<th>Điện thoại</th><th>Chức danh</th>{sortHeader("startDate", "Ngày làm nghề")}<th>Tình trạng chứng chỉ</th><th>Tình trạng</th>
+          {sortHeader("code", "Mã NV")}{sortHeader("name", "Họ và tên")}<th>Điện thoại</th><th>Chức danh</th>{sortHeader("startDate", "Ngày làm nghề")}<th>Tình trạng chứng chỉ</th><th>Dự án</th>
         </tr></thead><tbody>{rows.map((employee) => {
           const health = certificateHealth[employee.id];
           const checked = selectedIds.includes(employee.id);
@@ -247,7 +251,14 @@ export function EmployeeListView(props: {
             <td><b>{employee.name}</b></td>
             <td>{employee.phone}</td><td>{employee.position}</td><td>{employee.startDate.split("-").reverse().join("/")}</td>
             <td>{health ? <span className={health.missing || health.expired ? "pill bad" : health.expiring ? "pill warn" : "pill ok"}>{health.missing ? `Thiếu ${health.missing} bắt buộc` : health.expired ? `Hết hạn ${health.expired}` : health.expiring ? `Sắp hết hạn ${health.expiring}` : "Đầy đủ"}</span> : <span className="pill none">Đang kiểm tra</span>}</td>
-            <td><span className={employee.archivedAt ? "pill bad" : employee.status === "active" ? "pill ok" : "pill warn"}>{employee.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[employee.status]}</span>{employee.archivedAt && can(actor, "employeeWrite") && <button className="button" onClick={(event) => { event.stopPropagation(); props.onRestore(employee); }}>Khôi phục</button>}</td>
+            <td><div className="employee-projects">{employee.archivedAt
+              ? <><span className="pill bad">Đã lưu trữ</span>{can(actor, "employeeWrite") && <button className="button" onClick={(event) => { event.stopPropagation(); props.onRestore(employee); }}>Khôi phục</button>}</>
+              : props.employeeProjects === null ? <span className="pill none">Đang tải</span>
+              : (props.employeeProjects[employee.id] ?? []).length
+                ? (props.employeeProjects[employee.id] ?? []).map((project) => (
+                  <button key={project.id} type="button" className={`pill project-pill${project.active ? " ok" : ""}`} title={`${project.code} · ${project.name}`}
+                    onClick={(event) => { event.stopPropagation(); props.onOpenProject(project.id); }}>{project.code}<span className="project-pill-name"> · {project.name}</span></button>))
+                : <span className="muted">Chưa thuộc dự án</span>}</div></td>
           </tr>;
         })}{!rows.length && (props.error
           ? <tr><td colSpan={8} className="empty" role="alert">{issueText("LIST_LOAD_FAILED")} <button type="button" className="button" onClick={props.onRetry}>Thử lại</button></td></tr>

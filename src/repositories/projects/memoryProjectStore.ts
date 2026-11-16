@@ -211,6 +211,7 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
     },
 
     async listMembers(projectId) { return clone(data.members.filter((member) => member.projectId === projectId)); },
+    async listMembershipsFor(employeeIds) { const wanted = new Set(employeeIds); return clone(data.members.filter((member) => wanted.has(member.employeeId))); },
     async listMembershipsOf(employeeId) { return clone(data.members.filter((member) => member.employeeId === employeeId)); },
     async saveMember(input) {
       if (data.members.some((member) => member.id !== input.id && member.projectId === input.projectId && member.employeeId === input.employeeId)) fail("MEMBER_DUPLICATE");
