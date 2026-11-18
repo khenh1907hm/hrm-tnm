@@ -46,6 +46,12 @@ export type Project = {
   workEnd: string;
   lunchStart: string;
   lunchEnd: string;
+  /**
+   * Số công (người × ngày) của dự án trước khi dùng hệ thống, nhập tay để công lũy kế chạy đúng thực tế;
+   * tính đến hết ngày openingAsOf, báo cáo ngày sau mốc này cộng tiếp.
+   */
+  openingWorkdays?: number;
+  openingAsOf?: string | null;
   updatedAt: string;
 };
 

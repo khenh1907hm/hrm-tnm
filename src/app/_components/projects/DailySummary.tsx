@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, ChevronLeft, ChevronRight, Download } from "lucide-react";
+import { BarChart3, ChevronLeft, ChevronRight, Download, Pencil } from "lucide-react";
+import { addDays } from "../../../lib/dates";
 import { weekdayShort } from "../../../modules/projects/calendar";
 import type { DailyReport } from "../../../modules/projects/dailyReport";
 import { periodRange, periodTitle, shiftPeriod, summarizeDailyReports, type PeriodKind } from "../../../modules/projects/dailyReportSummary";
@@ -13,7 +14,7 @@ const dmy = (iso: string) => iso.split("-").reverse().join("/");
 const dm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
 
 /** Báo cáo tuần / tháng: tổng hợp các BC ngày trong kỳ, xem trên web và xuất Excel. */
-export function DailySummary({ store, data, viewer, setNotice, refreshKey }: Pick<TabProps, "store" | "data" | "viewer" | "setNotice"> & { refreshKey: number }) {
+export function DailySummary({ store, data, viewer, setNotice, refreshKey, reload }: Pick<TabProps, "store" | "data" | "viewer" | "setNotice" | "reload"> & { refreshKey: number }) {
   const { project, today, holidays } = data;
   const [kind, setKind] = useState<PeriodKind>("week");
   const [anchor, setAnchor] = useState(today);
@@ -31,13 +32,47 @@ export function DailySummary({ store, data, viewer, setNotice, refreshKey }: Pic
   }, [store, project.id, range, key, setNotice]);
 
   const reports = loaded?.key === key ? loaded.reports : null;
+
+  // Công lũy kế từ đầu dự án đến hết kỳ = công nhập trước (dự án chạy trước khi dùng hệ thống) + công các BC ngày sau mốc
+  const opening = project.openingWorkdays ?? 0;
+  const openingAsOf = project.openingAsOf ?? null;
+  const cumFrom = openingAsOf ? addDays(openingAsOf, 1) : (project.actualStart ?? project.plannedStart);
+  const cumKey = `${cumFrom}|${range.to}|${refreshKey}`;
+  const [cumulative, setCumulative] = useState<{ key: string; workdays: number } | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (cumFrom > range.to) return () => { active = false; };
+    void store.listDailyReports(project.id, { from: cumFrom, to: range.to }).then(
+      (list) => { if (active) setCumulative({ key: cumKey, workdays: list.reduce((sum, report) => sum + (report.present ?? 0), 0) }); },
+      () => { if (active) setCumulative(null); },
+    );
+    return () => { active = false; };
+  }, [store, project.id, cumFrom, range.to, cumKey]);
+  // Kỳ đang xem nằm trước mốc nhập công cũ thì không tính lũy kế
+  const afterOpening = cumFrom > range.to ? 0 : cumulative?.key === cumKey ? cumulative.workdays : null;
+  const cumulativeWorkdays = openingAsOf && openingAsOf > range.to ? null : afterOpening === null ? null : opening + afterOpening;
+  const canEditOpening = viewer.isLead || viewer.canEditProject;
+  const [editingOpening, setEditingOpening] = useState<{ workdays: string; asOf: string } | null>(null);
+  const saveOpening = async () => {
+    if (!editingOpening) return;
+    const workdays = Number(editingOpening.workdays.replace(",", "."));
+    if (!Number.isFinite(workdays) || workdays < 0) { setNotice("Số công nhập trước phải là số không âm.", "error"); return; }
+    if (workdays > 0 && !editingOpening.asOf) { setNotice("Chọn ngày: số công tính đến hết ngày nào.", "error"); return; }
+    try {
+      await store.saveProject({ ...project, openingWorkdays: workdays, openingAsOf: workdays > 0 ? editingOpening.asOf : null });
+      setEditingOpening(null);
+      setNotice("Đã lưu số công nhập trước.", "success");
+      await reload();
+    } catch (error) { setNotice(errorMessage(error), "error"); }
+  };
   const summary = useMemo(() => reports ? summarizeDailyReports(reports, range, { weeklyOff: project.weeklyOff, holidays, stdHours: project.stdHours, today, startDate: project.actualStart ?? project.plannedStart }) : null, [reports, range, project.weeklyOff, project.stdHours, project.actualStart, project.plannedStart, holidays, today]);
   const isCurrent = range.from <= today && today <= range.to;
 
   const exportExcel = async () => {
     if (!summary) return;
     try {
-      const bytes = await buildDailySummaryWorkbook({ project, kind, summary, exportedBy: viewer.isAdmin ? "Admin" : "PM / CHT", exportedOn: today });
+      const bytes = await buildDailySummaryWorkbook({ project, kind, summary, exportedBy: viewer.isAdmin ? "Admin" : "PM / CHT", exportedOn: today,
+        cumulative: cumulativeWorkdays === null ? null : { workdays: cumulativeWorkdays, opening, openingAsOf } });
       downloadXlsx(bytes, `BC-${kind === "week" ? "tuan" : "thang"}-${project.code.replace(/[^\w.-]+/g, "-")}-${range.from}.xlsx`);
       setNotice(`Đã xuất ${periodTitle(kind, range).toLowerCase()}.`, "success");
     } catch (error) { setNotice(errorMessage(error), "error"); }
@@ -67,12 +102,25 @@ export function DailySummary({ store, data, viewer, setNotice, refreshKey }: Pic
         <>
           <div className="dr-kpis">
             <div><span>Ngày có báo cáo</span><b>{summary.reportedDays}<small>/{summary.days.length}</small></b></div>
-            <div><span>Tổng công</span><b>{summary.workdays}</b></div>
+            <div><span>Tổng công</span><b>{summary.workdays}</b><small>trong kỳ</small></div>
+            <div><span>Công lũy kế</span><b>{cumulativeWorkdays ?? (openingAsOf && openingAsOf > range.to ? "—" : "…")}</b><small>{opening ? `gồm ${opening} công đến ${dmy(openingAsOf ?? "")}` : "từ đầu dự án"}{canEditOpening && <button type="button" className="link-button" style={{ marginLeft: 6 }} aria-label="Sửa số công nhập trước" title="Nhập số công đã làm trước khi dùng hệ thống" onClick={() => setEditingOpening({ workdays: String(opening || ""), asOf: openingAsOf ?? addDays(cumFrom, -1) })}><Pencil size={12} aria-hidden="true" /></button>}</small></div>
             <div><span>Giờ công</span><b>{summary.regularHours}</b><small>{project.stdHours} giờ/công</small></div>
             <div><span>Tăng ca</span><b>{summary.otHours} giờ</b><small>{summary.otPersonDays} lượt người</small></div>
             <div><span>Hiện diện TB</span><b>{summary.avgPresent}</b><small>cao nhất {summary.maxPresent}</small></div>
             <div className={summary.missingDates.length ? "warn" : ""}><span>Thiếu báo cáo</span><b>{summary.missingDates.length}</b><small>{summary.missingDates.length ? summary.missingDates.map(dm).join(", ") : "Đủ"}</small></div>
           </div>
+
+          {editingOpening && (
+            <div className="bs-head" role="group" aria-label="Công nhập trước">
+              <label className="field"><span>Số công đã làm trước (người × ngày)</span><input inputMode="decimal" autoFocus value={editingOpening.workdays} placeholder="vd: 1250" onChange={(event) => setEditingOpening({ ...editingOpening, workdays: event.target.value })} /></label>
+              <label className="field"><span>Tính đến hết ngày</span><input type="date" value={editingOpening.asOf} onChange={(event) => setEditingOpening({ ...editingOpening, asOf: event.target.value })} /></label>
+              <div className="button-row" style={{ alignSelf: "end" }}>
+                <button type="button" className="button" onClick={() => setEditingOpening(null)}>Hủy</button>
+                <button type="button" className="button primary" onClick={() => void saveOpening()}>Lưu</button>
+              </div>
+              <small className="muted" style={{ gridColumn: "1 / -1" }}>Dùng cho dự án chạy trước khi có hệ thống: công lũy kế = số này + công của các báo cáo ngày sau ngày đã chọn.</small>
+            </div>
+          )}
 
           <div className="table-scroll">
             <table className="pj-table dr-summary-table">

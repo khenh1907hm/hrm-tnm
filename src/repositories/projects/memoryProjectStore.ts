@@ -199,7 +199,9 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
     async saveProject(input) {
       const code = input.code.trim().toLowerCase();
       if (data.projects.some((project) => project.id !== input.id && project.code.trim().toLowerCase() === code)) fail("PROJECT_CODE_DUPLICATE");
-      const saved: Project = { ...input, id: input.id ?? newId(), updatedAt: now() } as Project;
+      const previous = data.projects.find((project) => project.id === input.id);
+      // Form Sửa dự án không gửi số công nhập trước thì giữ số cũ
+      const saved: Project = { openingWorkdays: previous?.openingWorkdays, openingAsOf: previous?.openingAsOf, ...input, id: input.id ?? newId(), updatedAt: now() } as Project;
       data.projects = [...data.projects.filter((project) => project.id !== saved.id), saved];
       persist();
       return clone(saved);

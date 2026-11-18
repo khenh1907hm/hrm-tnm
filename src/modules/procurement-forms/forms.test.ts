@@ -126,7 +126,10 @@ describe("procurement forms (Excel theo mẫu công ty)", () => {
     expect(String(cell(book, "Q2"))).toMatch(/^☑ Xác Nhận/);
     expect([cell(book, "G40"), cell(book, "G41"), cell(book, "G45")]).toEqual(["☑ Báo giá có ký xác nhận hoặc PO/Hợp Đồng", "☐ Báo giá TNM gửi có ký đóng dấu", "Báo giá TNM gửi có ký đóng dấu"]);
     expect(String(cell(book, "G31")).length).toBeLessThanOrEqual(95);
-    expect(String(cell(book, "P6"))).toContain("Nguyễn Gia Luân");
+    // Ô ký chỉ ghi tên, ngày giờ ký ở ô "Ngày:" bên dưới
+    expect(cell(book, "P6")).toBe("Nguyễn Gia Luân");
+    expect(String(cell(book, "P10"))).toMatch(/^\d{2}\/\d{2}\/\d{2} \d{2}:\d{2}$/);
+    expect(cell(book, "L6")).toBeNull();
   });
 
   it("PRC_77 P-COST-08: phiếu mới (không dùng file .xls có virus) kèm bảng so sánh báo giá", async () => {

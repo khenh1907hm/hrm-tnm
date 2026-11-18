@@ -436,11 +436,21 @@ export async function fillContract(template: ArrayBuffer | Uint8Array, input: Co
   mark("G48", "Tiến độ tổng", attach.masterSchedule, !confirmed);
   mark("G49", "Bản vẽ", attach.drawings, !confirmed);
   if (contract.note) put(ws, "E50", contract.note);
-  // Ô ký: HC, Kế toán (KT), Lãnh đạo, VT-Kho, P. Kỹ thuật, Phụ trách; ngày ký ở hàng 10
+  // Ô ký: HC, Kế toán (KT), Lãnh đạo, VT-Kho, P. Kỹ thuật, Phụ trách. Trong ô chỉ ghi tên người ký,
+  // ô "Ngày:" bên dưới (hàng 10) ghi ngày giờ ký
   const boxes: [ApprovalRole, string][] = [["admin_office", "L"], ["accounting", "N"], ["leader", "P"], ["material", "R"], ["technical", "T"], ["pic", "V"]];
-  for (const [, col] of boxes) merge(ws, `${col}6:${String.fromCharCode(col.charCodeAt(0) + 1)}9`);
-  signBox(ws, input.steps, boxes.map(([role, col]) => [role, `${col}6`, `${col}10`] as [ApprovalRole, string, string]));
-  for (const [, col] of boxes) { const date = ws.getCell(`${col}10`); date.numFmt = "dd/mm/yy"; date.font = { ...date.font, size: 8 }; date.alignment = { horizontal: "center" }; }
+  for (const [role, col] of boxes) {
+    merge(ws, `${col}6:${String.fromCharCode(col.charCodeAt(0) + 1)}9`);
+    const step = stepOf(input.steps, role);
+    const name = ws.getCell(`${col}6`);
+    name.value = step?.result === "signed" ? step.signerName || "Đã ký" : step?.result === "returned" ? `${step.signerName}\n(trả về)` : null;
+    name.alignment = { ...name.alignment, wrapText: true, vertical: "middle", horizontal: "center" };
+    name.font = { ...name.font, size: 8 };
+    const time = ws.getCell(`${col}10`);
+    time.value = step?.result === "signed" && step.actedAt ? vnDateTime(step.actedAt).replace(/\/(\d{2})(\d{2}) /, "/$2 ") : null;
+    time.font = { ...time.font, size: 7 };
+    time.alignment = { horizontal: "center", vertical: "middle", shrinkToFit: true };
+  }
   return finish(workbook);
 }
 

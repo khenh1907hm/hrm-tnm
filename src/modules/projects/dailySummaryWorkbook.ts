@@ -8,6 +8,8 @@ export type DailySummaryWorkbookInput = {
   summary: DailySummary;
   exportedBy: string;
   exportedOn: string;
+  /** Công lũy kế từ đầu dự án đến hết kỳ (gồm số công nhập trước khi dùng hệ thống). */
+  cumulative?: { workdays: number; opening: number; openingAsOf: string | null } | null;
 };
 
 const HEADER_FILL = "FF1E3A8A";
@@ -68,6 +70,12 @@ export async function buildDailySummaryWorkbook(input: DailySummaryWorkbookInput
     ws.mergeCells("A7:J7");
     ws.getCell("A7").value = `Chưa có báo cáo: ${summary.missingDates.map(dmy).join(", ")}`;
     ws.getCell("A7").font = { color: { argb: "FFB91C1C" }, italic: true };
+  }
+  if (input.cumulative) {
+    const { workdays, opening, openingAsOf } = input.cumulative;
+    ws.mergeCells("A8:J8");
+    ws.getCell("A8").value = `Công lũy kế từ đầu dự án đến ${dmy(input.summary.to)}: ${workdays}${opening ? ` (gồm ${opening} công nhập trước, tính đến ${openingAsOf ? dmy(openingAsOf) : "—"})` : ""}`;
+    ws.getCell("A8").font = { bold: true };
   }
   header(ws, 9, ["Ngày", "Thứ", "Tổng số", "Hiện diện", "Vắng", "SL tăng ca", "Giờ TC", "Giờ công", "Công việc", "Người lập"]);
   let row = 10;

@@ -41,6 +41,7 @@ const projectFromRow = (row: Row): Project => ({
   stdHours: num(row.std_hours), weeklyOff: ((row.weekly_off ?? [0]) as number[]).map(Number), status: row.status as Project["status"], note: str(row.note), updatedAt: str(row.updated_at),
   siteLat: row.site_lat === null || row.site_lat === undefined ? null : Number(row.site_lat), siteLng: row.site_lng === null || row.site_lng === undefined ? null : Number(row.site_lng),
   siteRadiusM: num(row.site_radius_m ?? 300), workStart: hhmm(row.work_start, "08:00"), workEnd: hhmm(row.work_end, "17:00"), lunchStart: hhmm(row.lunch_start, "12:00"), lunchEnd: hhmm(row.lunch_end, "13:00"),
+  openingWorkdays: num(row.opening_workdays ?? 0), openingAsOf: strOrNull(row.opening_as_of),
 });
 const checkFromRow = (row: Row): AttendanceCheck => ({
   id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), workDate: str(row.work_date), checkInAt: str(row.check_in_at),
@@ -200,6 +201,8 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
         status: input.status, note: input.note,
         site_lat: input.siteLat, site_lng: input.siteLng, site_radius_m: input.siteRadiusM,
         work_start: input.workStart, work_end: input.workEnd, lunch_start: input.lunchStart, lunch_end: input.lunchEnd,
+        // Công nhập trước: chỉ ghi khi có trong input (form Sửa dự án không gửi thì giữ nguyên)
+        ...(input.openingWorkdays !== undefined ? { opening_workdays: input.openingWorkdays, opening_as_of: input.openingAsOf ?? null } : {}),
       };
       const request = input.id ? client.from("projects").update(payload).eq("id", input.id).select("*").single() : client.from("projects").insert(payload).select("*").single();
       const { data, error } = await request;

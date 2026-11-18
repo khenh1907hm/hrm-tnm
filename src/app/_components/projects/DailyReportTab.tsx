@@ -38,7 +38,7 @@ async function shrink(file: File, side = 1600): Promise<File> {
  * Tab Báo cáo ngày (mẫu "BC ngày"): chụp bảng phân công → máy đọc (Python) → chỉ huy trưởng kiểm tra, sửa →
  * thêm ảnh thi công nếu có (tối đa 12) → lưu dữ liệu và gửi file Excel vào nhóm Telegram. Không lưu ảnh.
  */
-export function DailyReportTab({ store, data, viewer, setNotice }: TabProps) {
+export function DailyReportTab({ store, data, viewer, setNotice, reload }: TabProps) {
   const { project, today, members } = data;
   const [reports, setReports] = useState<DailyReport[] | null>(null);
   const [draft, setDraft] = useState<DailyReportDraft | null>(null);
@@ -172,7 +172,7 @@ export function DailyReportTab({ store, data, viewer, setNotice }: TabProps) {
       </div>
 
       {download && <p className="dr-download"><a className="button dr-wide" href={download.url} download={download.name}><Download className="ico" size={16} aria-hidden="true" /> Tải file {download.name}</a></p>}
-      <DailySummary store={store} data={data} viewer={viewer} setNotice={setNotice} refreshKey={attempt} />
+      <DailySummary store={store} data={data} viewer={viewer} setNotice={setNotice} refreshKey={attempt} reload={reload} />
       <ReportHistory reports={reports} onCopy={copy} />
     </div>
   );

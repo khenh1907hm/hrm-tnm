@@ -12,6 +12,7 @@ import { BudgetCheckBox } from "./BudgetCheckBox";
 import { AttachmentsField, type PendingFile } from "./AttachmentsField";
 import { filesAvailable, listAttachments, uploadAttachment, type PurchaseAttachment } from "./purchaseFiles";
 import { readQuote } from "./quoteImport";
+import { DELIVERY_LABELS, deliveryAddressFor, deliveryKindOf, type DeliveryKind } from "../../../modules/purchases/delivery";
 import type { QuoteData } from "../../../modules/purchases/quoteParse";
 
 const dmyText = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
@@ -34,7 +35,8 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
   const [draft, setDraft] = useState<Omit<PurchaseDraft, "items">>(() => start
     ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, note: start.note, budgetCode: start.budgetCode,
       advanceRequired: start.advanceRequired, advancePct: start.advancePct, prepayRequired: start.prepayRequired }
-    : { kind: props.defaultProjectId ? "project" : "office", projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
+    : { kind: props.defaultProjectId ? "project" : "office", projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null,
+      deliveryAddress: deliveryAddressFor(props.defaultProjectId ? "project" : "office", props.projects.find((project) => project.id === props.defaultProjectId) ?? null), supplier: "", supplierContact: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
   const [items, setItems] = useState<ItemDraft[]>(() => start?.items.map((item) => ({ id: item.id, name: item.name, spec: item.spec, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice })) ?? [blankItem()]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -91,6 +93,17 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
     } finally { setImporting(false); }
   };
   const set = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) => setDraft((current) => ({ ...current, [key]: value }));
+  // Giao tới: Văn phòng / Dự án / Khác; đổi dự án thì địa chỉ giao theo dự án mới
+  const [delivery, setDelivery] = useState<DeliveryKind>(() => deliveryKindOf(start?.deliveryAddress ?? "", props.defaultProjectId ? "project" : "office"));
+  const projectById = (id: string | null) => props.projects.find((project) => project.id === id) ?? null;
+  const chooseDelivery = (kind: DeliveryKind) => {
+    setDelivery(kind);
+    set("deliveryAddress", deliveryAddressFor(kind, projectById(draft.projectId), draft.deliveryAddress));
+  };
+  const chooseProject = (id: string | null) => {
+    set("projectId", id);
+    if (delivery === "project") set("deliveryAddress", deliveryAddressFor("project", projectById(id)));
+  };
   const setItem = (index: number, patch: Partial<ItemDraft>) => setItems((current) => current.map((item, at) => at === index ? { ...item, ...patch } : item));
   const usable = props.projects.filter((project) => project.status !== "archived" && project.status !== "done");
   const lockedProject = props.lockProject ? props.projects.find((project) => project.id === draft.projectId) ?? null : null;
@@ -159,11 +172,11 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
               {imported.warnings.map((warning) => <p key={warning} className="warn-text" style={{ margin: "2px 0" }}><small>⚠ {warning}</small></p>)}
             </div>}
           </div>
-          {props.lockProject ? null : <><label className="field"><span>Mua cho</span><select value={draft.kind} onChange={(event) => { const kind = event.target.value as PurchaseKind; set("kind", kind); if (kind === "office") set("projectId", null); }}>
+          {props.lockProject ? null : <><label className="field"><span>Mua cho</span><select value={draft.kind} onChange={(event) => { const kind = event.target.value as PurchaseKind; set("kind", kind); if (kind === "office") { chooseProject(null); if (delivery === "project") chooseDelivery("office"); } }}>
             {(Object.keys(PURCHASE_KIND_LABELS) as PurchaseKind[]).map((key) => <option key={key} value={key}>{PURCHASE_KIND_LABELS[key]}</option>)}
           </select></label>
           {draft.kind === "project"
-            ? <label className="field"><span>Dự án *</span><select value={draft.projectId ?? ""} onChange={(event) => set("projectId", event.target.value || null)}>
+            ? <label className="field"><span>Dự án *</span><select value={draft.projectId ?? ""} onChange={(event) => chooseProject(event.target.value || null)}>
               <option value="">— Chọn dự án —</option>
               {usable.map((project) => <option key={project.id} value={project.id}>{project.code} · {project.name}</option>)}
             </select>{!usable.length && <small className="field-hint">Bạn chưa thuộc dự án nào đang mở.</small>}</label>
@@ -176,7 +189,14 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
             : <label className="field"><span>Bộ phận</span><input value={draft.department} placeholder="vd: Hành chính – Nhân sự" onChange={(event) => set("department", event.target.value)} /></label>}
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Nội dung đơn *</span><input className={ai("title")} value={draft.title} maxLength={300} autoFocus placeholder="vd: Mua ống đồng đợt 2 / Mua giấy in, mực máy in tháng 11" onChange={(event) => set("title", event.target.value)} /></label>
           <label className="field"><span>Cần hàng trước ngày</span><input type="date" value={draft.neededBy ?? ""} onChange={(event) => set("neededBy", event.target.value || null)} /></label>
-          <label className="field"><span>Giao tới</span><input value={draft.deliveryAddress} placeholder="Địa chỉ nhận hàng" onChange={(event) => set("deliveryAddress", event.target.value)} /></label>
+          <label className="field"><span>Giao tới</span>
+            <select value={delivery} onChange={(event) => chooseDelivery(event.target.value as DeliveryKind)}>
+              {(Object.keys(DELIVERY_LABELS) as DeliveryKind[]).map((key) => <option key={key} value={key}>{DELIVERY_LABELS[key]}</option>)}
+            </select>
+            {delivery === "other"
+              ? <input value={draft.deliveryAddress} placeholder="Địa chỉ nhận hàng" style={{ marginTop: 4 }} onChange={(event) => set("deliveryAddress", event.target.value)} />
+              : <small className="field-hint">{draft.deliveryAddress || "Chọn dự án để lấy địa chỉ công trình"}</small>}
+          </label>
           <label className="field"><span>Nhà cung cấp{draft.kind === "project" ? " *" : ""}</span><input className={ai("supplier")} value={draft.supplier} placeholder="Tên công ty nhà cung cấp" onChange={(event) => set("supplier", event.target.value)} /></label>
           <label className="field"><span>Liên hệ nhà cung cấp</span><input className={ai("supplierContact")} value={draft.supplierContact} placeholder="Tên, số điện thoại" onChange={(event) => set("supplierContact", event.target.value)} /></label>
 

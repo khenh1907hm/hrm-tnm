@@ -15,6 +15,13 @@ import type { TabProps } from "./ProjectDetail";
 import { errorMessage, moneyInput, parseMoney } from "./projectShared";
 
 const TONE: Record<BudgetSheet["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", superseded: "" };
+const headerOf = (sheet: BudgetSheet): BudgetSheetHeader => ({ confirmation: sheet.confirmation, exchangeRate: sheet.exchangeRate, quoteNo: sheet.quoteNo, offerPrice: sheet.offerPrice, contractValue: sheet.contractValue, note: sheet.note });
+/** Số lấy từ Confirm Contract đã duyệt (ô trống trong Confirm Contract thì giữ số đang có). */
+const fromContract = (contract: ProjectContract, header: BudgetSheetHeader): Partial<BudgetSheetHeader> => ({
+  contractValue: contract.confirmedValue || header.contractValue, quoteNo: contract.quoteNo || header.quoteNo,
+  offerPrice: contract.quoteValue || header.offerPrice, confirmation: contract.confirmation,
+});
+const differs = (header: BudgetSheetHeader, contract: ProjectContract) => Object.entries(fromContract(contract, header)).some(([key, value]) => header[key as keyof BudgetSheetHeader] !== value);
 const pctText = (value: number | null) => value === null ? "—" : `${(value * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
 
 /**
@@ -31,18 +38,20 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const projectId = data.project.id;
+  // Chỉ lấy số từ Confirm Contract (P-COST-01) đã được duyệt; lần đang chờ ký thì chỉ báo
   const [contract, setContract] = useState<ProjectContract | null>(null);
+  const [pendingContract, setPendingContract] = useState<ProjectContract | null>(null);
   const fetchAll = useCallback(() => Promise.all([store.listBudgetSheets(projectId), store.costCodes(), store.listContracts(projectId).catch(() => [])]), [store, projectId]);
   useEffect(() => {
     let active = true;
-    void fetchAll().then(([list, catalog, contracts]) => { if (active) { setSheets(list); setCodes(catalog); setContract(contracts.find((item) => item.status === "approved") ?? null); } }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setSheets([]); } });
+    void fetchAll().then(([list, catalog, contracts]) => { if (active) { setSheets(list); setCodes(catalog); setContract(contracts.find((item) => item.status === "approved") ?? null); setPendingContract(contracts.find((item) => item.status === "submitted" || item.status === "draft" || item.status === "rejected") ?? null); } }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setSheets([]); } });
     return () => { active = false; };
   }, [fetchAll, setNotice, attempt]);
 
   const current = sheets?.find((sheet) => sheet.id === selected) ?? sheets?.[0] ?? null;
   const canEdit = viewer.isLead || viewer.canEditProject;
   const editable = Boolean(current && canEdit && (current.status === "draft" || current.status === "rejected"));
-  const working = current && draft?.id === current.id ? draft : current ? { id: current.id, header: { confirmation: current.confirmation, exchangeRate: current.exchangeRate, quoteNo: current.quoteNo, offerPrice: current.offerPrice, contractValue: current.contractValue, note: current.note }, lines: current.lines } : null;
+  const working = current && draft?.id === current.id ? draft : current ? { id: current.id, header: headerOf(current), lines: current.lines } : null;
   const totals = working ? sheetTotals({ ...working.header, lines: working.lines }) : null;
   const dirty = Boolean(draft && current && draft.id === current.id);
   const refresh = () => { setDraft(null); setAttempt((value) => value + 1); };
@@ -79,7 +88,15 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
         <div className="pj-section-head">
           <h2>Ngân sách dự án theo mã <small className="muted">(P-COST-03)</small></h2>
           <div className="button-row">
-            {canEdit && !open && <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => { const id = await store.newBudgetSheet(projectId); setSelected(id); }, sheets.length ? "Đã lập lần ngân sách mới (chép từ lần trước)." : "Đã lập ngân sách nháp.")}><FilePlus2 className="ico" size={16} aria-hidden="true" /> {sheets.length ? "Lập lần ngân sách mới" : "Lập ngân sách"}</button>}
+            {canEdit && !open && <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => {
+              const id = await store.newBudgetSheet(projectId);
+              // Lấy sẵn giá trị hợp đồng, báo giá, loại xác nhận từ Confirm Contract đã duyệt
+              if (contract) {
+                const created = (await store.listBudgetSheets(projectId)).find((sheet) => sheet.id === id);
+                if (created) await store.saveBudgetSheet(id, { ...headerOf(created), ...fromContract(contract, headerOf(created)) }, created.lines);
+              }
+              setSelected(id);
+            }, `${sheets.length ? "Đã lập lần ngân sách mới (chép từ lần trước)" : "Đã lập ngân sách nháp"}${contract ? `, lấy số từ Confirm Contract lần ${contract.revision} đã duyệt` : ""}.`)}><FilePlus2 className="ico" size={16} aria-hidden="true" /> {sheets.length ? "Lập lần ngân sách mới" : "Lập ngân sách"}</button>}
             {editable && <button type="button" className="button" disabled={busy || !dirty} onClick={() => void save()}><Save className="ico" size={16} aria-hidden="true" /> Lưu</button>}
             {editable && <button type="button" className="button primary" disabled={busy} onClick={() => void save(() => store.submitBudgetSheet(working!.id))}><Send className="ico" size={16} aria-hidden="true" /> Lưu và gửi ký</button>}
             {editable && <button type="button" className="button danger" disabled={busy} onClick={() => { if (window.confirm("Xóa lần ngân sách nháp này?")) void run(async () => { await store.deleteBudgetSheet(working!.id); setSelected(null); }, "Đã xóa nháp."); }}><Trash2 className="ico" size={16} aria-hidden="true" /> Xóa nháp</button>}
@@ -104,14 +121,15 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
             )}
             {current && working && <FormExportButtons code="P-COST-03" fileBase={current.number} setNotice={setNotice} build={async (forms, template) => forms.fillBudgetSheet(template!, {
               sheet: { ...current, ...working.header, lines: working.lines }, codes,
-              project: { code: data.project.code, name: data.project.name, site: data.project.site, plannedStart: data.project.plannedStart, plannedEnd: data.project.plannedEnd },
+              project: { code: data.project.code, name: data.project.name, site: data.project.site, plannedStart: data.project.plannedStart ?? contract?.startOn, plannedEnd: data.project.plannedEnd ?? contract?.endOn },
               steps: current.status === "draft" ? [] : await store.listSteps("budget", current.id),
             })} />}
           </div>
         </div>
-        {editable && working && contract && contract.confirmedValue !== working.header.contractValue && (
-          <p className="muted">Xác nhận dự án (P-COST-01) lần {contract.revision} đã duyệt: giá trị hợp đồng {formatVnd(contract.confirmedValue)}. <button type="button" className="link-button" onClick={() => setHeader({ contractValue: contract.confirmedValue, quoteNo: working.header.quoteNo || contract.quoteNo, offerPrice: working.header.offerPrice || contract.quoteValue, confirmation: contract.confirmation })}>Lấy theo xác nhận dự án</button></p>
+        {editable && working && contract && differs(working.header, contract) && (
+          <p className="muted">Confirm Contract (P-COST-01) lần {contract.revision} đã duyệt: giá trị hợp đồng {formatVnd(contract.confirmedValue)}{contract.quoteNo ? `, báo giá ${contract.quoteNo}` : ""}{contract.quoteValue ? ` (${formatVnd(contract.quoteValue)})` : ""}. <button type="button" className="link-button" onClick={() => setHeader(fromContract(contract, working.header))}>Lấy theo Confirm Contract</button></p>
         )}
+        {canEdit && !contract && pendingContract && <p className="muted">Confirm Contract lần {pendingContract.revision} chưa được duyệt: ngân sách chỉ lấy số khi Confirm Contract đã duyệt.</p>}
         {!sheets.length
           ? <p className="muted">Dự án chưa có ngân sách theo mã. {canEdit ? "Bấm Lập ngân sách để bắt đầu. Đơn đặt hàng của dự án chỉ gửi duyệt được khi đã có ngân sách được Lãnh đạo duyệt." : "PM, CHT hoặc P. Kỹ thuật lập ngân sách."}</p>
           : (
