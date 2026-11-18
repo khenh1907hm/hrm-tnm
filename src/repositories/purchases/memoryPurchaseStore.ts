@@ -256,7 +256,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const code = (await options.projects?.listProjects().catch(() => []))?.find((project) => project.id === projectId)?.code ?? "DA";
       const sheet: BudgetSheet = {
         id: newId(), projectId, revision, number: budgetNumber(code, revision), status: "draft",
-        confirmation: prev?.confirmation ?? "tentative", exchangeRate: prev?.exchangeRate ?? 25000, quoteNo: prev?.quoteNo ?? "", offerPrice: prev?.offerPrice ?? 0, contractValue: prev?.contractValue ?? 0,
+        confirmation: prev?.confirmation ?? "tentative", exchangeRate: prev?.exchangeRate ?? 26500, quoteNo: prev?.quoteNo ?? "", offerPrice: prev?.offerPrice ?? 0, contractValue: prev?.contractValue ?? 0,
         note: "", createdAt: now(), submittedAt: null, approvedAt: null, lines: clone(prev?.lines ?? []),
       };
       data.sheets.push(sheet);

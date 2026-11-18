@@ -21,7 +21,7 @@ const fromContract = (contract: ProjectContract, header: BudgetSheetHeader): Par
   contractValue: contract.confirmedValue || header.contractValue, quoteNo: contract.quoteNo || header.quoteNo,
   offerPrice: contract.quoteValue || header.offerPrice, confirmation: contract.confirmation,
 });
-const differs = (header: BudgetSheetHeader, contract: ProjectContract) => Object.entries(fromContract(contract, header)).some(([key, value]) => header[key as keyof BudgetSheetHeader] !== value);
+const DEFAULT_EXCHANGE_RATE = 26_500;
 const pctText = (value: number | null) => value === null ? "—" : `${(value * 100).toLocaleString("vi-VN", { maximumFractionDigits: 1 })}%`;
 
 /**
@@ -51,7 +51,10 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
   const current = sheets?.find((sheet) => sheet.id === selected) ?? sheets?.[0] ?? null;
   const canEdit = viewer.isLead || viewer.canEditProject;
   const editable = Boolean(current && canEdit && (current.status === "draft" || current.status === "rejected"));
-  const working = current && draft?.id === current.id ? draft : current ? { id: current.id, header: headerOf(current), lines: current.lines } : null;
+  const base = current && draft?.id === current.id ? draft : current ? { id: current.id, header: headerOf(current), lines: current.lines } : null;
+  // Có Confirm Contract đã duyệt thì loại, số báo giá, giá báo khách, giá trị hợp đồng luôn theo Confirm Contract (kể cả lần đã duyệt)
+  const working = base && contract ? { ...base, header: { ...base.header, ...fromContract(contract, base.header) } } : base;
+  const locked = Boolean(contract);
   const totals = working ? sheetTotals({ ...working.header, lines: working.lines }) : null;
   const dirty = Boolean(draft && current && draft.id === current.id);
   const refresh = () => { setDraft(null); setAttempt((value) => value + 1); };
@@ -91,9 +94,11 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
             {canEdit && !open && <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => {
               const id = await store.newBudgetSheet(projectId);
               // Lấy sẵn giá trị hợp đồng, báo giá, loại xác nhận từ Confirm Contract đã duyệt
-              if (contract) {
-                const created = (await store.listBudgetSheets(projectId)).find((sheet) => sheet.id === id);
-                if (created) await store.saveBudgetSheet(id, { ...headerOf(created), ...fromContract(contract, headerOf(created)) }, created.lines);
+              // Lần đầu: tỷ giá mặc định 26.500
+              const created = (await store.listBudgetSheets(projectId)).find((sheet) => sheet.id === id);
+              if (created && (contract || !sheets.length)) {
+                const header = { ...headerOf(created), ...(sheets.length ? {} : { exchangeRate: DEFAULT_EXCHANGE_RATE }) };
+                await store.saveBudgetSheet(id, contract ? { ...header, ...fromContract(contract, header) } : header, created.lines);
               }
               setSelected(id);
             }, `${sheets.length ? "Đã lập lần ngân sách mới (chép từ lần trước)" : "Đã lập ngân sách nháp"}${contract ? `, lấy số từ Confirm Contract lần ${contract.revision} đã duyệt` : ""}.`)}><FilePlus2 className="ico" size={16} aria-hidden="true" /> {sheets.length ? "Lập lần ngân sách mới" : "Lập ngân sách"}</button>}
@@ -126,9 +131,7 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
             })} />}
           </div>
         </div>
-        {editable && working && contract && differs(working.header, contract) && (
-          <p className="muted">Confirm Contract (P-COST-01) lần {contract.revision} đã duyệt: giá trị hợp đồng {formatVnd(contract.confirmedValue)}{contract.quoteNo ? `, báo giá ${contract.quoteNo}` : ""}{contract.quoteValue ? ` (${formatVnd(contract.quoteValue)})` : ""}. <button type="button" className="link-button" onClick={() => setHeader(fromContract(contract, working.header))}>Lấy theo Confirm Contract</button></p>
-        )}
+        {working && contract && <p className="muted">Loại, số báo giá, giá báo khách và giá trị hợp đồng lấy theo Confirm Contract lần {contract.revision} đã duyệt (sửa ở tab Confirm Contract).</p>}
         {canEdit && !contract && pendingContract && <p className="muted">Confirm Contract lần {pendingContract.revision} chưa được duyệt: ngân sách chỉ lấy số khi Confirm Contract đã duyệt.</p>}
         {!sheets.length
           ? <p className="muted">Dự án chưa có ngân sách theo mã. {canEdit ? "Bấm Lập ngân sách để bắt đầu. Đơn đặt hàng của dự án chỉ gửi duyệt được khi đã có ngân sách được Lãnh đạo duyệt." : "PM, CHT hoặc P. Kỹ thuật lập ngân sách."}</p>
@@ -140,10 +143,10 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
         {current && working && totals && (
           <>
             <div className="bs-head">
-              <label className="field"><span>Loại</span><select disabled={!editable} value={working.header.confirmation} onChange={(event) => setHeader({ confirmation: event.target.value as Confirmation })}>{(Object.keys(CONFIRMATION_LABELS) as Confirmation[]).map((key) => <option key={key} value={key}>{CONFIRMATION_LABELS[key]}</option>)}</select></label>
-              <label className="field"><span>Số báo giá</span><input disabled={!editable} value={working.header.quoteNo} onChange={(event) => setHeader({ quoteNo: event.target.value })} /></label>
-              <label className="field"><span>Giá báo khách (VNĐ)</span><input disabled={!editable} inputMode="numeric" value={moneyInput(working.header.offerPrice)} onChange={(event) => setHeader({ offerPrice: parseMoney(event.target.value) })} /></label>
-              <label className="field"><span>Giá trị hợp đồng (VNĐ)</span><input disabled={!editable} inputMode="numeric" value={moneyInput(working.header.contractValue)} onChange={(event) => setHeader({ contractValue: parseMoney(event.target.value) })} /></label>
+              <label className="field"><span>Loại</span><select disabled={!editable || locked} value={working.header.confirmation} onChange={(event) => setHeader({ confirmation: event.target.value as Confirmation })}>{(Object.keys(CONFIRMATION_LABELS) as Confirmation[]).map((key) => <option key={key} value={key}>{CONFIRMATION_LABELS[key]}</option>)}</select></label>
+              <label className="field"><span>Số báo giá</span><input disabled={!editable || locked} value={working.header.quoteNo} onChange={(event) => setHeader({ quoteNo: event.target.value })} /></label>
+              <label className="field"><span>Giá báo khách (VNĐ)</span><input disabled={!editable || locked} inputMode="numeric" value={moneyInput(working.header.offerPrice)} onChange={(event) => setHeader({ offerPrice: parseMoney(event.target.value) })} /></label>
+              <label className="field"><span>Giá trị hợp đồng (VNĐ)</span><input disabled={!editable || locked} inputMode="numeric" value={moneyInput(working.header.contractValue)} onChange={(event) => setHeader({ contractValue: parseMoney(event.target.value) })} /></label>
               <label className="field"><span>Tỷ giá VND/USD</span><input disabled={!editable} inputMode="numeric" value={moneyInput(working.header.exchangeRate)} onChange={(event) => setHeader({ exchangeRate: parseMoney(event.target.value) })} /></label>
             </div>
             <div className="pj-kpis">

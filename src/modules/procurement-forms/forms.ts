@@ -613,7 +613,7 @@ export async function parseBudgetWorkbook(bytes: ArrayBuffer | Uint8Array, catal
     const result: ImportedBudget = {
       lines: [...lines.values()].sort((a, b) => a.code.localeCompare(b.code)),
       quoteNo: textOf(ws.getCell("D13").value).trim().slice(0, 200),
-      exchangeRate: amount(ws.getCell("G13").value) || 25_000,
+      exchangeRate: amount(ws.getCell("G13").value) || 26_500,
       offerPrice: amount(ws.getCell("D14").value),
       contractValue: amount(ws.getCell("L10").value),
     };
