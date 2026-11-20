@@ -1,0 +1,65 @@
+{
+  "expo": {
+    "name": "TNM",
+    "slug": "tnm-mobile",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thiennhatminh.tnm",
+      "requireFullScreen": false
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.thiennhatminh.tnm"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-image",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0B1F66"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TNM cần vị trí của bạn để xác nhận bạn đang ở công trường khi điểm danh."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "TNM cần camera để chụp ảnh khi điểm danh và chụp ảnh thi công cho báo cáo ngày.",
+          "photosPermission": "TNM cần thư viện ảnh để bạn chọn ảnh thi công cho báo cáo ngày.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TNM cần camera để chụp ảnh khi điểm danh.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ],
+    "scheme": "tnm",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

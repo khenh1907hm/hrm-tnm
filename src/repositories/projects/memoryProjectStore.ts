@@ -56,6 +56,8 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
   }
   // Dữ liệu demo cũ chưa có giờ làm, tọa độ công trường
   data.projects = data.projects.map((project) => ({ ...DEFAULT_SITE_SETTINGS, ...project }));
+  // Phiếu giải trình demo cũ chưa có lý do chọn sẵn, ảnh đính kèm
+  data.requests = data.requests.map((request) => ({ ...request, reasonCode: request.reasonCode ?? null, attachments: request.attachments ?? [] }));
   // Ảnh chấm công demo chỉ giữ trong phiên (không ghi localStorage)
   const photos = new Map<string, string>();
   let actingAs: string | null = null;
@@ -161,13 +163,14 @@ export function createMemoryProjectStore(options: { initial?: ProjectData; persi
       });
     },
     async listRequests(projectId) { return clone(data.requests.filter((item) => !projectId || item.projectId === projectId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+    async requestAttachmentUrls(paths) { return paths.map((path) => photos.get(path) ?? null); },
     async submitRequest(input) {
       if (!actingAs) fail("CHECKIN_NO_EMPLOYEE");
       const member = data.members.find((item) => item.projectId === input.projectId && item.employeeId === actingAs && item.joinedOn <= input.workDate && (item.leftOn === null || item.leftOn >= input.workDate)) ?? fail("TS_OUTSIDE_MEMBERSHIP");
       const issue = requestIssue(input, today()); if (issue) fail(issue);
       if (isLocked(input.projectId, input.workDate)) fail("TS_PERIOD_LOCKED");
       if (data.requests.some((item) => item.projectId === input.projectId && item.employeeId === actingAs && item.workDate === input.workDate && item.status === "pending")) fail("ATR_PENDING_EXISTS");
-      data.requests.push({ id: newId(), projectId: input.projectId, employeeId: actingAs!, employeeName: member.displayName, workDate: input.workDate, kind: input.kind, requestedIn: input.requestedIn, requestedOut: input.requestedOut, reason: input.reason.trim(), status: "pending", reviewerName: "", reviewedAt: null, reviewNote: "", createdAt: now() });
+      data.requests.push({ id: newId(), projectId: input.projectId, employeeId: actingAs!, employeeName: member.displayName, workDate: input.workDate, kind: input.kind, requestedIn: input.requestedIn, requestedOut: input.requestedOut, reason: input.reason.trim(), reasonCode: null, attachments: [], status: "pending", reviewerName: "", reviewedAt: null, reviewNote: "", createdAt: now() });
       persist();
     },
     async cancelRequest(id) {

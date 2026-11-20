@@ -4,7 +4,7 @@ import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import type { ProjectStore } from "../../modules/projects/store";
 import type { AttendanceCheck, AttendanceContext, GpsFix } from "../../modules/projects/attendance";
 import type { MonthRecord } from "../../modules/projects/attendanceMonth";
-import type { AttendanceRequest } from "../../modules/projects/attendanceRequests";
+import { reasonCodeOf, type AttendanceRequest } from "../../modules/projects/attendanceRequests";
 import {
   DEFAULT_LABOR_SETTINGS, type Holiday, type LaborRate, type LaborSettings, type PeriodLock, type Project, type ProjectBudget, type ProjectExpense,
   type ProjectMember, type Subcontract, type SubcontractPayment, type Timesheet, type TimesheetCost, type TimesheetLine,
@@ -51,6 +51,8 @@ const checkFromRow = (row: Row): AttendanceCheck => ({
   outAccuracyM: row.out_accuracy_m === null ? null : num(row.out_accuracy_m), outDistanceM: row.out_distance_m === null ? null : num(row.out_distance_m), outPhoto: strOrNull(row.out_photo),
 });
 const PHOTO_BUCKET = "attendance-photos";
+/** Ảnh đính kèm phiếu giải trình gửi từ app điện thoại (kho riêng tư, PM/CHT của dự án và sếp đọc được). */
+const ATTACHMENT_BUCKET = "attendance-attachments";
 const memberFromRow = (row: Row): ProjectMember => ({
   id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), displayName: str(row.display_name), employeeCode: str(row.employee_code),
   role: row.role as ProjectMember["role"], parentId: strOrNull(row.parent_id), team: str(row.team), subcontractId: strOrNull(row.subcontract_id), joinedOn: str(row.joined_on), leftOn: strOrNull(row.left_on),
@@ -171,8 +173,14 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
       return (await rows(query)).map((row): AttendanceRequest => ({
         id: str(row.id), projectId: str(row.project_id), employeeId: str(row.employee_id), employeeName: str(row.employee_name), workDate: str(row.work_date), kind: row.kind as AttendanceRequest["kind"],
         requestedIn: row.requested_in ? hhmm(row.requested_in, "") : null, requestedOut: row.requested_out ? hhmm(row.requested_out, "") : null, reason: str(row.reason), status: row.status as AttendanceRequest["status"],
+        reasonCode: reasonCodeOf(row.reason_code), attachments: Array.isArray(row.attachments) ? row.attachments.map(String) : [],
         reviewerName: str(row.reviewer_name), reviewedAt: strOrNull(row.reviewed_at), reviewNote: str(row.review_note), createdAt: str(row.created_at),
       }));
+    },
+    async requestAttachmentUrls(paths) {
+      if (!paths.length) return [];
+      const { data } = await client.storage.from(ATTACHMENT_BUCKET).createSignedUrls(paths, 3600);
+      return paths.map((path) => data?.find((item) => item.path === path)?.signedUrl ?? null);
     },
     async submitRequest(input) { await rpc("attendance_request_submit", { p_project: input.projectId, p_date: input.workDate, p_kind: input.kind, p_in: input.requestedIn, p_out: input.requestedOut, p_reason: input.reason }); },
     async cancelRequest(id) { await rpc("attendance_request_cancel", { p_id: id }); },

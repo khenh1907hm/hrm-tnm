@@ -99,6 +99,8 @@ export interface ProjectStore {
   myMonth(month: string): Promise<MonthRecord[]>;
   /** Phiếu giải trình người xem đọc được (của mình; PM, CHT: của dự án; sếp: tất cả); lọc theo dự án nếu có. */
   listRequests(projectId?: string): Promise<AttendanceRequest[]>;
+  /** Link xem ảnh đính kèm của phiếu giải trình (có hạn khoảng 1 giờ), cùng thứ tự với paths; null nếu không xem được. */
+  requestAttachmentUrls(paths: string[]): Promise<(string | null)[]>;
   submitRequest(input: RequestInput): Promise<void>;
   cancelRequest(id: string): Promise<void>;
   reviewRequest(id: string, approve: boolean, note: string): Promise<void>;

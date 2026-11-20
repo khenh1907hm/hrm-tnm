@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SCHEDULE } from "./attendance";
 import { buildMonthCalendar, type MonthRecord } from "./attendanceMonth";
-import { canReview, requestIssue } from "./attendanceRequests";
+import { canReview, REASON_CODE_LABELS, reasonCodeOf, reasonNote, requestIssue } from "./attendanceRequests";
 
 const at = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`).toISOString();
 const record = (workDate: string, extra: Partial<MonthRecord> = {}): MonthRecord => ({
@@ -44,5 +44,15 @@ describe("attendance month", () => {
     expect(canReview({ status: "pending" }, { isPm: true })).toBe(true);
     expect(canReview({ status: "pending" }, { isPm: false })).toBe(false);
     expect(canReview({ status: "approved" }, { isPm: true })).toBe(false);
+  });
+
+  it("ATT_04 shows the mobile app's preset reason as a label and keeps only the free-text note", () => {
+    expect(Object.values(REASON_CODE_LABELS)).toEqual(["Quên chấm công", "Làm việc công ty ở ngoài", "Không chấm công được", "Chọn sai ca", "Lý do khác"]);
+    expect(reasonCodeOf("wrong_shift")).toBe("wrong_shift");
+    expect([reasonCodeOf(null), reasonCodeOf("bogus"), reasonCodeOf("toString")]).toEqual([null, null, null]);
+    expect(reasonNote({ reasonCode: "forgot", reason: "Quên chấm công: điện thoại hết pin (kèm 2 ảnh)" })).toBe("điện thoại hết pin");
+    expect(reasonNote({ reasonCode: "cannot_check", reason: "Không chấm công được (kèm 1 ảnh)" })).toBe("");
+    expect(reasonNote({ reasonCode: "outside_work", reason: "Làm việc công ty ở ngoài" })).toBe("");
+    expect(reasonNote({ reasonCode: null, reason: "Quên bấm (kèm 2 ảnh)" })).toBe("Quên bấm (kèm 2 ảnh)");
   });
 });

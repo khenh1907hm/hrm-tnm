@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Edge Function chạy trên Deno, có cấu hình riêng; hoSoRules.mjs là tệp đóng gói tự động
     "supabase/functions/**",
+    // App điện thoại (Expo) có cấu hình riêng trong mobile/
+    "mobile/**",
   ]),
 ]);
 
