@@ -33,7 +33,7 @@ const OTHER_FORMS: readonly { docType: TreeDocType; title: string; hint: string 
 ];
 
 /**
- * Trang Admin "Quy trình duyệt": (1) chức danh của công ty (ai giữ chức danh nào, ai không có là Kỹ sư);
+ * Trang Admin "Quy trình duyệt": (1) chức danh của công ty (ai giữ chức danh nào, ai không có là nhân viên thường);
  * (2) giai đoạn mua hàng, bấm vào giai đoạn để xem và sắp xếp cây duyệt mặc định cho mọi dự án; (3) cây duyệt các phiếu khác.
  */
 export function ApprovalSettingsPage(props: { live: boolean; employees: EmployeeSource; setNotice: Notify }) {
@@ -108,7 +108,7 @@ export function ApprovalSettingsPage(props: { live: boolean; employees: Employee
             <button type="button" className="button primary" disabled={busy || !dirty} onClick={() => void save()}>{busy ? "Đang lưu…" : "Lưu chức danh"}</button>
           </div>
         </div>
-        <p className="muted">Ai không có chức danh nào là <b>Kỹ sư</b>. <b>Giám đốc, Kế toán, Người duyệt đầu vào</b> mặc định có trong mọi dự án (thấy và ký phiếu của mọi dự án, không cần thêm vào dự án)
+        <p className="muted">Ai không có chức danh nào là <b>nhân viên</b> thường. <b>Sếp, Kế toán, Kiểm soát đầu vào</b> mặc định có trong mọi dự án (thấy và ký phiếu của mọi dự án, không cần thêm vào dự án)
           {defaultPeople.length ? <>: {defaultPeople.join(", ")}</> : null}. Mỗi người cần tài khoản đã liên kết hồ sơ nhân sự.</p>
         <div className="ap-editor">
           {COMPANY_ROLES.map((role) => {
@@ -124,17 +124,17 @@ export function ApprovalSettingsPage(props: { live: boolean; employees: Employee
                       onRemove={(index) => setList(role.key, list.filter((_, i) => i !== index))} />
                   ) : <small className="muted">Chưa có ai</small>}
                   {list.length > 1 && <ModePicker name={`gmode-${role.key}`} value={mode} onChange={(next) => setModes({ ...modes, [role.key]: next })} />}
-                  <EmployeePicker key={`${role.key}-${pickerKey}`} label="" source={props.employees} exclude={new Set(list)} onPick={(option) => {
+                  {role.max && list.length >= role.max ? <small className="muted">Chỉ {role.max} người: bỏ người hiện tại để đổi.</small> : <EmployeePicker key={`${role.key}-${pickerKey}`} label="" source={props.employees} exclude={new Set(list)} onPick={(option) => {
                     if (!option) return;
                     setNames((current) => ({ ...current, [option.id]: option.name }));
                     setList(role.key, [...list, option.id]);
                     setPickerKey((value) => value + 1);
-                  }} />
+                  }} />}
                 </div>
               </div>
             );
           })}
-          <div className="ap-editor-row"><div className="ap-editor-role"><b>Kỹ sư</b><small className="muted">Mặc định</small></div><div className="ap-editor-people"><small className="muted">Mọi người còn lại (không có chức danh ở trên).</small></div></div>
+          <div className="ap-editor-row"><div className="ap-editor-role"><b>Nhân viên</b><small className="muted">Mặc định</small></div><div className="ap-editor-people"><small className="muted">Mọi người còn lại (không có chức danh ở trên).</small></div></div>
         </div>
       </section>
 

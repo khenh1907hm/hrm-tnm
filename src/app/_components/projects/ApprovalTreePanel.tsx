@@ -147,7 +147,7 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
       {!props.embedded && <h2><ShieldCheck className="ico" size={18} aria-hidden="true" /> Người duyệt</h2>}
       <small className="muted">Cây duyệt {DOC_TEXT[docType]}: ký từ trên xuống, Lãnh đạo là khối cuối cùng. {saved.length ? "" : inherited
         ? `Mục này chưa cài riêng: đang đi theo cây ${DOC_TEXT[inherited].split(" (")[0]} (hiện bên dưới, sửa rồi lưu để thành cây riêng).`
-        : "Dự án chưa cài cây riêng: đang dùng cây duyệt mặc định của công ty (Admin → Quy trình duyệt). Giám đốc, Kế toán, Người duyệt đầu vào mặc định có trong mọi dự án."}</small>
+        : "Dự án chưa cài cây riêng: đang dùng cây duyệt mặc định của công ty (Admin → Quy trình duyệt). Sếp, Kế toán, Kiểm soát đầu vào mặc định có trong mọi dự án."}</small>
       {!readOnly && <div className="ap-pool tb-pool">
         <b>Thành viên tham gia</b>
         <div className="ap-pool-list">
