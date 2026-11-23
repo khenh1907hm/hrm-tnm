@@ -29,6 +29,8 @@ import { TimesheetsTab } from "./TimesheetsTab";
 import { ToolChecksTab } from "./ToolChecksTab";
 import { ExplanatoryTab } from "./ExplanatoryTab";
 import { ProjectPaymentsTab } from "../purchases/ProjectPaymentsTab";
+import { ProcurementNav, type ProcurementStage } from "../purchases/ProcurementNav";
+import { getPurchaseStore } from "../purchases/usePurchaseStore";
 
 /** Toàn bộ dữ liệu một dự án (tải một lần, tải lại sau mỗi thao tác). Các mục tiền là [] khi người xem không được xem tiền. */
 export type ProjectData = {
@@ -77,9 +79,11 @@ type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "p
 /** Theo thứ tự quy trình vận hành: Confirmed Contract → Budget → Material Request → PO Draft → PO → Request for Payment → thi công. */
 const TABS: readonly [Tab, string, string?][] = [
   ["overview", "Overview"], ["contract", "Confirmed Contract", "P-COST-01"], ["budget", "Budget Sheet", "P-COST-03"], ["explanatory", "Explanatory Report", "P-COST-05"],
-  ["materials", "Material Request", "P-COST-08"], ["podraft", "PO Draft", "P-CC-07"], ["purchases", "Purchase Order", "P-CC-08"], ["payments", "Request for Payment", "P-CF-03"],
+  ["materials", "Purchasing", "Material Request → PO Draft → Purchase Order → Request for Payment"],
   ["members", "Org Chart & Members"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["tools", "Tool Check"], ["reports", "Reports"],
 ];
+/** Giai đoạn mua hàng: một tab "Purchasing", bên trong là sub-nav 4 bước. */
+const PROCUREMENT = new Set<string>(["materials", "podraft", "purchases", "payments"]);
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
   overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", explanatory: "bao-cao-giai-thich", materials: "yeu-cau-vat-tu", podraft: "don-nhap", purchases: "dat-hang", payments: "de-nghi-thanh-toan", members: "so-do", daily: "bao-cao-ngay",
@@ -95,6 +99,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   const { store, project, actor, setNotice } = props;
   const [data, setData] = useState<ProjectData | null>(null);
   const [tab, setTab] = useState<Tab>(tabFromUrl);
+  const purchaseStore = useMemo(() => getPurchaseStore(store.mode), [store.mode]);
 
   const reload = useCallback(async () => {
     try { setData(await fetchProjectData(store, project)); } catch (error) { setNotice(errorMessage(error), "error"); }
@@ -157,13 +162,13 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         {tab !== "contract" && <button type="button" className="link-button" onClick={() => setTab("contract")}>Mở Confirm Contract</button>}
       </div>}
       <div className="pj-tabs" role="tablist" aria-label="Mục của dự án">
-        {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key || (key === "reports" && tab === "daily")} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key)}>{label}</button>)}
+        {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key || (key === "reports" && tab === "daily") || (key === "materials" && PROCUREMENT.has(tab))} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key === "materials" && PROCUREMENT.has(tab) ? tab : key)}>{label}</button>)}
       </div>
       {!data || !viewer ? <div className="loading">Đang tải dữ liệu dự án…</div> : (() => {
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
         if (tab === "overview") return <OverviewTab {...tabProps} />;
         // Confirm Contract, Ngân sách, Đặt hàng: bên phải là khung người duyệt (Admin, Giám đốc sửa được)
-        const withApprovers = (content: ReactNode, docType: "contract" | "budget" | "explanatory" | "purchase" | "payment") => store.mode !== "live" ? content : (
+        const withApprovers = (content: ReactNode, docType: "contract" | "budget" | "explanatory" | "material" | "purchase" | "payment") => store.mode !== "live" ? content : (
           <div className="pj-with-aside">
             <div className="pj-with-aside-main">{content}</div>
             <ApprovalTreePanel key={docType} projectId={project.id} docType={docType} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />
@@ -171,15 +176,23 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         );
         if (tab === "budget") return withApprovers(<BudgetSheetTab {...tabProps} />, "budget");
         if (tab === "contract") return withApprovers(<ContractTab {...tabProps} />, "contract");
-        if (tab === "materials") return <MaterialsTab {...tabProps} />;
         if (tab === "members") return <OrgChartTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
         if (tab === "tools") return <ToolChecksTab {...tabProps} />;
         if (tab === "explanatory") return withApprovers(<ExplanatoryTab {...tabProps} />, "explanatory");
-        if (tab === "podraft") return withApprovers(<ProjectPurchasesTab {...tabProps} view="draft" />, "purchase");
-        if (tab === "purchases") return withApprovers(<ProjectPurchasesTab {...tabProps} view="po" />, "purchase");
-        if (tab === "payments") return withApprovers(<ProjectPaymentsTab {...tabProps} />, "payment");
+        if (PROCUREMENT.has(tab)) {
+          const stage = tab as ProcurementStage;
+          return (
+            <>
+              <ProcurementNav store={purchaseStore} projectId={project.id} current={stage} onSelect={setTab} />
+              {stage === "materials" ? withApprovers(<MaterialsTab {...tabProps} />, "material")
+                : stage === "podraft" ? withApprovers(<ProjectPurchasesTab {...tabProps} view="draft" />, "purchase")
+                  : stage === "purchases" ? withApprovers(<ProjectPurchasesTab {...tabProps} view="po" />, "purchase")
+                    : withApprovers(<ProjectPaymentsTab {...tabProps} />, "payment")}
+            </>
+          );
+        }
         return (
           <>
             {canDaily && <div className="pj-subtabs" role="tablist" aria-label="Loại báo cáo">

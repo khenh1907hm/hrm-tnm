@@ -13,18 +13,6 @@ import { AttachmentsField, type PendingFile } from "./AttachmentsField";
 import { filesAvailable, listAttachments, uploadAttachment, type PurchaseAttachment } from "./purchaseFiles";
 import { readQuote } from "./quoteImport";
 import { DELIVERY_LABELS, deliveryAddressFor, deliveryKindOf, type DeliveryKind } from "../../../modules/purchases/delivery";
-import type { QuoteData } from "../../../modules/purchases/quoteParse";
-
-const dmyText = (iso: string | null) => (iso ? iso.split("-").reverse().join("/") : "");
-/** Ghi chú lấy từ báo giá: số / ngày báo giá, VAT, thanh toán, giao hàng. */
-function quoteNote(data: QuoteData): string {
-  return [
-    data.quoteNo || data.quoteDate ? `Theo báo giá ${data.quoteNo}${data.quoteDate ? ` ngày ${dmyText(data.quoteDate)}` : ""}` : "",
-    data.vatIncluded === true ? "đơn giá đã gồm VAT" : data.vatIncluded === false ? "đơn giá chưa gồm VAT" : "",
-    data.paymentTerms ? `Thanh toán: ${data.paymentTerms}` : "",
-    data.deliveryText ? `Giao hàng: ${data.deliveryText.replace(/^giao h[aà]ng\s*:?\s*/i, "")}` : "",
-  ].filter(Boolean).join(". ");
-}
 
 type ItemDraft = PurchaseDraft["items"][number];
 const blankItem = (): ItemDraft => ({ id: "", name: "", spec: "", unit: "", quantity: 1, unitPrice: 0 });
@@ -67,8 +55,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
         const contact = [data.contact, data.taxCode ? `MST ${data.taxCode}` : ""].filter(Boolean).join(" · ");
         if (contact) { next.supplierContact = contact; fields.add("supplierContact"); }
         if (!current.title.trim()) { next.title = `Mua theo báo giá ${data.quoteNo || ""}${data.supplier ? ` – ${data.supplier}` : ""}`.replace(/\s+/g, " ").trim(); fields.add("title"); }
-        const note = quoteNote(data);
-        if (note) { next.note = current.note.trim() ? `${current.note.trim()}. ${note}` : note; fields.add("note"); }
+        // Ghi chú, lý do mua: người lập tự nhập, không lấy từ báo giá
         if (data.advancePct) { next.advanceRequired = true; next.advancePct = data.advancePct; fields.add("terms"); }
         if (data.prepay) { next.prepayRequired = true; fields.add("terms"); }
         return next;
@@ -235,7 +222,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
             <label className="po-term"><input type="radio" name="po-pay-when" checked={!draft.prepayRequired && !draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: false, advanceRequired: false, advancePct: null }))} />
               <span><b>Thanh toán sau khi nhận hàng</b><small>Nhận hàng, kiểm đếm, nhập kho, thu thập hóa đơn chứng từ rồi mới đề nghị thanh toán.</small></span></label>
           </fieldset>
-          <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú, lý do mua</span><input className={ai("note")} value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
+          <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú, lý do mua</span><input value={draft.note} placeholder="Người lập tự nhập: lý do mua, ghi chú cho người duyệt" onChange={(event) => set("note", event.target.value)} /></label>
           {live && <fieldset className="po-terms" style={{ gridColumn: "1 / -1" }}>
             <legend>Attach file</legend>
             <AttachmentsField existing={existing} pending={pending} onPendingChange={setPending} editable requireSigned={draft.kind === "project"} setNotice={(message) => setError(message)} />

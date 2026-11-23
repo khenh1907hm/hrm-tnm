@@ -10,7 +10,6 @@ import type { ContractDraft, ProjectContract } from "../purchases/contract";
 import { lineD, lineE, type ExplanatoryReport } from "../purchases/explanatory";
 import { cheapestByItem, quoteTotal, type MaterialQuote, type MaterialRequest } from "../purchases/materials";
 import type { PurchaseOrder, PurchasePayment } from "../purchases/types";
-import { PO_TERMS } from "./poTerms";
 import { vndInWords } from "./vndWords";
 
 export type FormCode = "P-COST-01" | "P-COST-03" | "P-COST-05" | "P-COST-08" | "P-CC-07" | "P-CC-08" | "P-CF-03";
@@ -71,6 +70,13 @@ async function finish(workbook: ExcelJS.Workbook): Promise<Uint8Array> {
 }
 function put(sheet: ExcelJS.Worksheet, address: string, value: Value) {
   sheet.getCell(address).value = value === undefined ? null : value;
+}
+/** Dấu X vào ô vuông của mẫu: căn giữa ngang và dọc, giữ khung / màu nền sẵn có. */
+function tick(sheet: ExcelJS.Worksheet, address: string) {
+  const cell = sheet.getCell(address);
+  cell.value = "X";
+  cell.alignment = { ...cell.alignment, horizontal: "center", vertical: "middle" };
+  cell.font = { ...cell.font, bold: true };
 }
 function putDate(sheet: ExcelJS.Worksheet, address: string, iso: string | null | undefined) {
   const cell = sheet.getCell(address);
@@ -244,16 +250,16 @@ export async function fillPurchaseDraft(template: ArrayBuffer | Uint8Array, inpu
   const terms = splitLines([paymentTermsText(order), order.note].filter(Boolean).join(" · "), 80, 2);
   put(ws, "J41", terms[0] ?? null);
   put(ws, "J42", terms[1] ?? null);
-  put(ws, "H44", "X");
+  tick(ws, "I44");
   put(ws, "J54", input.budgetNumber || null);
   put(ws, "J55", order.budgetA ?? null);
   put(ws, "J56", order.budgetB ?? null);
-  if (input.hasComparison) put(ws, "J65", "X");
+  if (input.hasComparison) tick(ws, "J65");
   addItemsSheet(workbook, order, "ĐƠN ĐẶT HÀNG (NHÁP)");
   return finish(workbook);
 }
 
-/** P-CC-08 PO chính thức gửi NCC ký, kèm danh mục hàng và điều khoản PO. */
+/** P-CC-08 PO chính thức gửi NCC ký: chỉ trang PO. Điều khoản & điều kiện là file PDF của công ty, ghép khi xuất "PDF gộp gửi NCC". */
 export async function fillPurchaseOrder(template: ArrayBuffer | Uint8Array, input: OrderFormInput): Promise<Uint8Array> {
   const { workbook, sheet: ws } = await open(template);
   const { order } = input;
@@ -264,24 +270,8 @@ export async function fillPurchaseOrder(template: ArrayBuffer | Uint8Array, inpu
   const termLines = splitLines([paymentTermsText(order), order.note].filter(Boolean).join(" · "), 80, 2);
   put(ws, "J43", termLines[0] ?? null);
   put(ws, "J44", termLines[1] ?? null);
-  put(ws, "H46", "X");
-  for (const address of ["P56", "P58"]) put(ws, address, "X");
-  addItemsSheet(workbook, order, "ĐƠN ĐẶT HÀNG");
-  const terms = workbook.addWorksheet("Điều khoản PO", { pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
-  terms.columns = [{ width: 4 }, { width: 110 }];
-  terms.addRow(["", "ĐIỀU KHOẢN & ĐIỀU KIỆN"]).font = { bold: true, size: 13 };
-  terms.addRow(["", `Kèm theo Đơn đặt hàng ${order.poNo || order.code}`]).font = { italic: true };
-  PO_TERMS.forEach((section, index) => {
-    terms.addRow([]);
-    terms.addRow([`${index + 1}.`, section.title]).font = { bold: true };
-    section.lines.forEach((line, sub) => {
-      const row = terms.addRow([`${index + 1}.${sub + 1}`, line]);
-      row.getCell(2).alignment = { wrapText: true, vertical: "top" };
-      row.height = Math.max(15, Math.ceil(line.length / 120) * 15);
-    });
-  });
-  terms.addRow([]);
-  terms.addRow(["", "Bên Bán (ký, ghi rõ họ tên, đóng dấu)                                              Bên Mua: Công ty TNHH Thiên Nhật Minh"]).font = { bold: true };
+  tick(ws, "I46");
+  for (const address of ["P56", "P58"]) tick(ws, address);
   return finish(workbook);
 }
 

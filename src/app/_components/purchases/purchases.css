@@ -197,3 +197,14 @@
 .po-term-chip:has(input:checked) { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); }
 .po-term-sub .po-term-pct { margin: 2px 0 0; flex: 0 0 100%; max-width: none; }
 .po-term-sub .po-term-pct input { max-width: 220px; }
+
+/* Sub-nav giai đoạn mua hàng trong dự án (dùng lại khối mũi tên của tiến trình) */
+.op-nav { margin: 4px 0 14px; padding: 0; }
+.op-nav .op-step { padding: 0; min-height: 54px; }
+.op-nav .op-step.is-todo { --op-bg: var(--soft); --op-ink: var(--ink); }
+.op-nav .op-step:hover:not(.is-current) { --op-bg: #e2e8f0; }
+.op-nav-btn { all: unset; box-sizing: border-box; width: 100%; height: 100%; min-height: 54px; display: flex; align-items: center; gap: 8px; padding: 8px 22px 8px 26px; cursor: pointer; color: var(--op-ink); }
+.op-nav .op-step:first-child .op-nav-btn { padding-left: 14px; }
+.op-nav .op-step:last-child .op-nav-btn { padding-right: 14px; }
+.op-nav-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
+.op-badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--accent); color: #fff; }

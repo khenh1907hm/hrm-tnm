@@ -65,7 +65,8 @@ export function FormExportButtons(props: { code: FormCode; fileBase: string; bui
 const extOf = (name: string) => name.toLowerCase().split(".").pop() ?? "";
 
 /**
- * Một file PDF gửi NCC ở bước PO: PO (P-CC-08) + Điều khoản & Điều kiện (PO's condition) + báo giá / hợp đồng NCC đã ký.
+ * Một file PDF gửi NCC ở bước PO: trang PO (P-CC-08) + file PDF Điều khoản & Điều kiện của công ty (PO's condition, giữ nguyên trang)
+ * + báo giá / hợp đồng NCC đã ký.
  * File so sánh giá là tài liệu nội bộ nên không gộp vào. Tệp không phải PDF / ảnh (Excel, Word…) được bỏ qua và báo lại.
  */
 export function PoBundleButton(props: { orderId: string; fileBase: string; build: (forms: FormsModule, template: ArrayBuffer) => Promise<Uint8Array>; setNotice: Notify }) {
@@ -73,9 +74,10 @@ export function PoBundleButton(props: { orderId: string; fileBase: string; build
   const run = async () => {
     setBusy(true);
     try {
-      const [forms, template, files, { convertXlsxToPdf }, { mergeProfilePdf }] = await Promise.all([
+      const [forms, template, files, { convertXlsxToPdf }, { mergeProfilePdf }, conditions] = await Promise.all([
         import("../../../modules/procurement-forms/forms"), loadTemplate("P-CC-08"), purchaseFiles.list(props.orderId),
         import("../profileExport"), import("../../../modules/exports/pdf/mergeProfilePdf"),
+        fetch("/templates/quy-trinh/P-CC-08-dieu-khoan.pdf", { cache: "no-cache" }).then((response) => { if (!response.ok) throw new Error("Thiếu file Điều khoản & Điều kiện PO."); return response.arrayBuffer(); }),
       ]);
       const cover = await convertXlsxToPdf(await props.build(forms, template!));
       const quotes = files.filter((item) => item.kind === "signed_quote");
@@ -85,7 +87,7 @@ export function PoBundleButton(props: { orderId: string; fileBase: string; build
         const ext = extOf(item.fileName);
         return ext === "pdf" ? { title: item.fileName, kind: "pdf" as const, bytes } : { title: item.fileName, kind: "image" as const, bytes, extension: ext === "png" ? "png" as const : "jpeg" as const };
       }));
-      const merged = await mergeProfilePdf(cover, parts);
+      const merged = await mergeProfilePdf(cover, [{ title: "Điều khoản & Điều kiện", kind: "pdf", bytes: new Uint8Array(conditions) }, ...parts]);
       downloadBytes(merged.bytes, `${safeName(`P-CC-08 ${props.fileBase} (kem dieu khoan, bao gia)`)}.pdf`, "application/pdf");
       const warnings = [...merged.warnings, ...skipped.map((name) => `${name}: không phải PDF / ảnh, chưa gộp được`)];
       props.setNotice(warnings.length ? `Đã tạo PDF gộp (${merged.pageCount} trang). ${warnings.join("; ")}.` : `Đã tạo PDF gộp: PO + điều khoản + ${parts.length} báo giá (${merged.pageCount} trang).`, warnings.length ? "warning" : "success");

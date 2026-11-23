@@ -2,10 +2,11 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Crown, GripVertical, Plus, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import type { ProjectMember } from "../../../modules/projects/types";
-import { approvalTrees, directorPeople, saveApprovalTree, TREE_FALLBACK, type ApprovalBlock, type ApprovalMode, type TreeDocType } from "../accountApi";
+import { approvalTrees, companyApprovalSettings, directorPeople, saveApprovalTree, TREE_FALLBACK, type CompanyApprovalSettings, type ApprovalBlock, type ApprovalMode, type TreeDocType } from "../accountApi";
 import type { Notify } from "../Toast";
 import { participantsOf, type Participant } from "./ProjectApproversPanel";
 import { errorMessage } from "./projectShared";
+import { COMPANY_ROLES, COMPANY_ROLE_LABELS, roleToken, tokenRole } from "../../../modules/purchases/companyRoles";
 
 const DRAG_TYPE = "application/x-tnm-block-person";
 const LEADER_NAME = "Lãnh đạo";
@@ -26,22 +27,32 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
   const [saved, setSaved] = useState<ApprovalBlock[] | null>(null);
   const [blocks, setBlocks] = useState<ApprovalBlock[]>([blankLeader()]);
   const [inherited, setInherited] = useState<TreeDocType | null>(null);
+  /** Dự án chưa cài cây riêng: cây đang hiện là cây mặc định của công ty (Cài đặt → Quy trình duyệt). */
+  const [fromCompany, setFromCompany] = useState(false);
+  const [initial, setInitial] = useState<ApprovalBlock[]>([blankLeader()]);
+  const [company, setCompany] = useState<CompanyApprovalSettings | null>(null);
   const [directors, setDirectors] = useState<{ employeeId: string; name: string }[]>([]);
   const [busy, setBusy] = useState(false);
   const [over, setOver] = useState<number | null>(null);
   const { projectId, docType } = props;
   useEffect(() => {
     let active = true;
-    void Promise.all([approvalTrees(projectId), directorPeople().catch(() => [])]).then(([trees, boss]) => {
+    void Promise.all([approvalTrees(projectId), directorPeople().catch(() => []), companyApprovalSettings().catch(() => null)]).then(([trees, boss, defaults]) => {
       if (!active) return;
       const tree = trees[docType] ?? [];
       // Mục chưa cài riêng: mở sẵn bản sao cây nhóm đang áp dụng để sửa tiếp
       const group = TREE_FALLBACK[docType];
       const fallback = !tree.length && group ? trees[group] ?? [] : [];
+      // Dự án chưa cài gì: hiện đúng cây mặc định của công ty như lúc gửi phiếu (mục → nhóm)
+      const companyTree = !tree.length && !fallback.length ? defaults?.trees[docType]?.length ? defaults.trees[docType]! : group ? defaults?.trees[group] ?? [] : [] : [];
       setSaved(tree);
       setInherited(fallback.length ? group! : null);
-      const start = tree.length ? tree : fallback;
-      setBlocks(start.length ? start.map((block) => ({ ...block, people: [...block.people] })) : [blankLeader()]);
+      setFromCompany(companyTree.length > 0);
+      setCompany(defaults);
+      const start = tree.length ? tree : fallback.length ? fallback : companyTree;
+      const copy = start.length ? start.map((block) => ({ ...block, people: [...block.people] })) : [blankLeader()];
+      setBlocks(copy);
+      setInitial(copy.map((block) => ({ ...block, people: [...block.people] })));
       setDirectors(boss);
     }, () => { if (active) setSaved([]); });
     return () => { active = false; };
@@ -50,7 +61,14 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
   if (!saved) return <section className={shell}><div className="loading">Đang tải người duyệt…</div></section>;
 
   const participants = participantsOf(props.members, props.today);
-  const nameOf = (id: string) => participants.find((person) => person.id === id)?.name ?? directors.find((item) => item.employeeId === id)?.name ?? "Người ngoài dự án";
+  const personName = (id: string) => participants.find((person) => person.id === id)?.name ?? directors.find((item) => item.employeeId === id)?.name ?? company?.names[id] ?? "Người ngoài dự án";
+  /** "role:intake" → "Kiểm soát đầu vào (Nguyễn Văn Hòa)": người đang giữ chức danh lúc gửi phiếu. */
+  const nameOf = (id: string) => {
+    const role = tokenRole(id);
+    if (!role) return personName(id);
+    const holders = (company?.departments[role] ?? []).map(personName);
+    return `${COMPANY_ROLE_LABELS[role]} (${holders.length ? holders.join(", ") : "chưa có người"})`;
+  };
   const directorIds = new Set(directors.map((item) => item.employeeId));
   const readOnly = !props.canEdit;
   const leaderAt = blocks.length - 1;
@@ -64,7 +82,7 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
     }));
   };
   const move = <T,>(list: T[], index: number, delta: number) => { const next = [...list]; const [item] = next.splice(index, 1); next.splice(index + delta, 0, item!); return next; };
-  const dirty = JSON.stringify(saved.length ? saved : [blankLeader()]) !== JSON.stringify(blocks);
+  const dirty = JSON.stringify(initial) !== JSON.stringify(blocks);
   const save = async (next: ApprovalBlock[]) => {
     setBusy(true);
     try {
@@ -72,6 +90,8 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
       await saveApprovalTree(projectId, docType, cleaned);
       setSaved(cleaned);
       setInherited(null);
+      setFromCompany(false);
+      setInitial(cleaned.length ? cleaned : [blankLeader()]);
       setBlocks(cleaned.length ? cleaned : [blankLeader()]);
       props.setNotice(`Đã lưu cây duyệt ${DOC_TEXT[docType]}. Phiếu gửi từ bây giờ đi theo cây này.`, "success");
       props.onSaved?.();
@@ -81,7 +101,13 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
     const group = TREE_FALLBACK[docType];
     if (!window.confirm(group ? `Bỏ cây duyệt riêng của mục này? Phiếu sẽ đi theo cây ${DOC_TEXT[group].split(" (")[0]} (nếu có) hoặc quy trình chung của công ty.` : "Bỏ cây duyệt riêng của dự án, dùng quy trình chung của công ty?")) return;
     setBusy(true);
-    try { await saveApprovalTree(projectId, docType, []); setSaved([]); setBlocks([blankLeader()]); props.setNotice(group ? "Đã bỏ cây riêng của mục." : "Đã chuyển về quy trình chung.", "success"); props.onSaved?.(); }
+    try {
+      await saveApprovalTree(projectId, docType, []); setSaved([]);
+      // Về cây mặc định của công ty (như lúc gửi phiếu)
+      const companyTree = company?.trees[docType]?.length ? company.trees[docType]! : group ? company?.trees[group] ?? [] : [];
+      const next = companyTree.length ? companyTree.map((block) => ({ ...block, people: [...block.people] })) : [blankLeader()];
+      setBlocks(next); setInitial(next.map((block) => ({ ...block, people: [...block.people] }))); setFromCompany(companyTree.length > 0); setInherited(null);
+      props.setNotice(group ? "Đã bỏ cây riêng của mục." : "Đã chuyển về quy trình chung.", "success"); props.onSaved?.(); }
     catch (error) { props.setNotice(errorMessage(error), "error"); } finally { setBusy(false); }
   };
 
@@ -97,6 +123,7 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
   const blockCard = (block: ApprovalBlock, index: number) => {
     const isLeader = index === leaderAt;
     const choices = participants.filter((person) => !block.people.includes(person.id) && !(isLeader && directorIds.has(person.id)));
+    const roleChoices = COMPANY_ROLES.map((role) => roleToken(role.key)).filter((token) => !block.people.includes(token));
     return (
       <div key={index} className={`tb-block${isLeader ? " leader" : ""}${over === index ? " over" : ""}`}
         onDragOver={(event) => { if (!readOnly) { event.preventDefault(); setOver(index); } }}
@@ -132,10 +159,11 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
           ))}
           {!block.people.length && !isLeader && <li className="muted tb-empty">{readOnly ? "Chưa có người (bỏ qua khối này)" : "Kéo người vào đây"}</li>}
         </ol>
-        {!readOnly && choices.length > 0 && (
+        {!readOnly && (choices.length > 0 || roleChoices.length > 0) && (
           <select className="ap-frame-add" aria-label="Thêm người vào khối" value="" onChange={(event) => { if (event.target.value) addPerson(index, event.target.value); }}>
             <option value="">+ Thêm người</option>
-            {choices.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
+            {roleChoices.length > 0 && <optgroup label="Theo chức danh (Cài đặt)">{roleChoices.map((token) => <option key={token} value={token}>{nameOf(token)}</option>)}</optgroup>}
+            {choices.length > 0 && <optgroup label="Thành viên dự án">{choices.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</optgroup>}
           </select>
         )}
       </div>
@@ -147,7 +175,9 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
       {!props.embedded && <h2><ShieldCheck className="ico" size={18} aria-hidden="true" /> Người duyệt</h2>}
       <small className="muted">Cây duyệt {DOC_TEXT[docType]}: ký từ trên xuống, Lãnh đạo là khối cuối cùng. {saved.length ? "" : inherited
         ? `Mục này chưa cài riêng: đang đi theo cây ${DOC_TEXT[inherited].split(" (")[0]} (hiện bên dưới, sửa rồi lưu để thành cây riêng).`
-        : "Dự án chưa cài cây riêng: đang dùng cây duyệt mặc định của công ty (Admin → Quy trình duyệt). Sếp, Kế toán, Kiểm soát đầu vào mặc định có trong mọi dự án."}</small>
+        : fromCompany
+          ? "Dự án chưa cài cây riêng: đang dùng cây mặc định của công ty (Cài đặt → Quy trình duyệt), hiện bên dưới. Sửa rồi lưu để thành cây riêng của dự án."
+          : "Công ty chưa cài cây mặc định cho loại phiếu này (Cài đặt → Quy trình duyệt). Sếp, Kế toán, Kiểm soát đầu vào mặc định có trong mọi dự án."}</small>
       {!readOnly && <div className="ap-pool tb-pool">
         <b>Thành viên tham gia</b>
         <div className="ap-pool-list">
@@ -163,7 +193,7 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
       </div>
       {!readOnly && <div className="button-row" style={{ justifyContent: "flex-end" }}>
         {saved.length > 0 && <button type="button" className="link-button" disabled={busy} onClick={() => void reset()}>Dùng quy trình chung</button>}
-        {dirty && <button type="button" className="button" disabled={busy} onClick={() => setBlocks(saved.length ? saved : [blankLeader()])}>Hoàn tác</button>}
+        {dirty && <button type="button" className="button" disabled={busy} onClick={() => setBlocks(initial.map((block) => ({ ...block, people: [...block.people] })))}>Hoàn tác</button>}
         <button type="button" className="button primary" disabled={busy || (!dirty && saved.length > 0)} onClick={() => void save(blocks)}>{busy ? "Đang lưu…" : "Lưu cây duyệt"}</button>
       </div>}
     </section>

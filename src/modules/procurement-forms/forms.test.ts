@@ -86,9 +86,11 @@ describe("procurement forms (Excel theo mẫu công ty)", () => {
 
   it("PRC_73 P-CC-08: số PO, ngày phát hành, điều khoản PO kèm theo", async () => {
     const book = await reopen(await fillPurchaseOrder(template("P-CC-08"), { order, project, steps: [], budgetNumber: "Pr25001-01-02" }));
-    expect([cell(book, "S12"), cell(book, "S10"), cell(book, "F12"), cell(book, "H46")]).toEqual(["PO-Pr25001-01-001", "2026-11-12", null, "X"]);
+    expect([cell(book, "S12"), cell(book, "S10"), cell(book, "F12"), cell(book, "H46"), cell(book, "I46"), cell(book, "P56"), cell(book, "P58")]).toEqual(["PO-Pr25001-01-001", "2026-11-12", null, null, "X", "X", "X"]);
+    // Dấu X nằm giữa ô vuông vàng của mẫu
+    for (const address of ["I46", "P56", "P58"]) expect(book.worksheets[0]!.getCell(address).alignment).toMatchObject({ horizontal: "center", vertical: "middle" });
     expect(`${cell(book, "J43")} ${cell(book, "J44")}`).toContain(paymentTermsText(order).slice(0, 40));
-    expect(book.worksheets.map((sheet) => sheet.name)).toEqual(["P-CC-08", "Chi tiết hàng", "Điều khoản PO"]);
+    expect(book.worksheets.map((sheet) => sheet.name)).toEqual(["P-CC-08"]);
     expect(book.worksheets[0]!.getImages().length).toBe(1);
   });
 
