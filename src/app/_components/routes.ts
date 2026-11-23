@@ -17,13 +17,14 @@ export const VIEW_PATHS: Record<PageView, string> = {
   timesheet: "/cham-cong",
   laborRates: "/don-gia",
   purchases: "/dat-hang",
+  projectPurchases: "/dat-hang-du-an",
   approvals: "/don-can-duyet",
   approvalSettings: "/quy-trinh-duyet",
   bugReports: "/bao-loi",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
-export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet", "purchases", "approvals"];
+export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet", "projectPurchases", "purchases", "approvals"];
 
 /** Mục quyền cần có để mở từng màn hình; null là ai cũng mở được, "admin" là chỉ Admin. */
 const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
@@ -43,6 +44,7 @@ const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
   laborRates: "projects.rates",
   // Ai cũng lập được đơn hàng; RLS chỉ trả đơn người đó được xem
   purchases: null,
+  projectPurchases: null,
   // Ai cũng mở được: chỉ thấy phiếu mình liên quan
   approvals: null,
   approvalSettings: "admin",
@@ -75,7 +77,8 @@ export const VIEW_TITLES: Record<PageView, string> = {
   projects: "Dự án",
   timesheet: "Chấm công",
   laborRates: "Đơn giá & lịch làm việc",
-  purchases: "Đặt hàng",
+  purchases: "Đặt hàng văn phòng",
+  projectPurchases: "Đặt hàng dự án",
   approvals: "Việc của tôi",
   approvalSettings: "Quy trình duyệt",
   bugReports: "Báo lỗi",

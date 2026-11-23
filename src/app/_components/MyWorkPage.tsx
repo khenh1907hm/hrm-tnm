@@ -37,8 +37,8 @@ export function MyWorkPage(props: { live: boolean; actor: Actor; store: Purchase
   const tiles: Tile[] = [
     ...(canOpenView(props.actor, "alerts") ? [{ key: "certs", label: "Chứng chỉ cần chú ý", hint: "Hết hạn, sắp hết hạn", count: props.certCount, icon: BellRing, tone: "bad" as const, go: () => props.onNavigate("alerts") }] : []),
     { key: "pay", label: "Khoản chờ chi", hint: "Đã duyệt, chờ kế toán chi", count: work?.pay ?? 0, icon: Banknote, tone: "warn", go: () => props.onNavigate("purchases") },
-    { key: "po", label: "PO cần phát hành", hint: "Đơn của bạn đã duyệt, chưa có PO", count: work?.po ?? 0, icon: FileSignature, tone: "info", go: () => props.onNavigate("purchases") },
-    { key: "stock", label: "Hàng về chờ nhập kho", hint: "Đã nhận, chưa nhập kho", count: work?.stock ?? 0, icon: PackageCheck, tone: "info", go: () => work?.firstStock ? props.onOpenOrder(work.firstStock) : props.onNavigate("purchases") },
+    { key: "po", label: "PO cần phát hành", hint: "Đơn của bạn đã duyệt, chưa có PO", count: work?.po ?? 0, icon: FileSignature, tone: "info", go: () => props.onNavigate("projectPurchases") },
+    { key: "stock", label: "Hàng về chờ nhập kho", hint: "Đã nhận, chưa nhập kho", count: work?.stock ?? 0, icon: PackageCheck, tone: "info", go: () => work?.firstStock ? props.onOpenOrder(work.firstStock) : props.onNavigate("projectPurchases") },
   ];
   const shown = tiles.filter((tile) => tile.count > 0 || tile.key === "certs");
 

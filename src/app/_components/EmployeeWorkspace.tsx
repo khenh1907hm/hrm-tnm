@@ -6,7 +6,7 @@ import Link from "next/link";
 import "./employee.css";
 import { isWorkerEmail } from "../../lib/workerLogin";
 import { usePathname } from "next/navigation";
-import { Camera, ClipboardCheck, FolderKanban, KeyRound, LogOut, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon, ClipboardSignature } from "lucide-react";
+import { Camera, ClipboardCheck, FolderKanban, KeyRound, LogOut, PackageSearch, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon, ClipboardSignature } from "lucide-react";
 import { PurchasesPage } from "./purchases/PurchasesPage";
 import { getPurchaseStore } from "./purchases/usePurchaseStore";
 import SkillsClient from "../skills/SkillsClient";
@@ -28,7 +28,8 @@ const NAV_META: Partial<Record<PageView, readonly [string, LucideIcon]>> = {
   tools: ["Công cụ", Wrench],
   projects: ["Dự án", FolderKanban],
   timesheet: ["Chấm công", ClipboardCheck],
-  purchases: ["Đặt hàng", ShoppingCart],
+  projectPurchases: ["Đặt hàng dự án", PackageSearch],
+  purchases: ["Văn phòng", ShoppingCart],
   approvals: ["Cần duyệt", ClipboardSignature],
 };
 
@@ -90,12 +91,12 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
   const projectStore = useProjectStore(props.mode, null);
   const projects = useHasProjects(projectStore.store, projectStore.ready, props.actor);
   const setNotice = useToast();
-  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "purchases" || projects.buys) && (key !== "approvals" || projects.buys) && (key !== "timesheet" || projects.attends));
+  const nav = roleInfo.nav.filter((key) => (canUseTools || key !== "tools") && (key !== "projects" || projects.has) && (key !== "purchases" || projects.buys) && (key !== "projectPurchases" || projects.buys) && (key !== "approvals" || projects.buys) && (key !== "timesheet" || projects.attends));
   // Công nhân có dự án đang thi công: mở thẳng trang Chấm công
   const home: PageView = projects.attends && !projects.has ? "timesheet" : canUseTools ? roleInfo.home : "skills";
   const route = parseRoute(usePathname());
   // Mở thẳng trang dự án/chấm công: chờ biết người này có dự án hay không rồi mới chuyển hướng
-  const waitingProjects = route !== null && (route.view === "projects" || route.view === "timesheet" || route.view === "purchases") && !projects.known;
+  const waitingProjects = route !== null && (route.view === "projects" || route.view === "timesheet" || route.view === "purchases" || route.view === "projectPurchases") && !projects.known;
   const allowed = waitingProjects || (route && EMPLOYEE_VIEWS.includes(route.view) && nav.includes(route.view) && !route.employeeId);
   const view: PageView = allowed ? route.view : home;
   const [changingPassword, setChangingPassword] = useState(false);
@@ -175,7 +176,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
         {view === "tools" && <ToolsPage orgChart={props.actor ? { store: projectStore.store, ready: projectStore.ready, actor: props.actor, employees: null, setNotice } : undefined} />}
         {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
           onOpen={(projectId) => { const path = projectId ? projectPath(projectId) : routePath("projects"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />)}
-        {view === "purchases" && props.actor && <PurchasesPage store={getPurchaseStore(props.mode)} projectStore={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} orderId={route?.purchaseId ?? null} setNotice={setNotice}
+        {(view === "purchases" || view === "projectPurchases") && props.actor && <PurchasesPage key={view} scope={view === "projectPurchases" ? "project" : "office"} store={getPurchaseStore(props.mode)} projectStore={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} orderId={route?.purchaseId ?? null} setNotice={setNotice}
           onOpen={(orderId) => { const path = orderId ? purchasePath(orderId) : routePath("purchases"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />}
         {view === "timesheet" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} setNotice={setNotice} onOpenProject={(projectId) => window.history.pushState(null, "", projectPath(projectId))} />)}
       </main>

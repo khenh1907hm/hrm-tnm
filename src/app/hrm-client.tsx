@@ -509,7 +509,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
-        {view === "purchases" && <PurchasesPage store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
+        {(view === "purchases" || view === "projectPurchases") && <PurchasesPage key={view} scope={view === "projectPurchases" ? "project" : "office"} store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
         {view === "bugReports" && actor.role === "admin" && <BugReportsPage setNotice={setNotice} />}
         {view === "approvals" && <MyWorkPage live={backend.mode === "live"} actor={actor} store={purchaseStore} certCount={certRows.length} onNavigate={(key) => navigate(key)} onOpenOrder={(id) => openPurchase(id)} setNotice={setNotice} />}
         {view === "approvalSettings" && actor.role === "admin" && <ApprovalSettingsPage live={backend.mode === "live"} employees={employeeSource} setNotice={setNotice} />}

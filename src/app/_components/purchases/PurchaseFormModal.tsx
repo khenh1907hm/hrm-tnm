@@ -18,13 +18,13 @@ type ItemDraft = PurchaseDraft["items"][number];
 const blankItem = (): ItemDraft => ({ id: "", name: "", spec: "", unit: "", quantity: 1, unitPrice: 0 });
 
 /** Soạn đơn nháp (PUR-02): dự án hoặc văn phòng, danh sách hàng cần mua. Lưu nháp hoặc Lập đơn (gửi sếp duyệt). */
-export function PurchaseFormModal(props: { store: PurchaseStore; projects: readonly Project[]; initial: PurchaseOrder | null; defaultProjectId?: string | null; lockProject?: boolean; onClose: () => void; onSaved: (order: PurchaseOrder, submitted: boolean) => void }) {
+export function PurchaseFormModal(props: { store: PurchaseStore; projects: readonly Project[]; initial: PurchaseOrder | null; defaultProjectId?: string | null; lockProject?: boolean; /** Trang Đặt hàng dự án / Văn phòng: cố định loại đơn, ẩn ô "Mua cho". */ fixedKind?: PurchaseKind; onClose: () => void; onSaved: (order: PurchaseOrder, submitted: boolean) => void }) {
   const start = props.initial;
   const [draft, setDraft] = useState<Omit<PurchaseDraft, "items">>(() => start
     ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, note: start.note, budgetCode: start.budgetCode,
       advanceRequired: start.advanceRequired, advancePct: start.advancePct, prepayRequired: start.prepayRequired }
-    : { kind: props.defaultProjectId ? "project" : "office", projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null,
-      deliveryAddress: deliveryAddressFor(props.defaultProjectId ? "project" : "office", props.projects.find((project) => project.id === props.defaultProjectId) ?? null), supplier: "", supplierContact: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
+    : { kind: props.fixedKind ?? (props.defaultProjectId ? "project" : "office"), projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null,
+      deliveryAddress: deliveryAddressFor(props.fixedKind ?? (props.defaultProjectId ? "project" : "office"), props.projects.find((project) => project.id === props.defaultProjectId) ?? null), supplier: "", supplierContact: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
   const [items, setItems] = useState<ItemDraft[]>(() => start?.items.map((item) => ({ id: item.id, name: item.name, spec: item.spec, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice })) ?? [blankItem()]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -81,7 +81,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
   };
   const set = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K]) => setDraft((current) => ({ ...current, [key]: value }));
   // Giao tới: Văn phòng / Dự án / Khác; đổi dự án thì địa chỉ giao theo dự án mới
-  const [delivery, setDelivery] = useState<DeliveryKind>(() => deliveryKindOf(start?.deliveryAddress ?? "", props.defaultProjectId ? "project" : "office"));
+  const [delivery, setDelivery] = useState<DeliveryKind>(() => deliveryKindOf(start?.deliveryAddress ?? "", props.fixedKind ?? (props.defaultProjectId ? "project" : "office")));
   const projectById = (id: string | null) => props.projects.find((project) => project.id === id) ?? null;
   const chooseDelivery = (kind: DeliveryKind) => {
     setDelivery(kind);
@@ -159,9 +159,9 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
               {imported.warnings.map((warning) => <p key={warning} className="warn-text" style={{ margin: "2px 0" }}><small>⚠ {warning}</small></p>)}
             </div>}
           </div>
-          {props.lockProject ? null : <><label className="field"><span>Mua cho</span><select value={draft.kind} onChange={(event) => { const kind = event.target.value as PurchaseKind; set("kind", kind); if (kind === "office") { chooseProject(null); if (delivery === "project") chooseDelivery("office"); } }}>
+          {props.lockProject ? null : <>{!props.fixedKind && <label className="field"><span>Mua cho</span><select value={draft.kind} onChange={(event) => { const kind = event.target.value as PurchaseKind; set("kind", kind); if (kind === "office") { chooseProject(null); if (delivery === "project") chooseDelivery("office"); } }}>
             {(Object.keys(PURCHASE_KIND_LABELS) as PurchaseKind[]).map((key) => <option key={key} value={key}>{PURCHASE_KIND_LABELS[key]}</option>)}
-          </select></label>
+          </select></label>}
           {draft.kind === "project"
             ? <label className="field"><span>Dự án *</span><select value={draft.projectId ?? ""} onChange={(event) => chooseProject(event.target.value || null)}>
               <option value="">— Chọn dự án —</option>

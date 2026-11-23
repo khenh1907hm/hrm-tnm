@@ -208,3 +208,21 @@
 .op-nav .op-step:last-child .op-nav-btn { padding-right: 14px; }
 .op-nav-btn:focus-visible { outline: 2px solid var(--focus); outline-offset: -4px; }
 .op-badge { margin-left: auto; flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center; font-size: 12px; font-weight: 700; background: var(--accent); color: #fff; }
+
+/* Bảng đơn hàng theo tình trạng (dùng khung cột của bảng duyệt) */
+.po-board { grid-template-columns: repeat(6, minmax(230px, 1fr)); }
+.po-card { cursor: pointer; }
+.po-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(15, 23, 42, .1); }
+.po-card .op-mini { min-width: 0; }
+.po-col-draft header b::before { background: #94a3b8; }
+.po-col-signing header b::before { background: #f59e0b; }
+.po-col-approved header b::before { background: var(--brand); }
+.po-col-ordered header b::before { background: #0ea5e9; }
+.po-col-received header b::before { background: #8b5cf6; }
+.po-col-completed header b::before { background: #16a34a; }
+.po-view-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.po-view-switch button { border: 0; background: var(--surface); padding: 7px 12px; font-weight: 600; color: var(--muted); display: inline-flex; gap: 6px; align-items: center; }
+.po-view-switch button[aria-pressed="true"] { background: var(--brand); color: #fff; }
+/* Bảng 6 cột cuộn ngang trong khung, không kéo giãn cả trang */
+.pj-page > .po-board { min-width: 0; max-width: 100%; overflow-x: auto; }
+.pj-page:has(> .po-board) { grid-template-columns: minmax(0, 1fr); }

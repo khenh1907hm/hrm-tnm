@@ -145,7 +145,7 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
             {(Object.keys(MODE_TEXT) as ApprovalMode[]).map((mode) => <option key={mode} value={mode}>{MODE_TEXT[mode]}</option>)}
           </select>}
         <ol className={`tb-people${block.mode === "sequence" && block.people.length > 1 ? " seq" : ""}`}>
-          {isLeader && directors.map((item) => <li key={item.employeeId} className="ap-chip director"><Crown size={12} aria-hidden="true" /> {item.name} · Giám đốc</li>)}
+          {isLeader && directors.filter((item) => !block.people.includes(item.employeeId) && !(block.people.includes(roleToken("leader")) && (company?.departments.leader ?? []).includes(item.employeeId))).map((item) => <li key={item.employeeId} className="ap-chip director"><Crown size={12} aria-hidden="true" /> {item.name} · Giám đốc</li>)}
           {block.people.map((id, at) => (
             <li key={id} className="ap-chip" draggable={!readOnly} onDragStart={(event) => drag(event, id, index)}>
               {!readOnly && <GripVertical size={12} aria-hidden="true" />}
