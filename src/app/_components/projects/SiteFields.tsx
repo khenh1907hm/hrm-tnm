@@ -2,15 +2,7 @@
 import { useState } from "react";
 import { Crosshair, ExternalLink, Link2, MapPin } from "lucide-react";
 import { isShortMapsLink, mapsEmbedUrl, mapsOpenUrl, parseCoordinates, type LatLng } from "../../../lib/mapsLink";
-import type { ProjectInput } from "../../../modules/projects/types";
-
-const RADIUS_PRESETS = [
-  { meters: 100, hint: "Văn phòng, kho nhỏ" },
-  { meters: 200, hint: "Công trình nhà xưởng nhỏ" },
-  { meters: 300, hint: "Nhà máy thông thường (mặc định)" },
-  { meters: 500, hint: "Nhà máy lớn, nhiều khu" },
-  { meters: 1000, hint: "Khu công nghiệp, tuyến dài" },
-] as const;
+import { SITE_RADIUS_M, type ProjectInput } from "../../../modules/projects/types";
 
 type Props = { draft: ProjectInput; set: <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => void };
 
@@ -92,23 +84,15 @@ export function SiteFields({ draft, set }: Props) {
 
       {point ? (
         <div style={{ display: "grid", gap: 6 }}>
-          <iframe title="Bản đồ vị trí công trường" src={mapsEmbedUrl(point, draft.siteRadiusM > 500 ? 15 : 16)} style={{ width: "100%", height: 220, border: "1px solid var(--line)", borderRadius: 8 }} />
+          <iframe title="Bản đồ vị trí công trường" src={mapsEmbedUrl(point, 17)} style={{ width: "100%", height: 220, border: "1px solid var(--line)", borderRadius: 8 }} />
           <small className="muted">Vị trí: {point.lat}, {point.lng} · <a href={mapsOpenUrl(point)} target="_blank" rel="noreferrer">Mở Google Maps <ExternalLink className="ico" size={12} aria-hidden="true" /></a> · <button type="button" className="link-button" onClick={() => { set("siteLat", null); set("siteLng", null); setStatus(null); }}>Xóa vị trí</button></small>
         </div>
       ) : <p className="warn-text" style={{ margin: 0 }}>Chưa đặt vị trí: nhân viên chưa tự chấm công GPS được ở dự án này.</p>}
 
-      <div style={{ display: "grid", gap: 6 }}>
-        <b>Bán kính được phép chấm công: {draft.siteRadiusM} m quanh điểm ghim</b>
-        <div className="role-switch" role="group" aria-label="Bán kính" style={{ flexWrap: "wrap" }}>
-          {RADIUS_PRESETS.map((preset) => <button key={preset.meters} type="button" aria-pressed={draft.siteRadiusM === preset.meters} title={preset.hint} onClick={() => set("siteRadiusM", preset.meters)}>{preset.meters >= 1000 ? `${preset.meters / 1000} km` : `${preset.meters} m`}</button>)}
-        </div>
-        <label className="field" style={{ margin: 0, maxWidth: 220 }}><span>Hoặc nhập số mét (50–5000)</span><input type="number" min={50} max={5000} step={50} value={draft.siteRadiusM} onChange={(event) => set("siteRadiusM", Math.min(5000, Math.max(50, Number(event.target.value) || 300)))} /></label>
-        <small className="muted">
-          Nhân viên đứng trong vòng <b>{draft.siteRadiusM} m</b> quanh điểm ghim mới bấm chấm công được; xa hơn thì bị chặn và báo cách bao nhiêu mét.
-          GPS điện thoại thường lệch 10–50 m (trong nhà xưởng có thể lệch hơn), nên đặt tối thiểu 150–200 m. Công trường rộng (nhà máy, khu công nghiệp) đặt 300–500 m
-          để người làm ở góc xa vẫn chấm được.{RADIUS_PRESETS.find((preset) => preset.meters === draft.siteRadiusM) ? ` Gợi ý: ${RADIUS_PRESETS.find((preset) => preset.meters === draft.siteRadiusM)!.hint.toLowerCase()}.` : ""}
-        </small>
-      </div>
+      <p className="muted" style={{ margin: 0 }}>
+        <b>Bán kính chấm công: {SITE_RADIUS_M} m quanh điểm ghim</b> (cố định cho mọi dự án). Nhân viên đứng trong vòng {SITE_RADIUS_M} m mới bấm chấm công được;
+        xa hơn thì bị chặn và báo cách bao nhiêu mét. Đặt điểm ghim đúng chỗ cổng hoặc giữa công trường.
+      </p>
 
       <details>
         <summary>Nhập tọa độ bằng tay (nâng cao)</summary>

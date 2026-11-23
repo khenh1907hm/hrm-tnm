@@ -2,16 +2,16 @@
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { FolderKanban, Plus, Search } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
+import { addDays } from "../../../lib/dates";
 import { normalizeText } from "../../../lib/text";
 import type { Actor } from "../../../modules/auth/permissions";
 import { budgetSummary, formatPct } from "../../../modules/projects/budget";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
-import { DEFAULT_SITE_SETTINGS, MEMBER_ROLE_LABELS, PROJECT_STATUS_LABELS, type Project, type ProjectMember, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
-import { getSupabaseClient } from "../../../lib/supabase/client";
+import { DEFAULT_SITE_SETTINGS, SITE_RADIUS_M, MEMBER_ROLE_LABELS, PROJECT_STATUS_LABELS, type Project, type ProjectMember, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
 import { isLink, mapsOpenUrl } from "../../../lib/mapsLink";
-import { CONTRACT_STATE_UI, directorPeople, projectContractStates, setProjectApprovers, type ContractState } from "../accountApi";
-import { ApproverFrames, type ApproverDraft, type Participant } from "./ProjectApproversPanel";
+import { CONTRACT_STATE_UI, projectContractStates, type ContractState } from "../accountApi";
+import type { Participant } from "./ProjectApproversPanel";
 import type { Notify } from "../Toast";
 import { ProjectDetail } from "./ProjectDetail";
 import { canCreateProject, defaultJoinDate, defaultLeaveDate, errorMessage, type EmployeeOption, type EmployeeSource } from "./projectShared";
@@ -145,16 +145,14 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   const today = todayVN(systemClock);
   const [draft, setDraft] = useState<ProjectInput>(() => props.initial ?? {
     code: "", name: "", customerId: null, customerName: "", site: "", pmEmployeeId: null, plannedStart: today, plannedEnd: today, actualStart: null, actualEnd: null,
-    stdHours: 8, weeklyOff: [0], status: "planning", note: "", ...DEFAULT_SITE_SETTINGS,
+    stdHours: 8, weeklyOff: [0], status: "planning", note: "", ...DEFAULT_SITE_SETTINGS, openingWorkdays: 0, openingAsOf: null,
   });
   const [pmName, setPmName] = useState("");
-  // Khi tạo: thành viên tham gia và người duyệt của dự án
+  // Khi tạo: thành viên tham gia (người duyệt cài ở tab Quy trình duyệt của dự án)
   const [members, setMembers] = useState<Participant[]>([]);
   const [memberPicker, setMemberPicker] = useState(0);
   // Ngày vào dự án của người mới thêm (null = tự lấy: tạo mới thì ngày bắt đầu, sửa thì hôm nay hoặc ngày bắt đầu nếu dự án đã qua)
   const [joinDate, setJoinDate] = useState<string | null>(null);
-  const [approvers, setApprovers] = useState<ApproverDraft[]>([]);
-  const [directors, setDirectors] = useState<{ employeeId: string; name: string }[]>([]);
   const [error, setError] = useState("");
   // Khi sửa: thành viên đang có trong dự án và những người đánh dấu bỏ (áp dụng khi bấm Lưu)
   const [existing, setExisting] = useState<ProjectMember[] | null>(props.initial ? null : []);
@@ -168,15 +166,6 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   const isCurrent = (member: ProjectMember) => member.leftOn === null || member.leftOn >= today;
   const kept = (existing ?? []).filter((member) => !dropped.has(member.id));
   const hasReports = (member: ProjectMember) => kept.some((other) => other.parentId === member.id && isCurrent(other));
-  useEffect(() => {
-    if (props.initial || !getSupabaseClient()) return;
-    let active = true;
-    void directorPeople().then((list) => { if (active) setDirectors(list); }, () => undefined);
-    return () => { active = false; };
-  }, [props.initial]);
-  // Người kéo vào khung duyệt: PM và các thành viên tham gia
-  const pmOption: Participant | null = draft.pmEmployeeId && pmName ? { id: draft.pmEmployeeId, code: pmName.split(" · ")[0] ?? "", name: pmName.split(" · ")[1] ?? pmName } : null;
-  const participants = [...(pmOption ? [pmOption] : []), ...members.filter((member) => member.id !== pmOption?.id)];
   const [busy, setBusy] = useState(false);
   const memberJoinedOn = joinDate ?? (props.initial ? defaultJoinDate(draft, today) : draft.plannedStart);
   const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setDraft((current) => ({ ...current, [key]: value }));
@@ -187,12 +176,16 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
     if (draft.actualStart && draft.actualEnd && draft.actualEnd < draft.actualStart) { setError("Ngày kết thúc thực tế phải sau ngày bắt đầu thực tế."); return; }
     if (!(draft.workEnd > draft.workStart) || draft.lunchEnd < draft.lunchStart) { setError("Giờ kết thúc phải sau giờ bắt đầu; giờ hết nghỉ trưa không trước giờ bắt đầu nghỉ."); return; }
     if (members.length && memberJoinedOn < draft.plannedStart) { setError("Ngày vào dự án của người mới thêm không được trước ngày bắt đầu dự án."); return; }
+    const opening = draft.openingWorkdays ?? 0;
+    if (!Number.isFinite(opening) || opening < 0) { setError("Số công đã thực hiện phải là số không âm."); return; }
+    if (opening > 0 && !draft.openingAsOf) { setError("Chọn ngày tính đến của số công đã thực hiện."); return; }
+    if (opening > 0 && draft.openingAsOf! > today) { setError("Ngày tính đến của số công đã thực hiện không được sau hôm nay."); return; }
     if ((draft.siteLat === null) !== (draft.siteLng === null)) { setError("Nhập đủ cả vĩ độ và kinh độ của công trường, hoặc để trống cả hai."); return; }
     setBusy(true); setError("");
     try {
       // Địa điểm công trường = link Google Maps của điểm ghim (đặt ở mục Vị trí công trường bên dưới)
       const site = draft.siteLat !== null && draft.siteLng !== null ? mapsOpenUrl({ lat: draft.siteLat, lng: draft.siteLng }) : isLink(draft.site) ? "" : draft.site;
-      const saved = await props.store.saveProject({ ...draft, site, ...(props.initial ? { id: props.initial.id } : {}) });
+      const saved = await props.store.saveProject({ ...draft, site, siteRadiusM: SITE_RADIUS_M, openingWorkdays: opening, openingAsOf: opening > 0 ? draft.openingAsOf ?? null : null, ...(props.initial ? { id: props.initial.id } : {}) });
       if (!props.initial) {
         const empty: ProjectBudget[] = (["labor", "subcontract", "material", "other"] as const).map((category) => ({ category, amount: 0, warnPct: 80, plannedHours: null }));
         await props.store.saveBudgets(saved.id, empty, "Tạo dự án");
@@ -204,9 +197,6 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           if (member.id === saved.pmEmployeeId) continue;
           await props.store.saveMember({ projectId: saved.id, employeeId: member.id, displayName: member.name, employeeCode: member.code, role: "member", parentId: null, team: "", subcontractId: null, joinedOn: memberJoinedOn, leftOn: null });
         }
-        const keep = new Set(participants.map((person) => person.id));
-        const chosen = approvers.filter((item) => keep.has(item.employeeId));
-        if (chosen.length && getSupabaseClient()) await setProjectApprovers(saved.id, chosen.map(({ role, employeeId }) => ({ role, employeeId })), {});
       } else if (existing) {
         await applyMemberChanges(saved);
       }
@@ -271,6 +261,16 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           <label className="field"><span>Kết thúc dự kiến *</span><input type="date" value={draft.plannedEnd} onChange={(event) => set("plannedEnd", event.target.value)} /></label>
           <label className="field"><span>Bắt đầu thực tế</span><input type="date" value={draft.actualStart ?? ""} onChange={(event) => set("actualStart", event.target.value || null)} /></label>
           <label className="field"><span>Kết thúc thực tế</span><input type="date" value={draft.actualEnd ?? ""} onChange={(event) => set("actualEnd", event.target.value || null)} /></label>
+          <fieldset className="pj-create-block">
+            <legend>Đã thực hiện trước khi đưa lên hệ thống</legend>
+            <p className="muted"><small>Dự án đã đi được một thời gian: nhập số công (người × ngày) đã làm tính đến một ngày. Công lũy kế ở báo cáo ngày / tuần / tháng cộng tiếp từ sau ngày này. Dự án mới thì để 0.</small></p>
+            <div className="form-grid" style={{ padding: 0 }}>
+              <label className="field"><span>Số công đã thực hiện</span><input type="number" min={0} step={0.5} value={draft.openingWorkdays ? String(draft.openingWorkdays) : ""} placeholder="0"
+                onChange={(event) => { const value = Number(event.target.value.replace(",", ".")); set("openingWorkdays", event.target.value.trim() === "" || !Number.isFinite(value) ? 0 : value); if (!draft.openingAsOf && value > 0) set("openingAsOf", today > draft.plannedStart ? addDays(today, -1) : draft.plannedStart); }} /></label>
+              <label className="field"><span>Tính đến hết ngày</span><input type="date" value={draft.openingAsOf ?? ""} max={today} disabled={!draft.openingWorkdays} onChange={(event) => set("openingAsOf", event.target.value || null)} /></label>
+            </div>
+            {(draft.openingWorkdays ?? 0) > 0 && <p className="muted" style={{ margin: 0 }}><small>≈ {((draft.openingWorkdays ?? 0) * draft.stdHours).toLocaleString("vi-VN")} giờ (theo {draft.stdHours} giờ chuẩn mỗi ngày).</small></p>}
+          </fieldset>
           <p className="muted" style={{ gridColumn: "1 / -1", margin: 0 }}><small>Dự án đã làm từ trước: chọn ngày bắt đầu, kết thúc trong quá khứ. Muốn nhập bù chấm công những ngày cũ thì để trạng thái <b>Đang thi công</b>, nhập xong mới chuyển <b>Hoàn thành</b>.</small></p>
           <fieldset className="field" style={{ gridColumn: "1 / -1", border: 0, padding: 0 }}>
             <span>Ngày nghỉ trong tuần</span>
@@ -286,7 +286,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
             <legend>Thành viên tham gia dự án</legend>
             <p className="muted"><small>{props.initial
               ? "Thêm hoặc bỏ người tham gia, thay đổi áp dụng khi bấm Lưu dự án. Người mới vào với vai trò Thành viên, đứng dưới PM, từ ngày vào dự án chọn ở dưới; người đã có chấm công thì không xóa mà ghi ngày rời dự án là hôm nay (dự án đã kết thúc thì là ngày kết thúc). Đổi vai trò, tổ, quản lý trực tiếp ở mục Sơ đồ & thành viên."
-              : "Ai tham gia dự án (kỹ thuật, vật tư, kế toán…) thì thêm vào đây: họ xem được dự án và kéo được vào khung duyệt bên dưới. Vai trò chấm công (Chỉ huy trưởng, Tổ trưởng…) xếp sau ở mục Sơ đồ & thành viên nếu cần."}</small></p>
+              : "Ai tham gia dự án (kỹ thuật, vật tư, kế toán…) thì thêm vào đây: họ xem được dự án và được chọn làm người duyệt ở tab Quy trình duyệt. Vai trò chấm công (Chỉ huy trưởng, Tổ trưởng…) xếp sau ở mục Sơ đồ & thành viên nếu cần."}</small></p>
             {existing === null ? <p className="muted">Đang tải thành viên…</p> : <>
               <EmployeePicker key={memberPicker} label="Thêm người" source={props.employees}
                 exclude={new Set([...members.map((member) => member.id), ...(draft.pmEmployeeId && !props.initial ? [draft.pmEmployeeId] : []), ...(existing ?? []).filter((member) => dropped.has(member.id) || (isCurrent(member) && member.leftOn === null)).map((member) => member.employeeId)])}
@@ -308,16 +308,11 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
                   <input type="date" value={memberJoinedOn} min={draft.plannedStart} onChange={(event) => setJoinDate(event.target.value || null)} /></label></li>}
                 {members.map((member) => (
                   <li key={member.id}><span className="pill">{props.initial ? "Mới" : "Thành viên"}</span> {member.code} · {member.name}
-                    <button type="button" className="link-button" onClick={() => { setMembers((list) => list.filter((other) => other.id !== member.id)); setApprovers((list) => list.filter((item) => item.employeeId !== member.id)); }}>Bỏ</button></li>
+                    <button type="button" className="link-button" onClick={() => { setMembers((list) => list.filter((other) => other.id !== member.id)); }}>Bỏ</button></li>
                 ))}
               </ul>}
             </>}
           </fieldset>
-          {!props.initial && getSupabaseClient() && <fieldset className="pj-create-block">
-            <legend>Người duyệt của dự án</legend>
-            <p className="muted"><small>Kéo người tham gia vào khung, ký từ trên xuống. Mỗi khung tối đa 2 người ngang quyền (một người duyệt là đủ). Khung Lãnh đạo dưới cùng là quyền cao nhất, Giám đốc luôn có sẵn. Khung để trống thì dùng khối chung của công ty.</small></p>
-            <ApproverFrames value={approvers} onChange={setApprovers} participants={participants} directors={directors} />
-          </fieldset>}
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>
         <footer><button type="button" className="button" onClick={props.onClose}>Hủy</button><button type="button" className="button primary" disabled={busy} onClick={() => void submit()}>{busy ? "Đang lưu…" : "Lưu dự án"}</button></footer>

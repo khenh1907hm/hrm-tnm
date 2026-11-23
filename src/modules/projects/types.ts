@@ -56,7 +56,9 @@ export type Project = {
 };
 
 /** Giá trị mặc định của phần giờ làm và vị trí công trường. */
-export const DEFAULT_SITE_SETTINGS = { siteLat: null, siteLng: null, siteRadiusM: 300, workStart: "08:00", workEnd: "17:00", lunchStart: "12:00", lunchEnd: "13:00" } as const satisfies Pick<Project, "siteLat" | "siteLng" | "siteRadiusM" | "workStart" | "workEnd" | "lunchStart" | "lunchEnd">;
+/** Bán kính chấm công GPS quanh điểm ghim công trường: cố định 50 m cho mọi dự án. */
+export const SITE_RADIUS_M = 50;
+export const DEFAULT_SITE_SETTINGS = { siteLat: null, siteLng: null, siteRadiusM: SITE_RADIUS_M, workStart: "08:00", workEnd: "17:00", lunchStart: "12:00", lunchEnd: "13:00" } as const satisfies Pick<Project, "siteLat" | "siteLng" | "siteRadiusM" | "workStart" | "workEnd" | "lunchStart" | "lunchEnd">;
 
 /** Vốn dự án (VNĐ); chỉ Admin, PM, CHT đọc được. */
 export type ProjectFinance = { capital: number; note: string };
