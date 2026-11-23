@@ -13,6 +13,7 @@ import { MODAL_ORIENTATIONS } from "@/lib/layout";
  */
 const ACTIONS: { icon: IconName; tone: Tone; title: string; sub: string; href?: Href }[] = [
   { icon: "report", tone: "rose", title: "Báo cáo ngày", sub: "Công việc, nhân lực, ảnh thi công", href: "/report" },
+  { icon: "shield", tone: "sky", title: "Kiểm tra dụng cụ điện", sub: "Tool & machine check, ảnh từng máy, OK / NG", href: "/tool-check" as Href },
   { icon: "calendar", tone: "sky", title: "Đơn xin nghỉ phép", sub: "Nghỉ phép, nghỉ việc riêng" },
   { icon: "clock", tone: "orange", title: "Đăng ký tăng ca", sub: "Làm thêm giờ, ngày nghỉ" },
   { icon: "box", tone: "navy", title: "Đề xuất vật tư", sub: "Yêu cầu vật tư cho công trường" },

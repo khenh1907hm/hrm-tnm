@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, MapPin, Pencil } from "lucide-react";
+import { isLink, siteMapUrl } from "../../../lib/mapsLink";
 import { systemClock, todayVN } from "../../../lib/clock";
 import type { Actor } from "../../../modules/auth/permissions";
 import { projectDuration } from "../../../modules/projects/calendar";
@@ -26,6 +27,7 @@ import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from
 import { formatDateVn } from "./ProjectsPage";
 import { ReportsTab } from "./ReportsTab";
 import { TimesheetsTab } from "./TimesheetsTab";
+import { ToolChecksTab } from "./ToolChecksTab";
 
 /** Toàn bộ dữ liệu một dự án (tải một lần, tải lại sau mỗi thao tác). Các mục tiền là [] khi người xem không được xem tiền. */
 export type ProjectData = {
@@ -70,12 +72,12 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "daily" | "timesheets" | "checks" | "purchases" | "approvals" | "reports";
-const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Confirm Contract"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["approvals", "Quy trình duyệt"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["reports", "Báo cáo"]];
+type Tab = "overview" | "contract" | "budget" | "materials" | "members" | "daily" | "timesheets" | "checks" | "tools" | "purchases" | "approvals" | "reports";
+const TABS: readonly [Tab, string][] = [["overview", "Tổng quan"], ["contract", "Confirm Contract"], ["budget", "Ngân sách"], ["materials", "Yêu cầu vật tư"], ["purchases", "Đặt hàng"], ["approvals", "Quy trình duyệt"], ["members", "Sơ đồ & thành viên"], ["daily", "Báo cáo ngày"], ["timesheets", "Chấm công"], ["checks", "Chấm công GPS"], ["tools", "Kiểm tra dụng cụ"], ["reports", "Báo cáo"]];
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
   overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", materials: "yeu-cau-vat-tu", purchases: "dat-hang", approvals: "quy-trinh-duyet", members: "so-do", daily: "bao-cao-ngay",
-  timesheets: "cham-cong", checks: "cham-cong-gps", reports: "bao-cao",
+  timesheets: "cham-cong", checks: "cham-cong-gps", tools: "kiem-tra-dung-cu", reports: "bao-cao",
 };
 const tabFromUrl = (): Tab => {
   if (typeof window === "undefined") return "overview";
@@ -122,6 +124,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
     && (key !== "approvals" || store.mode === "live") && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
+  const mapUrl = siteMapUrl(project);
   return (
     <section className="pj-page">
       <div>
@@ -131,7 +134,8 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
             <span className="pj-code">{project.code} · {PROJECT_STATUS_LABELS[project.status]}</span>
             {stateUi && <span className={`cc-pill cc-${stateUi.tone}`} style={{ marginLeft: 8 }}>{stateUi.label}</span>}
             <h1>{project.name}</h1>
-            <p>{[project.customerName, project.site].filter(Boolean).join(" · ")}</p>
+            <p>{[project.customerName, isLink(project.site) ? "" : project.site].filter(Boolean).join(" · ")}
+              {mapUrl && <>{project.customerName || (project.site && !isLink(project.site)) ? " · " : ""}<a href={mapUrl} target="_blank" rel="noreferrer"><MapPin className="ico" size={14} aria-hidden="true" /> Bản đồ công trường</a></>}</p>
             <p className="muted">
               Dự kiến {formatDateVn(project.plannedStart)} – {formatDateVn(project.plannedEnd)}
               {duration && ` (${duration.planned.calendar} ngày, ${duration.planned.working} ngày làm việc)`}
@@ -165,6 +169,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "daily") return <DailyReportTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
+        if (tab === "tools") return <ToolChecksTab {...tabProps} />;
         if (tab === "purchases") return withApprovers(<ProjectPurchasesTab {...tabProps} />, "purchase");
         if (tab === "approvals") return <ApprovalsTab projectId={project.id} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />;
         return <ReportsTab {...tabProps} />;

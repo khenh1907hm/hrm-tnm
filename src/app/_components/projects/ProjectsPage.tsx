@@ -9,11 +9,12 @@ import { formatVnd } from "../../../modules/projects/cost";
 import type { ProjectStore } from "../../../modules/projects/store";
 import { DEFAULT_SITE_SETTINGS, MEMBER_ROLE_LABELS, PROJECT_STATUS_LABELS, type Project, type ProjectMember, type ProjectBudget, type ProjectInput, type ProjectStatus } from "../../../modules/projects/types";
 import { getSupabaseClient } from "../../../lib/supabase/client";
+import { isLink, mapsOpenUrl } from "../../../lib/mapsLink";
 import { CONTRACT_STATE_UI, directorPeople, projectContractStates, setProjectApprovers, type ContractState } from "../accountApi";
 import { ApproverFrames, type ApproverDraft, type Participant } from "./ProjectApproversPanel";
 import type { Notify } from "../Toast";
 import { ProjectDetail } from "./ProjectDetail";
-import { canCreateProject, errorMessage, type EmployeeOption, type EmployeeSource } from "./projectShared";
+import { canCreateProject, defaultJoinDate, defaultLeaveDate, errorMessage, type EmployeeOption, type EmployeeSource } from "./projectShared";
 import "./projects.css";
 import { SiteFields } from "./SiteFields";
 
@@ -150,6 +151,8 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   // Khi tạo: thành viên tham gia và người duyệt của dự án
   const [members, setMembers] = useState<Participant[]>([]);
   const [memberPicker, setMemberPicker] = useState(0);
+  // Ngày vào dự án của người mới thêm (null = tự lấy: tạo mới thì ngày bắt đầu, sửa thì hôm nay hoặc ngày bắt đầu nếu dự án đã qua)
+  const [joinDate, setJoinDate] = useState<string | null>(null);
   const [approvers, setApprovers] = useState<ApproverDraft[]>([]);
   const [directors, setDirectors] = useState<{ employeeId: string; name: string }[]>([]);
   const [error, setError] = useState("");
@@ -175,6 +178,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
   const pmOption: Participant | null = draft.pmEmployeeId && pmName ? { id: draft.pmEmployeeId, code: pmName.split(" · ")[0] ?? "", name: pmName.split(" · ")[1] ?? pmName } : null;
   const participants = [...(pmOption ? [pmOption] : []), ...members.filter((member) => member.id !== pmOption?.id)];
   const [busy, setBusy] = useState(false);
+  const memberJoinedOn = joinDate ?? (props.initial ? defaultJoinDate(draft, today) : draft.plannedStart);
   const set = <K extends keyof ProjectInput>(key: K, value: ProjectInput[K]) => setDraft((current) => ({ ...current, [key]: value }));
 
   const submit = async () => {
@@ -182,10 +186,13 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
     if (draft.plannedEnd < draft.plannedStart) { setError("Ngày kết thúc dự kiến phải sau hoặc bằng ngày bắt đầu."); return; }
     if (draft.actualStart && draft.actualEnd && draft.actualEnd < draft.actualStart) { setError("Ngày kết thúc thực tế phải sau ngày bắt đầu thực tế."); return; }
     if (!(draft.workEnd > draft.workStart) || draft.lunchEnd < draft.lunchStart) { setError("Giờ kết thúc phải sau giờ bắt đầu; giờ hết nghỉ trưa không trước giờ bắt đầu nghỉ."); return; }
+    if (members.length && memberJoinedOn < draft.plannedStart) { setError("Ngày vào dự án của người mới thêm không được trước ngày bắt đầu dự án."); return; }
     if ((draft.siteLat === null) !== (draft.siteLng === null)) { setError("Nhập đủ cả vĩ độ và kinh độ của công trường, hoặc để trống cả hai."); return; }
     setBusy(true); setError("");
     try {
-      const saved = await props.store.saveProject({ ...draft, ...(props.initial ? { id: props.initial.id } : {}) });
+      // Địa điểm công trường = link Google Maps của điểm ghim (đặt ở mục Vị trí công trường bên dưới)
+      const site = draft.siteLat !== null && draft.siteLng !== null ? mapsOpenUrl({ lat: draft.siteLat, lng: draft.siteLng }) : isLink(draft.site) ? "" : draft.site;
+      const saved = await props.store.saveProject({ ...draft, site, ...(props.initial ? { id: props.initial.id } : {}) });
       if (!props.initial) {
         const empty: ProjectBudget[] = (["labor", "subcontract", "material", "other"] as const).map((category) => ({ category, amount: 0, warnPct: 80, plannedHours: null }));
         await props.store.saveBudgets(saved.id, empty, "Tạo dự án");
@@ -195,7 +202,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
         // Thành viên tham gia: chỉ thêm người, không cần vai trò (xếp vai trò sau ở Sơ đồ & thành viên nếu cần)
         for (const member of members) {
           if (member.id === saved.pmEmployeeId) continue;
-          await props.store.saveMember({ projectId: saved.id, employeeId: member.id, displayName: member.name, employeeCode: member.code, role: "member", parentId: null, team: "", subcontractId: null, joinedOn: saved.plannedStart, leftOn: null });
+          await props.store.saveMember({ projectId: saved.id, employeeId: member.id, displayName: member.name, employeeCode: member.code, role: "member", parentId: null, team: "", subcontractId: null, joinedOn: memberJoinedOn, leftOn: null });
         }
         const keep = new Set(participants.map((person) => person.id));
         const chosen = approvers.filter((item) => keep.has(item.employeeId));
@@ -227,14 +234,15 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           current = current.filter((member) => member.id !== leaf.id);
         } catch (caught) {
           if (!(caught instanceof Error) || !caught.message.includes("MEMBER_HAS_TIMESHEETS")) throw caught;
-          const left = await props.store.saveMember({ ...leaf, leftOn: leaf.leftOn !== null && leaf.leftOn < today ? leaf.leftOn : today });
+          const leaveOn = defaultLeaveDate(saved, leaf.joinedOn, today);
+          const left = await props.store.saveMember({ ...leaf, leftOn: leaf.leftOn !== null && leaf.leftOn < leaveOn ? leaf.leftOn : leaveOn });
           current = current.map((member) => member.id === left.id ? left : member);
         }
         setDropped((set) => { const next = new Set(set); next.delete(leaf.id); return next; });
         sync();
       }
       const pm = current.find((member) => member.role === "pm" && isCurrent(member)) ?? null;
-      const joinedOn = today > saved.plannedStart ? today : saved.plannedStart;
+      const joinedOn = memberJoinedOn;
       for (const person of members) {
         const before = current.find((member) => member.employeeId === person.id);
         // Người từng rời dự án được thêm lại thì chỉ xóa ngày rời
@@ -257,13 +265,13 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           <label className="field"><span>Trạng thái</span><select value={draft.status} onChange={(event) => set("status", event.target.value as ProjectStatus)}>{(Object.keys(PROJECT_STATUS_LABELS) as ProjectStatus[]).map((key) => <option key={key} value={key}>{PROJECT_STATUS_LABELS[key]}</option>)}</select></label>
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Tên dự án *</span><input value={draft.name} maxLength={300} onChange={(event) => set("name", event.target.value)} /></label>
           <label className="field"><span>Khách hàng</span><input value={draft.customerName} maxLength={200} onChange={(event) => set("customerName", event.target.value)} /></label>
-          <label className="field"><span>Địa điểm công trường</span><input value={draft.site} maxLength={300} onChange={(event) => set("site", event.target.value)} /></label>
           {!props.initial && <EmployeePicker label="PM (quản lý dự án)" source={props.employees} onPick={(option) => { set("pmEmployeeId", option?.id ?? null); setPmName(option ? `${option.code} · ${option.name}` : ""); }} />}
           <label className="field"><span>Giờ chuẩn mỗi ngày</span><input type="number" min={1} max={12} step={0.5} value={draft.stdHours} onChange={(event) => set("stdHours", Number(event.target.value) || 8)} /></label>
           <label className="field"><span>Bắt đầu dự kiến *</span><input type="date" value={draft.plannedStart} onChange={(event) => set("plannedStart", event.target.value)} /></label>
           <label className="field"><span>Kết thúc dự kiến *</span><input type="date" value={draft.plannedEnd} onChange={(event) => set("plannedEnd", event.target.value)} /></label>
           <label className="field"><span>Bắt đầu thực tế</span><input type="date" value={draft.actualStart ?? ""} onChange={(event) => set("actualStart", event.target.value || null)} /></label>
           <label className="field"><span>Kết thúc thực tế</span><input type="date" value={draft.actualEnd ?? ""} onChange={(event) => set("actualEnd", event.target.value || null)} /></label>
+          <p className="muted" style={{ gridColumn: "1 / -1", margin: 0 }}><small>Dự án đã làm từ trước: chọn ngày bắt đầu, kết thúc trong quá khứ. Muốn nhập bù chấm công những ngày cũ thì để trạng thái <b>Đang thi công</b>, nhập xong mới chuyển <b>Hoàn thành</b>.</small></p>
           <fieldset className="field" style={{ gridColumn: "1 / -1", border: 0, padding: 0 }}>
             <span>Ngày nghỉ trong tuần</span>
             <div className="button-row">
@@ -277,7 +285,7 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
           <fieldset className="pj-create-block">
             <legend>Thành viên tham gia dự án</legend>
             <p className="muted"><small>{props.initial
-              ? "Thêm hoặc bỏ người tham gia, thay đổi áp dụng khi bấm Lưu dự án. Người mới vào với vai trò Thành viên, đứng dưới PM; người đã có chấm công thì không xóa mà ghi ngày rời dự án là hôm nay. Đổi vai trò, tổ, quản lý trực tiếp ở mục Sơ đồ & thành viên."
+              ? "Thêm hoặc bỏ người tham gia, thay đổi áp dụng khi bấm Lưu dự án. Người mới vào với vai trò Thành viên, đứng dưới PM, từ ngày vào dự án chọn ở dưới; người đã có chấm công thì không xóa mà ghi ngày rời dự án là hôm nay (dự án đã kết thúc thì là ngày kết thúc). Đổi vai trò, tổ, quản lý trực tiếp ở mục Sơ đồ & thành viên."
               : "Ai tham gia dự án (kỹ thuật, vật tư, kế toán…) thì thêm vào đây: họ xem được dự án và kéo được vào khung duyệt bên dưới. Vai trò chấm công (Chỉ huy trưởng, Tổ trưởng…) xếp sau ở mục Sơ đồ & thành viên nếu cần."}</small></p>
             {existing === null ? <p className="muted">Đang tải thành viên…</p> : <>
               <EmployeePicker key={memberPicker} label="Thêm người" source={props.employees}
@@ -296,6 +304,8 @@ export function ProjectFormModal(props: { store: ProjectStore; employees: Employ
                     </li>
                   );
                 })}
+                {members.length > 0 && <li><label className="field" style={{ margin: 0 }}><span>Ngày vào dự án của người mới thêm</span>
+                  <input type="date" value={memberJoinedOn} min={draft.plannedStart} onChange={(event) => setJoinDate(event.target.value || null)} /></label></li>}
                 {members.map((member) => (
                   <li key={member.id}><span className="pill">{props.initial ? "Mới" : "Thành viên"}</span> {member.code} · {member.name}
                     <button type="button" className="link-button" onClick={() => { setMembers((list) => list.filter((other) => other.id !== member.id)); setApprovers((list) => list.filter((item) => item.employeeId !== member.id)); }}>Bỏ</button></li>

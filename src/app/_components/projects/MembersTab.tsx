@@ -6,7 +6,7 @@ import { buildMemberTree, directReports, teamsOf, treeIssues, wouldCreateCycle, 
 import { MEMBER_ROLE_LABELS, MEMBER_ROLES, type MemberRole, type ProjectMember } from "../../../modules/projects/types";
 import type { TabProps } from "./ProjectDetail";
 import { EmployeePicker } from "./ProjectsPage";
-import { errorMessage, moneyInput, parseMoney, projectText, type EmployeeOption } from "./projectShared";
+import { defaultJoinDate, errorMessage, moneyInput, parseMoney, projectText, type EmployeeOption } from "./projectShared";
 
 const initials = (name: string) => name.trim().split(/\s+/).slice(-2).map((part) => part[0] ?? "").join("").toUpperCase();
 
@@ -87,7 +87,7 @@ function MemberFormModal(props: { tab: Pick<TabProps, "store" | "data" | "viewer
   const [parentId, setParentId] = useState<string | null>(editing?.parentId ?? data.members.find((member) => member.role === "pm")?.id ?? null);
   const [team, setTeam] = useState(editing?.team ?? "");
   const [subcontractId, setSubcontractId] = useState<string | null>(editing?.subcontractId ?? null);
-  const [joinedOn, setJoinedOn] = useState(editing?.joinedOn ?? (data.today > data.project.plannedStart ? data.today : data.project.plannedStart));
+  const [joinedOn, setJoinedOn] = useState(editing?.joinedOn ?? defaultJoinDate(data.project, data.today));
   const [leftOn, setLeftOn] = useState<string | null>(editing?.leftOn ?? null);
   const [rate, setRate] = useState(ownRate);
   const [error, setError] = useState("");

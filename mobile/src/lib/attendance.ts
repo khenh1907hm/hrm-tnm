@@ -59,6 +59,14 @@ export async function loadWorkplaces(): Promise<Workplace[]> {
  */
 export type Site = Workplace & { address: string; isMember: boolean };
 
+/** Địa điểm công trường lưu dạng link Google Maps thì không hiện ra như chữ. */
+export const isLink = (text: string) => /^https?:\/\//i.test(text.trim());
+/** Link mở Google Maps tới điểm ghim công trường (dùng tọa độ, kể cả nơi chưa có tên trên bản đồ). */
+export function siteMapUrl(site: { siteLat: number | null; siteLng: number | null; address?: string }): string | null {
+  if (site.siteLat !== null && site.siteLng !== null) return `https://www.google.com/maps/search/?api=1&query=${site.siteLat},${site.siteLng}`;
+  return site.address && isLink(site.address) ? site.address.trim() : null;
+}
+
 export async function loadSites(): Promise<Site[]> {
   const { data, error } = await supabase.rpc("attendance_sites");
   if (error) throw new Error(error.message);

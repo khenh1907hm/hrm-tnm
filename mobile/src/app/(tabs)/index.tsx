@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppIcon, Glyph } from "@/components/AppIcon";
 import { GradientButton, SecondaryButton } from "@/components/GradientButton";
 import { GridBackground } from "@/components/GridBackground";
@@ -16,7 +16,7 @@ import { useToast } from "@/components/Toast";
 import { SelfieCamera, type SelfiePhoto } from "@/components/SelfieCamera";
 import { AttendanceCalendar } from "@/components/AttendanceCalendar";
 import { DaySheet } from "@/components/DaySheet";
-import { distanceM, freshGps, loadSites, nextPunch, punch, readGps, type GpsFix, type Site, type Workplace } from "@/lib/attendance";
+import { distanceM, freshGps, isLink, loadSites, nextPunch, punch, readGps, siteMapUrl, type GpsFix, type Site, type Workplace } from "@/lib/attendance";
 import { buildCalendar, loadMonthExplanations, loadMonthRows, shiftMonth, type Day, type Explanation, type MonthRow } from "@/lib/history";
 import { clockVN, dayLabel, monthISO, todayISO } from "@/lib/dates";
 import type React from "react";
@@ -122,7 +122,7 @@ export default function CheckinScreen() {
     return {
       id: s.projectId,
       title: s.name,
-      subtitle: [s.code, s.isMember ? "Công trường của bạn" : s.address].filter(Boolean).join(" · "),
+      subtitle: [s.code, s.isMember ? "Công trường của bạn" : isLink(s.address) ? "" : s.address].filter(Boolean).join(" · "),
       badge: next === "in" ? (s.hasSite ? "Chưa chấm" : "Chưa có vị trí") : next === "out" ? `Vào ${clockVN(s.today?.checkInAt)}` : "Đã đủ",
       icon: "pin",
       tone: next === "out" ? "sky" : next === null ? "navy" : s.isMember ? "orange" : "rose",
@@ -200,7 +200,7 @@ export default function CheckinScreen() {
                     <View style={styles.siteText}>
                       <Text style={styles.overline}>Công trường</Text>
                       <Text style={styles.siteName} numberOfLines={1}>{site ? site.name : "Chọn công trường"}</Text>
-                      <Text style={styles.siteSub} numberOfLines={1}>{site ? [site.code, site.address].filter(Boolean).join(" · ") : `${sites.length} công trường đang thi công`}</Text>
+                      <Text style={styles.siteSub} numberOfLines={1}>{site ? [site.code, isLink(site.address) ? "" : site.address].filter(Boolean).join(" · ") : `${sites.length} công trường đang thi công`}</Text>
                     </View>
                     <View style={styles.change}><Glyph name="search" size={16} color={colors.skyDeep} fillOpacity={0} /><Text style={styles.changeText}>Chọn</Text></View>
                   </Card>
@@ -212,6 +212,11 @@ export default function CheckinScreen() {
                   <View style={styles.chips}>
                     <Text style={styles.chip}>Giờ làm {place.workStart}–{place.workEnd}</Text>
                     <Text style={styles.chip}>{place.hasSite ? `Bán kính ${place.radiusM} m` : "Chưa đặt vị trí"}</Text>
+                    {siteMapUrl(place) ? (
+                      <Pressable onPress={() => void Linking.openURL(siteMapUrl(place)!)} accessibilityRole="link" accessibilityLabel="Mở bản đồ công trường" hitSlop={6}>
+                        <Text style={[styles.chip, styles.chipMap]}>Mở bản đồ ↗</Text>
+                      </Pressable>
+                    ) : null}
                     {place.team ? <Text style={styles.chip}>Tổ {place.team}</Text> : null}
                     {!site.isMember ? <Text style={[styles.chip, styles.chipOther]}>Công trường khác</Text> : null}
                     {settings.gpsWarmup ? <Text style={[styles.chip, gps ? styles.chipOk : styles.chipWait]}>{gps ? `GPS sẵn sàng · ±${gps.accuracy} m` : "Đang dò GPS…"}</Text> : null}
@@ -352,6 +357,7 @@ const styles = StyleSheet.create({
   change: { flexDirection: "row", alignItems: "center", gap: space.xxs, height: 32, paddingHorizontal: space.sm, borderRadius: radius.pill, backgroundColor: colors.skyTint },
   changeText: { fontSize: text.caption, fontFamily: fonts.bold, color: colors.skyDeep },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: space.xs, justifyContent: "center" },
+  chipMap: { color: colors.skyDeep, borderColor: colors.skyDeep },
   chip: { fontSize: text.caption, lineHeight: 16, fontFamily: fonts.semibold, color: colors.navy, backgroundColor: "rgba(255,255,255,0.92)", borderWidth: 1, borderColor: colors.line, borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: space.xxs, overflow: "hidden" },
   chipOk: { color: "#0E6B3A", backgroundColor: "#ECFBF2", borderColor: "#BDEBD0" },
   chipWait: { color: colors.muted },

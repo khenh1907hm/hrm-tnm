@@ -16,6 +16,7 @@ import { Card, FadeSlide, Screen, SectionTitle } from "@/components/Screen";
 import { useToast } from "@/components/Toast";
 import { addDays, dayLabel, dmy, todayISO } from "@/lib/dates";
 import { emptyDraft, issuesOf, loadRecentReports, loadReportProjects, loadRoster, MAX_PHOTOS, MAX_TASKS, sendReport, type Draft, type Photo, type ReportProject, type SavedReport } from "@/lib/dailyReport";
+import { isLink } from "@/lib/attendance";
 import { errorText } from "@/lib/errors";
 import { colors, fonts, gradients, radius } from "@/lib/theme";
 
@@ -76,7 +77,7 @@ export default function ReportScreen() {
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
   const setTask = (index: number, patch: Partial<Draft["tasks"][number]>) => setDraft((d) => ({ ...d, tasks: d.tasks.map((t, i) => (i === index ? { ...t, ...patch } : t)) }));
 
-  const items: PickerItem[] = useMemo(() => (projects ?? []).map((p) => ({ id: p.projectId, title: p.name, subtitle: [p.code, p.site].filter(Boolean).join(" · "), badge: p.code, icon: "report", tone: "rose" })), [projects]);
+  const items: PickerItem[] = useMemo(() => (projects ?? []).map((p) => ({ id: p.projectId, title: p.name, subtitle: [p.code, isLink(p.site) ? "" : p.site].filter(Boolean).join(" · "), badge: p.code, icon: "report", tone: "rose" })), [projects]);
 
   const addPhotos = async (source: "camera" | "library") => {
     const room = MAX_PHOTOS - photos.length;
@@ -136,7 +137,7 @@ export default function ReportScreen() {
                 <View style={styles.flex}>
                   <Text style={styles.small}>Dự án</Text>
                   <Text style={styles.projectName} numberOfLines={2}>{project?.name ?? "Chọn dự án"}</Text>
-                  {project ? <Text style={styles.projectSub} numberOfLines={1}>{[project.code, project.site].filter(Boolean).join(" · ")}</Text> : null}
+                  {project ? <Text style={styles.projectSub} numberOfLines={1}>{[project.code, isLink(project.site) ? "" : project.site].filter(Boolean).join(" · ")}</Text> : null}
                 </View>
                 <View style={styles.change}><Text style={styles.changeText}>Đổi</Text></View>
               </Card>

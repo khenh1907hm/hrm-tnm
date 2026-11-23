@@ -63,3 +63,21 @@ export type EmployeeSource = {
 /** Nhập số tiền có dấu chấm ngăn cách: "1.250.000" → 1250000. */
 export const parseMoney = (text: string) => Number(text.replace(/[^\d]/g, "")) || 0;
 export const moneyInput = (value: number) => value ? value.toLocaleString("vi-VN") : "";
+
+/** Ngày kết thúc của dự án (thực tế, nếu chưa có thì dự kiến). */
+export const projectEnd = (project: Pick<Project, "plannedEnd" | "actualEnd">) => project.actualEnd ?? project.plannedEnd;
+
+/**
+ * Ngày vào dự án mặc định cho người mới thêm: hôm nay nếu dự án đang trong thời gian thi công,
+ * còn dự án đã làm xong từ trước (nhập lại để quản lý) hoặc chưa bắt đầu thì lấy ngày bắt đầu dự án.
+ */
+export function defaultJoinDate(project: Pick<Project, "plannedStart" | "plannedEnd" | "actualEnd">, today: string): string {
+  return today > project.plannedStart && today <= projectEnd(project) ? today : project.plannedStart;
+}
+
+/** Ngày rời dự án khi bỏ người đã có chấm công: hôm nay, nhưng không quá ngày kết thúc dự án và không trước ngày vào. */
+export function defaultLeaveDate(project: Pick<Project, "plannedEnd" | "actualEnd">, joinedOn: string, today: string): string {
+  const end = projectEnd(project);
+  const day = today < end ? today : end;
+  return day < joinedOn ? joinedOn : day;
+}

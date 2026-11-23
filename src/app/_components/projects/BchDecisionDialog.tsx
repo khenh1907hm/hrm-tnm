@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
+import { isLink } from "../../../lib/mapsLink";
 import type { ProjectStore } from "../../../modules/projects/store";
 import type { Project, ProjectMember } from "../../../modules/projects/types";
 import type { OrgChart } from "../../../modules/projects/orgChart";
@@ -26,7 +27,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
   const [number, setNumber] = useState(1);
   const [signedOn, setSignedOn] = useState(props.today);
   const [packageName, setPackageName] = useState(project.name);
-  const [worksName, setWorksName] = useState([project.customerName, project.site].filter(Boolean).join(" – "));
+  const [worksName, setWorksName] = useState([project.customerName, isLink(project.site) ? "" : project.site].filter(Boolean).join(" – "));
   const [responsibleTo, setResponsibleTo] = useState("Chủ đầu tư");
   const [directorName, setDirectorName] = useState("");
   const [rows, setRows] = useState<Row[] | null>(null);

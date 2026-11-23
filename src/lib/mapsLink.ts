@@ -41,3 +41,10 @@ export function isShortMapsLink(input: string): boolean {
 
 export const mapsEmbedUrl = (point: LatLng, zoom = 17) => `https://maps.google.com/maps?q=${point.lat},${point.lng}&z=${zoom}&output=embed`;
 export const mapsOpenUrl = (point: LatLng) => `https://www.google.com/maps?q=${point.lat},${point.lng}`;
+/** Chữ là một đường link (vd địa điểm công trường lưu dạng link Google Maps). */
+export const isLink = (text: string) => /^https?:\/\//i.test(text.trim());
+/** Link bản đồ của công trường: có tọa độ thì dựng từ tọa độ (cả nơi chưa có tên trên bản đồ), không thì dùng địa điểm nếu đã là link. */
+export function siteMapUrl(project: { site: string; siteLat: number | null; siteLng: number | null }): string | null {
+  if (project.siteLat !== null && project.siteLng !== null) return mapsOpenUrl({ lat: project.siteLat, lng: project.siteLng });
+  return isLink(project.site) ? project.site.trim() : null;
+}
