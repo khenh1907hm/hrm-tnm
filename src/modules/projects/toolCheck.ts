@@ -43,7 +43,7 @@ const px = (chars: number) => Math.floor(chars * 7 + 5);
 
 /**
  * Xuất Excel theo mẫu TOOL & MACHINE CHECK PHOTO REPORT: mỗi dụng cụ một dòng, ảnh đặt giữa ô của từng mục,
- * mục không áp dụng cho loại đó ghi "N/A", Result OK / NG (có danh sách chọn), dòng NG tô đỏ.
+ * mục không áp dụng cho loại đó để trống có gạch chéo (như file mẫu), Result OK / NG (có danh sách chọn), dòng NG tô đỏ.
  */
 export async function buildToolCheckWorkbook(check: ToolCheck, project: { code: string; name: string }, images: ReadonlyMap<string, LoadedImage>): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();
@@ -93,7 +93,8 @@ export async function buildToolCheckWorkbook(check: ToolCheck, project: { code: 
 
     for (const key of ITEM_KEYS) {
       const col = PHOTO_COL[key];
-      if (!item.items.includes(key)) { row.getCell(col).value = "N/A"; row.getCell(col).font = { color: { argb: "FF999999" } }; continue; }
+      // Mục không áp dụng: để trống, gạch chéo như file mẫu
+      if (!item.items.includes(key)) { row.getCell(col).value = null; row.getCell(col).border = { ...box, diagonal: { up: true, down: false, style: "hair", color: { argb: "FF000000" } } }; continue; }
       const path = item.photos[key];
       const image = path ? images.get(path) : undefined;
       if (!image) { row.getCell(col).value = path ? "(photo not loaded)" : "No photo"; row.getCell(col).font = { color: { argb: "FFC00000" }, italic: true }; continue; }

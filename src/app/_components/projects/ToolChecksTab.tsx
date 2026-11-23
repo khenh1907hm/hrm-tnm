@@ -110,7 +110,7 @@ export function ToolChecksTab({ data, setNotice }: TabProps) {
                     <td><b>{row.serial}</b>{row.typeName ? <><br /><small className="muted">{row.typeName}</small></> : null}</td>
                     <td>{row.subcon}</td>
                     {ITEM_KEYS.map((k) => {
-                      if (!row.items.includes(k)) return <td key={k} className="muted">N/A</td>;
+                      if (!row.items.includes(k)) return <td key={k} className="muted" aria-label="Không áp dụng" style={{ background: "linear-gradient(to top right, transparent calc(50% - 0.5px), #999 50%, transparent calc(50% + 0.5px))" }} />;
                       const path = row.photos[k];
                       const url = path ? urls[path] : undefined;
                       return <td key={k}>{url ? <a href={url} target="_blank" rel="noreferrer">{/* eslint-disable-next-line @next/next/no-img-element -- ảnh link tạm của Supabase Storage */}

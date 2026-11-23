@@ -5,6 +5,7 @@ import { router } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Svg, { Line } from "react-native-svg";
 import { AppIcon, Glyph } from "@/components/AppIcon";
 import { GradientButton, SecondaryButton } from "@/components/GradientButton";
 import { LogoLoader } from "@/components/LogoLoader";
@@ -68,6 +69,8 @@ export default function ToolCheckScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const ready = useRef(false);
+  // Dữ liệu đang nhập (để ghi nháp ngay khi đổi dự án / tháng và mang sang dự án mới còn trống)
+  const current = useRef<{ projectId: string | null; month: string; rows: ToolRow[]; checkedBy: string }>({ projectId: null, month: "", rows: [], checkedBy: "" });
 
   const loadBase = useCallback(async () => {
     try {
@@ -88,6 +91,13 @@ export default function ToolCheckScreen() {
   useEffect(() => {
     if (!projectId) return;
     let active = true;
+    // Rời dự án / tháng cũ: ghi nháp ngay (không đợi hẹn giờ) để quay lại vẫn còn
+    const before = current.current;
+    const carry = ready.current && before.projectId && before.projectId !== projectId && before.month === month && before.rows.length
+      ? before.rows.map((r) => ({ ...r, key: newKey(), photos: Object.fromEntries(Object.entries(r.photos).filter(([, p]) => p?.uri).map(([k, p]) => [k, { ...p!, path: undefined }])) }))
+      : null;
+    if (ready.current && before.projectId) void writeDraft(before.projectId, before.month, before.rows.length ? { checkedBy: before.checkedBy, rows: before.rows } : null);
+    current.current = { ...before, projectId, month, rows: [] };
     ready.current = false;
     setLoading(true); setRows([]); setUrls({}); setShowMissing(false); setCheckId(null); setPrevious(null);
     void (async () => {
@@ -100,6 +110,7 @@ export default function ToolCheckScreen() {
         setDate(saved?.date ?? (month === thisMonth ? today : `${month}-01`));
         if (draft) { setRows(draft.rows); if (draft.checkedBy) setCheckedBy(draft.checkedBy); }
         else if (saved) { setRows(saved.rows); if (saved.checkedBy) setCheckedBy(saved.checkedBy); }
+        else if (carry) { setRows(carry); toast(`Dự án này chưa có phiếu tháng ${monthLabel(month)}: đã mang sang ${carry.length} dụng cụ đang nhập.`, "ok"); }
         const paths = (draft?.rows ?? saved?.rows ?? []).flatMap((r) => Object.values(r.photos).map((p) => p?.path).filter((p): p is string => Boolean(p)));
         const map = await signedUrls(paths).catch(() => ({}));
         if (active) setUrls(map);
@@ -115,6 +126,7 @@ export default function ToolCheckScreen() {
   // Lưu nháp trên máy mỗi khi sửa
   useEffect(() => {
     if (!projectId || !ready.current) return;
+    current.current = { projectId, month, rows, checkedBy };
     const timer = setTimeout(() => { void writeDraft(projectId, month, rows.length ? { checkedBy, rows } : null); }, 400);
     return () => clearTimeout(timer);
   }, [rows, checkedBy, projectId, month]);
@@ -452,7 +464,7 @@ function ToolTable({ rows, types, urls, highlight, onSerial, onNote, onShootRow,
                 </View>
               </Pressable>
               {ITEM_KEYS.map((k) => {
-                if (!items.includes(k)) return <View key={k} style={[styles.tdBox, styles.colPhoto, styles.tdNa]}><Text style={styles.naText}>N/A</Text></View>;
+                if (!items.includes(k)) return <View key={k} style={[styles.tdBox, styles.colPhoto, styles.tdNa]} accessibilityLabel="Không áp dụng"><Svg style={StyleSheet.absoluteFill} viewBox="0 0 100 100" preserveAspectRatio="none"><Line x1="0" y1="100" x2="100" y2="0" stroke={colors.faint} strokeWidth={1} vectorEffect="non-scaling-stroke" /></Svg></View>;
                 const photo = row.photos[k];
                 const src = photo?.uri ?? (photo?.path ? urls[photo.path] : undefined);
                 const need = highlight && !photo;
@@ -612,7 +624,6 @@ const styles = StyleSheet.create({
   noteInput: { width: "100%", minHeight: 32, marginTop: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.badLine, backgroundColor: "#fff", paddingHorizontal: 4, fontSize: 11, lineHeight: 14, fontFamily: fonts.regular, color: colors.ink },
   colType: { width: 110 },
   tdNa: { backgroundColor: "#F0F0F0" },
-  naText: { fontSize: 11, fontFamily: fonts.semibold, color: colors.faint },
   colName: { width: 150 },
   colPhoto: { width: 92 },
   colResult: { width: 84 },

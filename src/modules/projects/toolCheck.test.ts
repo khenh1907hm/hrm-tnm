@@ -20,7 +20,7 @@ describe("toolCheck", () => {
     expect(missingCount(check)).toBe(4);
   });
 
-  it("xuất Excel theo mẫu: tiêu đề, N/A cho mục không áp dụng, ảnh, kết quả", async () => {
+  it("xuất Excel theo mẫu: tiêu đề, gạch chéo ô không áp dụng, ảnh, kết quả", async () => {
     const images = new Map([["p/a.jpg", { buffer: JPEG, width: 1280, height: 960 }]]);
     const bytes = await buildToolCheckWorkbook(check, { code: "DA-01", name: "Mega" }, images);
     const wb = new ExcelJS.Workbook();
@@ -31,7 +31,8 @@ describe("toolCheck", () => {
     expect(ws.getCell("B9").value).toBe("MÁY CẮT BÀN");
     expect(ws.getCell("E9").value).toBe("(photo not loaded)");
     expect(ws.getCell("F9").value).toBe("No photo");
-    expect(ws.getCell("E10").value).toBe("N/A");
+    expect(ws.getCell("E10").value).toBeNull();
+    expect(ws.getCell("E10").border.diagonal?.up).toBe(true);
     expect(ws.getCell("H10").value).toBe("NG");
     expect(ws.getImages()).toHaveLength(1);
   });
