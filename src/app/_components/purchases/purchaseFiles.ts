@@ -12,6 +12,8 @@ export type AttachmentApi = {
   upload(parentId: string, kind: string, file: File): Promise<void>;
   remove(item: Attachment): Promise<void>;
   open(item: Attachment): Promise<void>;
+  /** Nội dung tệp (để gộp PDF). */
+  download(item: Attachment): Promise<Uint8Array>;
 };
 
 type Row = Record<string, unknown>;
@@ -59,6 +61,13 @@ export function attachmentApi(bucket: string, table: string, parentColumn: strin
       if (error) throw new Error(error.message);
       await client.storage.from(bucket).remove([item.path]);
     },
+    async download(item) {
+      const client = getSupabaseClient();
+      if (!client) throw new Error("Không tải được tệp.");
+      const { data, error } = await client.storage.from(bucket).download(item.path);
+      if (error || !data) throw new Error(`Không tải được tệp ${item.fileName}.`);
+      return new Uint8Array(await data.arrayBuffer());
+    },
     async open(item) {
       const client = getSupabaseClient();
       if (!client) return;
@@ -69,14 +78,14 @@ export function attachmentApi(bucket: string, table: string, parentColumn: strin
   };
 }
 
-/** Đơn hàng: 4 loại tệp (giống mục đính kèm trên biểu mẫu công ty). */
-export type AttachmentKind = "signed_quote" | "tnm_quote" | "master_schedule" | "drawing";
+/** Đơn hàng: báo giá NCC có ký (bắt buộc) và file so sánh giá. Loại cũ (báo giá TNM, tiến độ, bản vẽ) chỉ còn để xem tệp đã đính kèm trước đây. */
+export type AttachmentKind = "signed_quote" | "price_comparison" | "tnm_quote" | "master_schedule" | "drawing";
 export const ATTACHMENT_KINDS: readonly AttachmentKindInfo[] = [
   { kind: "signed_quote", label: "Báo giá có ký xác nhận hoặc PO/Hợp đồng", required: true },
-  { kind: "tnm_quote", label: "Báo giá TNM gửi có ký đóng dấu", required: false },
-  { kind: "master_schedule", label: "Tiến độ tổng", required: false },
-  { kind: "drawing", label: "Bản vẽ", required: false },
+  { kind: "price_comparison", label: "File so sánh giá", required: false },
 ];
+/** Tên các loại tệp đã bỏ, để vẫn hiện (chỉ xem) tệp đính kèm trước đây. */
+export const LEGACY_ATTACHMENT_LABELS: Record<string, string> = { tnm_quote: "Báo giá TNM gửi có ký đóng dấu", master_schedule: "Tiến độ tổng", drawing: "Bản vẽ" };
 export const purchaseFiles = attachmentApi("purchase-files", "purchase_attachments", "order_id");
 export type PurchaseAttachment = Attachment;
 export const listAttachments = (orderId: string) => purchaseFiles.list(orderId);

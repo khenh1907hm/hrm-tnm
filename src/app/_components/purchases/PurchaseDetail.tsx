@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, FolderCheck, PackageCheck, Pencil, Send, Truck, Warehouse, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentIssue, paymentSummary, stageDepartmentLabel, stepStates, type EnforcedStage, type StageDepartments } from "../../../modules/purchases/flow";
-import { FlowStepper } from "./FlowBar";
+import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type StageDepartments } from "../../../modules/purchases/flow";
+import { OrderProgress } from "./OrderProgress";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
   PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PaymentRequestInput, type PurchaseEvent, type ReceiptRecord, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
@@ -15,7 +15,8 @@ import { PurchaseFormModal } from "./PurchaseFormModal";
 import { ApprovalChain } from "./ApprovalChain";
 import { OrderAttachments } from "./AttachmentsField";
 import { BudgetCheckBox } from "./BudgetCheckBox";
-import { FormExportButtons } from "./FormExport";
+import { FormExportButtons, PoBundleButton } from "./FormExport";
+import { listAttachments } from "./purchaseFiles";
 import { budgetCheck } from "../../../modules/purchases/budget";
 
 export const STATUS_TONE: Record<PurchaseOrder["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", ordered: "warn", received: "ok", completed: "ok", cancelled: "" };
@@ -61,13 +62,13 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const me = { userId: props.userId, isAdmin: props.isAdmin, isProjectLead: order.projectId ? props.leadProjectIds.has(order.projectId) : false, stages, ...props.roles };
   const deptName = (stage: "received" | "stocked" | "final") => departments?.[stage] ? stageDepartmentLabel(departments[stage]) : "";
   const actions = allowedActions(order, me, payments);
-  const steps = stepStates(order, payments);
   const summary = paymentSummary(order, payments);
   /** Dữ liệu chung cho P-CC-07 / P-CC-08 / P-CF-03: dự án, số ngân sách đang dùng, chuỗi ký. */
   const orderFormInput = async () => {
     const check = order.projectId && order.budgetCode ? await store.checkBudget(order.projectId, order.budgetCode, order.id).catch(() => null) : null;
     return {
-      order, budgetNumber: check?.sheetNumber ?? "", hasComparison: /YCVT-/.test(order.note),
+      order, budgetNumber: check?.sheetNumber ?? "",
+      hasComparison: /YCVT-/.test(order.note) || (store.mode === "live" && (await listAttachments(order.id).catch(() => [])).some((item) => item.kind === "price_comparison")),
       project: { code: project?.code ?? order.department ?? "", name: project?.name ?? (order.kind === "office" ? "Văn phòng" : ""), site: project?.site ?? "" },
       steps: order.usesChain && order.status !== "draft" ? await store.listSteps("purchase", order.id) : [],
     };
@@ -89,7 +90,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
       </div>
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
-        <FlowStepper states={steps} departments={departments} cancelled={order.status === "cancelled"} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
+        <OrderProgress order={order} payments={payments} departments={departments} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
         {order.status === "rejected" && <p className="warn-text">{order.usesChain ? "Bị trả về" : "Sếp từ chối"}: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
         {order.status === "cancelled" && <p className="warn-text">Đơn đã hủy: {order.decisionNote}</p>}
         <div className="po-actions">
@@ -124,7 +125,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         <div className="po-forms">
           <span className="muted">Biểu mẫu:</span>
           <span className="po-form-item">Đơn nháp <FormExportButtons code="P-CC-07" fileBase={`${order.code} ${order.title}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseDraft(template!, await orderFormInput())} /></span>
-          {order.poNo && <span className="po-form-item">PO gửi NCC ký <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} /></span>}
+          {order.poNo && <span className="po-form-item">PO gửi NCC ký <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} />
+            {store.mode === "live" && <PoBundleButton fileBase={`${order.poNo} ${order.supplier}`} orderId={order.id} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template, await orderFormInput())} />}</span>}
         </div>
       </section>
 

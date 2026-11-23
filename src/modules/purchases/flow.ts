@@ -272,3 +272,59 @@ export function nextHint(order: Pick<PurchaseOrder, "status" | "requesterId"> & 
     default: return "Đơn đã hủy.";
   }
 }
+
+/** Bước trên thanh tiến trình mới: như FLOW_STEPS nhưng tách "Hóa đơn, chứng từ cho kho" khỏi đề nghị thanh toán cuối. */
+export type PathKey = Exclude<FlowStepKey, "failed"> | "docs";
+export type PathStep = { key: PathKey; label: string; state: StepState; /** Giai đoạn để lấy phòng ban phụ trách. */ stage: AssignableStage | null };
+export const PATH_LABELS: Record<PathKey, string> = {
+  draft: "Đơn nháp", submitted: "Gửi ký duyệt", approved: "Duyệt", po: "PO, NCC ký nhận", advance: "Đề nghị tạm ứng", advance_pay: "Chi tạm ứng",
+  ordered: "Theo dõi đơn hàng", prepayment: "Đề nghị TT trước giao", prepayment_pay: "Chi TT trước giao", received: "Nhận hàng, kiểm đếm", stocked: "Nhập kho",
+  docs: "Hóa đơn, chứng từ cho kho", final: "Đề nghị thanh toán", final_pay: "Chi thanh toán", completed: "Hoàn tất",
+};
+/** Điều kiện thanh toán của đơn (hai lựa chọn trên form): trước khi nhận hàng (kèm tạm ứng có / không) hoặc sau khi nhận hàng. */
+export const payBeforeDelivery = (order: Partial<Pick<PurchaseOrder, "advanceRequired" | "prepayRequired">>) => Boolean(order.prepayRequired || order.advanceRequired);
+export function paymentTermsLabel(order: Partial<Pick<PurchaseOrder, "advanceRequired" | "advancePct" | "prepayRequired">>): string {
+  if (!payBeforeDelivery(order)) return "Thanh toán sau khi nhận hàng";
+  return order.advanceRequired ? `Thanh toán trước khi nhận hàng · Tạm ứng ${order.advancePct ?? 0}%` : "Thanh toán trước khi nhận hàng · Không tạm ứng";
+}
+
+/**
+ * Các bước của riêng một đơn theo điều kiện thanh toán (mỗi đơn khác nhau):
+ * Nháp → Gửi ký → Duyệt → [PO] → [Tạm ứng → Chi tạm ứng] → Theo dõi → [Đề nghị TT trước giao → Chi] → Nhận hàng → Nhập kho
+ * → Hóa đơn, chứng từ cho kho → [Đề nghị thanh toán → Chi] → Hoàn tất. Bước trong [] chỉ có khi đơn cần (hoặc đã có khoản đó).
+ */
+export function orderPath(order: StepOrder & Partial<Pick<PurchaseOrder, "advancePct">>, payments: readonly Pick<PurchasePayment, "kind" | "status">[]): PathStep[] {
+  const states = stepStates(order, payments);
+  const has = (kind: PaymentKind) => payments.some((payment) => payment.kind === kind && payment.status !== "rejected");
+  const completed = order.status === "completed";
+  const keys: PathKey[] = ["draft", "submitted", "approved"];
+  if (order.usesChain) keys.push("po");
+  if (order.advanceRequired || has("advance")) keys.push("advance", "advance_pay");
+  keys.push("ordered");
+  if (order.prepayRequired || has("prepayment")) keys.push("prepayment", "prepayment_pay");
+  keys.push("received", "stocked", "docs");
+  // Thanh toán sau nhận hàng luôn có; trả trước thì chỉ khi còn phần thanh toán cuối
+  if (!payBeforeDelivery(order) || has("final")) keys.push("final", "final_pay");
+  keys.push("completed");
+
+  const finalPays = payments.filter((payment) => payment.kind === "final" && payment.status !== "rejected");
+  const docsDone = Boolean(order.docsCollectedAt) || completed;
+  const stateOf = (key: PathKey): StepState => {
+    if (key === "docs") return docsDone ? "done" : order.status === "received" && order.stockedAt ? "current" : "todo";
+    if (key === "final") {
+      if (finalPays.some((payment) => payment.status === "requested")) return "current";
+      if (finalPays.some((payment) => payment.status === "approved" || payment.status === "paid")) return "done";
+      return completed ? "skipped" : docsDone ? "current" : "todo";
+    }
+    const state = states[key];
+    // Bước đã chọn trong điều kiện thanh toán thì không "Không dùng" khi chưa tới
+    return state === "skipped" && !completed && order.status !== "cancelled" ? "todo" : state;
+  };
+  const steps = keys.map((key) => ({ key, label: PATH_LABELS[key], state: stateOf(key), stage: key === "docs" ? "final" as const : key === "completed" ? null : key }));
+  // Chỉ một bước "đang ở": bước current đầu tiên; các bước current sau đó (chạy song song) giữ nguyên để người dùng thấy
+  if (!steps.some((step) => step.state === "current") && order.status !== "cancelled" && !completed) {
+    const next = steps.find((step) => step.state === "todo");
+    if (next) next.state = "current";
+  }
+  return steps;
+}

@@ -179,7 +179,7 @@ export type OrderFormInput = {
 };
 
 export function paymentTermsText(order: Pick<PurchaseOrder, "advanceRequired" | "advancePct" | "prepayRequired">): string {
-  if (order.advanceRequired) return `Tạm ứng ${order.advancePct ?? 0}% sau khi NCC ký xác nhận PO; phần còn lại thanh toán sau khi giao hàng, nghiệm thu và có hóa đơn GTGT.`;
+  if (order.advanceRequired) return `Tạm ứng ${order.advancePct ?? 0}% sau khi NCC ký xác nhận PO; phần còn lại thanh toán trước khi giao hàng (theo đề nghị thanh toán được duyệt).`;
   if (order.prepayRequired) return "Thanh toán trước khi giao hàng (theo đề nghị thanh toán được duyệt).";
   return "Thanh toán sau khi nhận hàng, có biên bản giao nhận hai bên ký và hóa đơn GTGT.";
 }

@@ -252,3 +252,7 @@
 .ad-avatar.boss { background: #f59e0b; }
 .ad-avatar.more { background: var(--line); color: var(--ink); }
 .ap-embedded { margin: 4px 0; max-width: 560px; }
+/* Tab con trong Reports: Daily Report / Timesheet Report */
+.pj-subtabs { display: inline-flex; gap: 2px; padding: 3px; margin: 4px 0 12px; border-radius: 10px; background: var(--surface-2, #eef2f7); }
+.pj-subtabs button { border: 0; background: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; color: var(--muted); }
+.pj-subtabs button[aria-selected="true"] { background: var(--surface, #fff); color: var(--brand); box-shadow: 0 1px 3px rgb(15 23 42 / 0.12); }

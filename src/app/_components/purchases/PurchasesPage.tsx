@@ -12,7 +12,7 @@ import type { Notify } from "../Toast";
 import { EmployeePicker } from "../projects/ProjectsPage";
 import { errorMessage, viewerFor, type EmployeeSource } from "../projects/projectShared";
 import { PurchaseDetail } from "./PurchaseDetail";
-import { FlowLegend, MiniProgress } from "./FlowBar";
+import { OrderMiniPath } from "./OrderProgress";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { MyApprovals } from "./ApprovalChain";
 import { DEPARTMENTS, emptyDepartments, ROLE_LABELS, type Department, type DepartmentMembers } from "../../../modules/purchases/approval";
@@ -57,7 +57,7 @@ export function PurchaseList(props: { orders: PurchaseOrder[]; projects: readonl
               {!props.hideProject && <td>{project ? `${project.code}` : PURCHASE_KIND_LABELS[order.kind]}{order.kind === "office" && order.department ? <><br /><small className="muted">{order.department}</small></> : null}</td>}
               <td>{order.requesterName}</td>
               <td className="pj-num">{formatVnd(order.totalActual ?? order.totalEstimate)}</td>
-              <td><MiniProgress status={order.status} order={order} />
+              <td><OrderMiniPath order={order} payments={pays} />
                 {pays.some((payment) => payment.status === "requested") && <><br /><small className="warn-text">Có khoản chi chờ duyệt</small></>}
                 {pays.some((payment) => payment.status === "approved") && <><br /><small className="warn-text">Có khoản chờ chi</small></>}</td>
             </tr>
@@ -117,7 +117,6 @@ export function PurchasesPage(props: { store: PurchaseStore; projectStore: Proje
           <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus className="ico" size={16} aria-hidden="true" /> Đơn hàng mới</button>
         </div>
       </div>
-      <section className="panel pj-section" aria-label="Quy trình đặt hàng"><FlowLegend departments={context.stageDepartments} /></section>
       {context.approvers.some((item) => !item.hasAccount) && <p className="list-notice is-warn">{context.approvers.filter((item) => !item.hasAccount).map((item) => item.name).join(", ")} chưa có tài khoản liên kết hồ sơ nên chưa duyệt được. Admin vào Tài khoản & phân quyền để cấp và liên kết.</p>}
       {deptSettings && <DepartmentSettings store={store} employees={props.employees} onSaved={() => { setDeptSettings(false); void reload(); }} setNotice={setNotice} />}
       {deptSettings && <StageDepartmentsEditor canEdit load={loadStages} save={async (value) => { await store.setStageDepartments(value); void reload(); }} setNotice={setNotice} />}

@@ -16,7 +16,6 @@ import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { ApprovalTreePanel } from "./ApprovalTreePanel";
-import { ApprovalsTab } from "./ApprovalsTab";
 import { CONTRACT_STATE_UI, myAccount, projectApprovers, projectContractStates, type ContractState } from "../accountApi";
 import { BudgetSheetTab } from "./BudgetSheetTab";
 import { ContractTab } from "./ContractTab";
@@ -74,16 +73,16 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "podraft" | "purchases" | "payments" | "members" | "daily" | "timesheets" | "checks" | "tools" | "approvals" | "reports";
+type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "podraft" | "purchases" | "payments" | "members" | "daily" | "timesheets" | "checks" | "tools" | "reports";
 /** Theo thứ tự quy trình vận hành: Confirmed Contract → Budget → Material Request → PO Draft → PO → Request for Payment → thi công. */
 const TABS: readonly [Tab, string, string?][] = [
   ["overview", "Overview"], ["contract", "Confirmed Contract", "P-COST-01"], ["budget", "Budget Sheet", "P-COST-03"], ["explanatory", "Explanatory Report", "P-COST-05"],
   ["materials", "Material Request", "P-COST-08"], ["podraft", "PO Draft", "P-CC-07"], ["purchases", "Purchase Order", "P-CC-08"], ["payments", "Request for Payment", "P-CF-03"],
-  ["approvals", "Approval Workflow"], ["members", "Org Chart & Members"], ["daily", "Daily Report"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["tools", "Tool Check"], ["reports", "Reports"],
+  ["members", "Org Chart & Members"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["tools", "Tool Check"], ["reports", "Reports"],
 ];
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
-  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", explanatory: "bao-cao-giai-thich", materials: "yeu-cau-vat-tu", podraft: "don-nhap", purchases: "dat-hang", payments: "de-nghi-thanh-toan", approvals: "quy-trinh-duyet", members: "so-do", daily: "bao-cao-ngay",
+  overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", explanatory: "bao-cao-giai-thich", materials: "yeu-cau-vat-tu", podraft: "don-nhap", purchases: "dat-hang", payments: "de-nghi-thanh-toan", members: "so-do", daily: "bao-cao-ngay",
   timesheets: "cham-cong", checks: "cham-cong-gps", tools: "kiem-tra-dung-cu", reports: "bao-cao",
 };
 const tabFromUrl = (): Tab => {
@@ -127,8 +126,9 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
     return () => { active = false; };
   }, [store.mode, project.id, data]);
   const stateUi = contractState ? CONTRACT_STATE_UI[contractState] : null;
-  const visibleTabs = TABS.filter(([key]) => ((key !== "budget" && key !== "contract" && key !== "explanatory" && key !== "approvals") || viewer?.canSeeMoney || signsHere || actor.role === "admin")
-    && (key !== "approvals" || store.mode === "live") && (key !== "daily" || viewer?.isLead || viewer?.canEditProject));
+  const visibleTabs = TABS.filter(([key]) => (key !== "budget" && key !== "contract" && key !== "explanatory") || viewer?.canSeeMoney || signsHere || actor.role === "admin");
+  /** Daily Report nằm trong tab Reports (đường dẫn cũ ?muc=bao-cao-ngay vẫn mở đúng). */
+  const canDaily = Boolean(viewer?.isLead || viewer?.canEditProject);
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
   const mapUrl = siteMapUrl(project);
@@ -157,7 +157,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         {tab !== "contract" && <button type="button" className="link-button" onClick={() => setTab("contract")}>Mở Confirm Contract</button>}
       </div>}
       <div className="pj-tabs" role="tablist" aria-label="Mục của dự án">
-        {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key)}>{label}</button>)}
+        {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key || (key === "reports" && tab === "daily")} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key)}>{label}</button>)}
       </div>
       {!data || !viewer ? <div className="loading">Đang tải dữ liệu dự án…</div> : (() => {
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
@@ -173,7 +173,6 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "contract") return withApprovers(<ContractTab {...tabProps} />, "contract");
         if (tab === "materials") return <MaterialsTab {...tabProps} />;
         if (tab === "members") return <OrgChartTab {...tabProps} />;
-        if (tab === "daily") return <DailyReportTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
         if (tab === "tools") return <ToolChecksTab {...tabProps} />;
@@ -181,8 +180,15 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "podraft") return withApprovers(<ProjectPurchasesTab {...tabProps} view="draft" />, "purchase");
         if (tab === "purchases") return withApprovers(<ProjectPurchasesTab {...tabProps} view="po" />, "purchase");
         if (tab === "payments") return withApprovers(<ProjectPaymentsTab {...tabProps} />, "payment");
-        if (tab === "approvals") return <ApprovalsTab projectId={project.id} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />;
-        return <ReportsTab {...tabProps} />;
+        return (
+          <>
+            {canDaily && <div className="pj-subtabs" role="tablist" aria-label="Loại báo cáo">
+              <button type="button" role="tab" aria-selected={tab === "daily"} onClick={() => setTab("daily")}>Daily Report</button>
+              <button type="button" role="tab" aria-selected={tab !== "daily"} onClick={() => setTab("reports")}>Timesheet Report</button>
+            </div>}
+            {tab === "daily" && canDaily ? <DailyReportTab {...tabProps} /> : <ReportsTab {...tabProps} />}
+          </>
+        );
       })()}
       {props.children}
     </section>

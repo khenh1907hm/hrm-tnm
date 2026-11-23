@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { Paperclip, Trash2, Upload } from "lucide-react";
 import type { Notify } from "../Toast";
-import { ATTACHMENT_KINDS, formatSize, purchaseFiles, type Attachment, type AttachmentApi, type AttachmentKindInfo } from "./purchaseFiles";
+import { ATTACHMENT_KINDS, LEGACY_ATTACHMENT_LABELS, formatSize, purchaseFiles, type Attachment, type AttachmentApi, type AttachmentKindInfo } from "./purchaseFiles";
 
 export type PendingFile = { key: string; kind: string; file: File };
 
@@ -37,7 +37,9 @@ export function AttachmentsField(props: {
   };
   return (
     <div className="po-files">
-      {kinds.map(({ kind, label, required }) => {
+      {[...kinds, ...[...new Set(props.existing.map((item) => item.kind))].filter((kind) => !kinds.some((info) => info.kind === kind))
+        .map((kind) => ({ kind, label: LEGACY_ATTACHMENT_LABELS[kind] ?? kind, required: false, legacy: true }))].map(({ kind, label, required, ...rest }) => {
+        const legacy = "legacy" in rest;
         const saved = props.existing.filter((item) => item.kind === kind);
         const waiting = (props.pending ?? []).filter((item) => item.kind === kind);
         const missing = required && props.requireSigned && !saved.length && !waiting.length;
@@ -60,7 +62,7 @@ export function AttachmentsField(props: {
               ))}
               {!saved.length && !waiting.length && <li><small className={missing ? "warn-text" : "muted"}>{missing ? "Chưa có tệp (cần trước khi gửi duyệt)" : "Chưa có tệp"}</small></li>}
             </ul>
-            {props.editable && (
+            {props.editable && !legacy && (
               <label className="button po-file-add">
                 <Upload size={14} aria-hidden="true" /> {busy === kind ? "Đang tải…" : "Chọn tệp"}
                 <input type="file" multiple hidden disabled={busy !== null} accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx,.dwg,.dxf,.zip,.msg,.eml" onChange={(event) => { void add(kind, event.target.files); event.target.value = ""; }} />

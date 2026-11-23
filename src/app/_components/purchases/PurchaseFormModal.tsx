@@ -223,11 +223,17 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
           {check && <div style={{ gridColumn: "1 / -1" }}><BudgetCheckBox check={check} /></div>}
           <fieldset className={`po-terms${imported?.fields.has("terms") ? " po-ai-box" : ""}`} style={{ gridColumn: "1 / -1" }}>
             <legend>Điều kiện thanh toán của nhà cung cấp</legend>
-            <label className="po-term"><input type="checkbox" checked={draft.advanceRequired} onChange={(event) => setDraft((current) => ({ ...current, advanceRequired: event.target.checked, advancePct: event.target.checked ? current.advancePct ?? 30 : null }))} />
-              <span><b>NCC cần tạm ứng</b><small>Phải lập đề nghị tạm ứng, ký duyệt và kế toán chi xong mới được đặt hàng, theo dõi.</small></span></label>
-            {draft.advanceRequired && <label className="field po-term-pct"><span>Tạm ứng (%)</span><input type="number" min={1} max={100} step="any" value={draft.advancePct ?? ""} onChange={(event) => set("advancePct", event.target.value ? Number(event.target.value) : null)} /><small className="field-hint">≈ {formatVnd(Math.round(estimateTotal(items) * (draft.advancePct ?? 0) / 100))}</small></label>}
-            <label className="po-term"><input type="checkbox" checked={draft.prepayRequired} onChange={(event) => set("prepayRequired", event.target.checked)} />
-              <span><b>NCC cần thanh toán trước khi giao hàng</b><small>Không chọn: thanh toán sau khi nhận hàng, kiểm tra.</small></span></label>
+            {/* Trước khi nhận hàng (kèm tạm ứng có / không) hoặc sau khi nhận hàng: quyết định các bước của đơn trên thanh tiến trình */}
+            <label className="po-term"><input type="radio" name="po-pay-when" checked={draft.prepayRequired || draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: true }))} />
+              <span><b>Thanh toán trước khi nhận hàng</b><small>Lập đề nghị thanh toán, ký duyệt và kế toán chi trước khi NCC giao hàng.</small></span></label>
+            {(draft.prepayRequired || draft.advanceRequired) && <div className="po-term-sub" role="radiogroup" aria-label="Tạm ứng">
+              <span className="po-term-sub-label">Tạm ứng:</span>
+              <label className="po-term-chip"><input type="radio" name="po-advance" checked={draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, advanceRequired: true, advancePct: current.advancePct ?? 30 }))} /> Có</label>
+              <label className="po-term-chip"><input type="radio" name="po-advance" checked={!draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, advanceRequired: false, advancePct: null }))} /> Không</label>
+              {draft.advanceRequired && <label className="field po-term-pct"><span>Tạm ứng (%)</span><input type="number" min={1} max={100} step="any" value={draft.advancePct ?? ""} onChange={(event) => set("advancePct", event.target.value ? Number(event.target.value) : null)} /><small className="field-hint">≈ {formatVnd(Math.round(estimateTotal(items) * (draft.advancePct ?? 0) / 100))}. Chi tạm ứng xong mới được đặt hàng.</small></label>}
+            </div>}
+            <label className="po-term"><input type="radio" name="po-pay-when" checked={!draft.prepayRequired && !draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: false, advanceRequired: false, advancePct: null }))} />
+              <span><b>Thanh toán sau khi nhận hàng</b><small>Nhận hàng, kiểm đếm, nhập kho, thu thập hóa đơn chứng từ rồi mới đề nghị thanh toán.</small></span></label>
           </fieldset>
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú, lý do mua</span><input className={ai("note")} value={draft.note} onChange={(event) => set("note", event.target.value)} /></label>
           {live && <fieldset className="po-terms" style={{ gridColumn: "1 / -1" }}>
