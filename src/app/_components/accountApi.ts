@@ -30,7 +30,7 @@ export function myAccount(refresh = false): Promise<MyAccount | null> {
     accountCache = rpc("my_account").then((data) => {
       const row = (data as Row[] | null)?.[0];
       return row ? {
-        fullName: str(row.full_name), role: str(row.role), isDirector: Boolean(row.is_director), employeeId: row.employee_id ? str(row.employee_id) : null,
+        fullName: str(row.full_name), role: str(row.role), isDirector: Boolean(row.is_director) || str(row.role) === "admin", employeeId: row.employee_id ? str(row.employee_id) : null,
         loginEmail: str(row.login_email), notifyEmail: str(row.notify_email), notifyEnabled: row.notify_enabled !== false,
       } : null;
     }, () => null);

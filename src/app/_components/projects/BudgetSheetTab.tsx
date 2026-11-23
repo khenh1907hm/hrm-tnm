@@ -3,7 +3,6 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { FilePlus2, FileUp, Save, Send, Trash2 } from "lucide-react";
 import type { ProjectContract } from "../../../modules/purchases/contract";
 import { FormExportButtons } from "../purchases/FormExport";
-import { ExplanatoryPanel } from "./ExplanatoryPanel";
 import { formatVnd } from "../../../modules/projects/cost";
 import {
   BUDGET_SHEET_STATUS_LABELS, CONFIRMATION_LABELS, COST_GROUP_LABELS, COST_GROUPS, sheetIssue, sheetTotals,
@@ -203,7 +202,7 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
       </section>
       {current && current.status !== "draft" && <ApprovalChain store={store} docType="budget" docId={current.id} refreshKey={attempt} title={`Chuỗi ký ngân sách ${current.number}`} onChanged={() => { refresh(); void reload(); }} setNotice={setNotice} />}
       {current?.status === "rejected" && <p className="warn-text">Ngân sách bị trả về: sửa rồi bấm Lưu và gửi ký lại.</p>}
-      <ExplanatoryPanel store={store} project={data.project} codes={codes} canEdit={canEdit || viewer.isPm} setNotice={setNotice} refreshKey={attempt} onApproved={() => { refresh(); void reload(); }} />
+      <p className="muted">Vượt ngân sách, đổi mã hoặc bảo hành: lập Explanatory Report (P-COST-05) ở tab Explanatory Report.</p>
     </div>
   );
 }

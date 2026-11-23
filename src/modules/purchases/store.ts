@@ -101,4 +101,4 @@ export type PendingApproval = { stepId: string; docType: ApprovalDocType; docId:
   orderId?: string };
 
 /** Mục của dự án mở được theo đường dẫn ?muc=… (tab). */
-export const DOC_PROJECT_TAB: Partial<Record<ApprovalDocType, string>> = { budget: "ngan-sach", explanatory: "ngan-sach", material: "yeu-cau-vat-tu", contract: "hop-dong" };
+export const DOC_PROJECT_TAB: Partial<Record<ApprovalDocType, string>> = { budget: "ngan-sach", explanatory: "bao-cao-giai-thich", material: "yeu-cau-vat-tu", contract: "hop-dong" };

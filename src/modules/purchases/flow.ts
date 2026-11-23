@@ -150,7 +150,9 @@ export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterI
   const handler = mine || me.isApprover || me.isAdmin;
   const status = order.status;
   const may = (stage: EnforcedStage) => me.isAdmin || Boolean(me.stages?.has(stage));
-  if (mine && (status === "draft" || status === "rejected")) { actions.add("edit"); actions.add("submit"); }
+  if (mine && (status === "draft" || status === "rejected")) actions.add("edit");
+  // Admin gửi ký được đơn của người khác (tự test cả quy trình)
+  if ((mine || me.isAdmin) && (status === "draft" || status === "rejected")) actions.add("submit");
   if (me.isApprover && status === "submitted" && !order.usesChain) { actions.add("approve"); actions.add("reject"); }
   // PRC-31: NCC cần tạm ứng thì phải chi xong tạm ứng mới sang Đặt hàng, theo dõi
   if (handler && status === "approved" && !orderBlock(order, payments)) actions.add("order");
