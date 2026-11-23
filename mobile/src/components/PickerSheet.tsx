@@ -5,7 +5,7 @@ import { colors, fonts, type Tone } from "@/lib/theme";
 import { AppIcon, Glyph, type IconName } from "./AppIcon";
 import { MODAL_ORIENTATIONS } from "@/lib/layout";
 
-export type PickerItem = { id: string; title: string; subtitle?: string; badge?: string; icon?: IconName; tone?: Tone; disabled?: boolean };
+export type PickerItem = { id: string; title: string; subtitle?: string; badge?: string; icon?: IconName; tone?: Tone; disabled?: boolean; /** Hiện số (vd số ảnh cần chụp) thay cho icon. */ number?: number };
 
 /** Bỏ dấu tiếng Việt để tìm "cong truong" ra "Công trường". */
 export const fold = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toLowerCase();
@@ -76,7 +76,7 @@ export function PickerSheet({ visible, title, placeholder, items, selectedId, em
                   accessibilityRole="button"
                   accessibilityState={{ selected, disabled: item.disabled }}
                 >
-                  <AppIcon name={item.icon ?? "home"} tone={item.tone ?? "sky"} size={40} />
+                  {item.number !== undefined ? <View style={[styles.num, selected && styles.numOn]}><Text style={styles.numText}>{item.number}</Text></View> : <AppIcon name={item.icon ?? "home"} tone={item.tone ?? "sky"} size={40} />}
                   <View style={styles.rowText}>
                     <Text style={styles.rowTitle} numberOfLines={2}>{item.title}</Text>
                     {item.subtitle ? <Text style={styles.rowSub} numberOfLines={1}>{item.subtitle}</Text> : null}
@@ -116,4 +116,7 @@ const styles = StyleSheet.create({
   badge: { fontSize: 11, lineHeight: 16, fontFamily: fonts.bold, color: colors.skyDeep, backgroundColor: colors.skyTint, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2, overflow: "hidden" },
   badgeOn: { color: "#B34700", backgroundColor: "#FFEBDC" },
   tick: { fontSize: 16, color: colors.orange, fontFamily: fonts.black },
+  num: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.skyDeep, alignItems: "center", justifyContent: "center" },
+  numOn: { backgroundColor: colors.orange },
+  numText: { fontSize: 18, lineHeight: 22, fontFamily: fonts.black, color: "#fff" },
 });

@@ -90,16 +90,16 @@ export function ToolChecksTab({ data, setNotice }: TabProps) {
         <div className="pj-toolbar">
           {checks && checks.length > 0 && (
             <select aria-label="Ngày kiểm tra" value={selected ?? ""} onChange={(event) => setSelected(event.target.value)}>
-              {checks.map((c) => <option key={c.id} value={c.id}>{formatDateVn(c.date)} · {c.rows.length} dụng cụ{c.rows.some((r) => r.result === "NG") ? " · có NG" : ""}</option>)}
+              {checks.map((c) => <option key={c.id} value={c.id}>Tháng {c.date.slice(5, 7)}/{c.date.slice(0, 4)} (ngày {formatDateVn(c.date)}) · {c.rows.length} dụng cụ{c.rows.some((r) => r.result === "NG") ? " · có NG" : ""}</option>)}
             </select>
           )}
           <button type="button" className="button primary" disabled={!check || Boolean(busy)} onClick={() => void exportExcel()}><Download className="ico" size={16} aria-hidden="true" /> {busy || "Xuất Excel kèm ảnh"}</button>
         </div>
       </div>
-      <p className="muted"><small><Smartphone className="ico" size={14} aria-hidden="true" /> Nhập trên app điện thoại: nút + → Kiểm tra dụng cụ điện. Người quản lý đặt loại dụng cụ (mục cần chụp) ở nút ⚙ trong màn đó; ngày đầu lưu xong có thể chuyển thành dữ liệu mẫu cho các ngày sau.</small></p>
+      <p className="muted"><small><Smartphone className="ico" size={14} aria-hidden="true" /> Kiểm tra định kỳ mỗi tháng một phiếu, nhập trên app điện thoại: nút + → Kiểm tra dụng cụ điện. Tháng sau bấm dùng danh sách tháng trước rồi chụp ảnh, có dụng cụ mới thì thêm. Người quản lý đặt loại dụng cụ ở nút ⚙.</small></p>
       {checks === null ? <p className="muted">Đang tải…</p> : !check ? <p className="muted">Chưa có phiếu kiểm tra nào.</p> : (
         <>
-          <p>Ngày <b>{formatDateVn(check.date)}</b> · Checked by <b>{check.checkedBy || "—"}</b> · {check.rows.length} dụng cụ · OK {check.rows.filter((r) => r.result === "OK").length} · <span className={check.rows.some((r) => r.result === "NG") ? "form-error" : undefined}>NG {check.rows.filter((r) => r.result === "NG").length}</span> · {photoCount(check)} ảnh{missingCount(check) ? <span className="warn-text"> · thiếu {missingCount(check)} ảnh</span> : null}</p>
+          <p>Kiểm tra định kỳ tháng <b>{check.date.slice(5, 7)}/{check.date.slice(0, 4)}</b> · ngày {formatDateVn(check.date)} · Checked by <b>{check.checkedBy || "—"}</b> · {check.rows.length} dụng cụ · OK {check.rows.filter((r) => r.result === "OK").length} · <span className={check.rows.some((r) => r.result === "NG") ? "form-error" : undefined}>NG {check.rows.filter((r) => r.result === "NG").length}</span> · {photoCount(check)} ảnh{missingCount(check) ? <span className="warn-text"> · thiếu {missingCount(check)} ảnh</span> : null}</p>
           <div className="table-wrap">
             <table className="data-table">
               <thead><tr><th>#</th><th>Serial/Code</th><th>Sub con.</th>{ITEM_KEYS.map((k) => <th key={k}>{ITEM_LABEL[k].en}</th>)}<th>Result</th></tr></thead>
