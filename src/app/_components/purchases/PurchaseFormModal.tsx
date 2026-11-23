@@ -21,10 +21,10 @@ const blankItem = (): ItemDraft => ({ id: "", name: "", spec: "", unit: "", quan
 export function PurchaseFormModal(props: { store: PurchaseStore; projects: readonly Project[]; initial: PurchaseOrder | null; defaultProjectId?: string | null; lockProject?: boolean; /** Trang Đặt hàng dự án / Văn phòng: cố định loại đơn, ẩn ô "Mua cho". */ fixedKind?: PurchaseKind; onClose: () => void; onSaved: (order: PurchaseOrder, submitted: boolean) => void }) {
   const start = props.initial;
   const [draft, setDraft] = useState<Omit<PurchaseDraft, "items">>(() => start
-    ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, note: start.note, budgetCode: start.budgetCode,
+    ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, supplierAddress: start.supplierAddress, supplierPhone: start.supplierPhone, supplierEmail: start.supplierEmail, note: start.note, budgetCode: start.budgetCode,
       advanceRequired: start.advanceRequired, advancePct: start.advancePct, prepayRequired: start.prepayRequired }
     : { kind: props.fixedKind ?? (props.defaultProjectId ? "project" : "office"), projectId: props.defaultProjectId ?? null, title: "", department: "", neededBy: null,
-      deliveryAddress: deliveryAddressFor(props.fixedKind ?? (props.defaultProjectId ? "project" : "office"), props.projects.find((project) => project.id === props.defaultProjectId) ?? null), supplier: "", supplierContact: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
+      deliveryAddress: deliveryAddressFor(props.fixedKind ?? (props.defaultProjectId ? "project" : "office"), props.projects.find((project) => project.id === props.defaultProjectId) ?? null), supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", budgetCode: null, advanceRequired: false, advancePct: null, prepayRequired: false });
   const [items, setItems] = useState<ItemDraft[]>(() => start?.items.map((item) => ({ id: item.id, name: item.name, spec: item.spec, unit: item.unit, quantity: item.quantity, unitPrice: item.unitPrice })) ?? [blankItem()]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,8 +52,10 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
       setDraft((current) => {
         const next = { ...current };
         if (data.supplier) { next.supplier = data.supplier; fields.add("supplier"); }
-        const contact = [data.contact, data.taxCode ? `MST ${data.taxCode}` : ""].filter(Boolean).join(" · ");
-        if (contact) { next.supplierContact = contact; fields.add("supplierContact"); }
+        if (data.contact) { next.supplierContact = data.contact; fields.add("supplierContact"); }
+        if (data.address) { next.supplierAddress = data.address; fields.add("supplierAddress"); }
+        if (data.phone) { next.supplierPhone = data.phone; fields.add("supplierPhone"); }
+        if (data.email) { next.supplierEmail = data.email; fields.add("supplierEmail"); }
         if (!current.title.trim()) { next.title = `Mua theo báo giá ${data.quoteNo || ""}${data.supplier ? ` – ${data.supplier}` : ""}`.replace(/\s+/g, " ").trim(); fields.add("title"); }
         // Ghi chú, lý do mua: người lập tự nhập, không lấy từ báo giá
         if (data.advancePct) { next.advanceRequired = true; next.advancePct = data.advancePct; fields.add("terms"); }
@@ -185,7 +187,10 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
               : <small className="field-hint">{draft.deliveryAddress || "Chọn dự án để lấy địa chỉ công trình"}</small>}
           </label>
           <label className="field"><span>Nhà cung cấp{draft.kind === "project" ? " *" : ""}</span><input className={ai("supplier")} value={draft.supplier} placeholder="Tên công ty nhà cung cấp" onChange={(event) => set("supplier", event.target.value)} /></label>
-          <label className="field"><span>Liên hệ nhà cung cấp</span><input className={ai("supplierContact")} value={draft.supplierContact} placeholder="Tên, số điện thoại" onChange={(event) => set("supplierContact", event.target.value)} /></label>
+          <label className="field"><span>Người liên hệ (Tới)</span><input className={ai("supplierContact")} value={draft.supplierContact} placeholder="vd: Phòng kinh doanh / Ông Nguyễn Văn A" onChange={(event) => set("supplierContact", event.target.value)} /></label>
+          <label className="field" style={{ gridColumn: "1 / -1" }}><span>Địa chỉ nhà cung cấp</span><input className={ai("supplierAddress")} value={draft.supplierAddress} placeholder="Số nhà, đường, phường, tỉnh / thành" onChange={(event) => set("supplierAddress", event.target.value)} /></label>
+          <label className="field"><span>Điện thoại NCC</span><input className={ai("supplierPhone")} value={draft.supplierPhone} inputMode="tel" placeholder="Số điện thoại liên hệ" onChange={(event) => set("supplierPhone", event.target.value)} /></label>
+          <label className="field"><span>Email NCC</span><input className={ai("supplierEmail")} value={draft.supplierEmail} type="email" placeholder="email@nhacungcap.vn" onChange={(event) => set("supplierEmail", event.target.value)} /></label>
 
           <div style={{ gridColumn: "1 / -1" }}>
             <div className="table-scroll">

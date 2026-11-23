@@ -52,8 +52,10 @@ describe("parseQuoteRows (báo giá Nam Long)", () => {
     expect(result.taxCode).toBe("0304153720");
     expect(result.quoteNo).toBe("9058221");
     expect(result.quoteDate).toBe("2026-11-12");
-    expect(result.contact).toContain("0938 473 168");
-    expect(result.contact).toContain("kinhdoanh@namlong.vn");
+    expect(result.contact).toBe("Phòng kinh doanh");
+    expect(result.address).toBe("205/5 Thích Quảng Đức, Phường Đức Nhuận, Hồ Chí Minh, Việt Nam");
+    expect(result.phone).toBe("0938 473 168");
+    expect(result.email).toBe("kinhdoanh@namlong.vn");
   });
   it("ghép tên hàng ở dòng trên và dưới, tách quy cách trong ngoặc", () => {
     expect(result.items).toEqual([{ name: "Cáp tín hiệu chống nhiễu Shielded twisted Benka 1x2x18 AWG 2 x 1.5mm", spec: "Benka 177 1218", unit: "Mét", quantity: 200, unitPrice: 21600, amount: 4320000 }]);

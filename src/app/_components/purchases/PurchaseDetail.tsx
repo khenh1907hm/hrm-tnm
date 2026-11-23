@@ -152,7 +152,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           </table>
         </div>
         <dl className="po-inline" style={{ margin: 0 }}>
-          <div><dt className="muted">Nhà cung cấp</dt><dd style={{ margin: 0 }}>{order.supplier || "—"}{order.supplierContact ? ` · ${order.supplierContact}` : ""}</dd></div>
+          <div><dt className="muted">Nhà cung cấp</dt><dd style={{ margin: 0 }}>{order.supplier || "—"}{order.supplierContact ? ` · ${order.supplierContact}` : ""}
+            {(order.supplierAddress || order.supplierPhone || order.supplierEmail) && <><br /><small className="muted">{[order.supplierAddress, order.supplierPhone, order.supplierEmail].filter(Boolean).join(" · ")}</small></>}</dd></div>
           <div><dt className="muted">Giao dự kiến</dt><dd style={{ margin: 0 }}>{dmy(order.expectedDelivery)}</dd></div>
           <div><dt className="muted">Giao tới</dt><dd style={{ margin: 0 }}>{order.deliveryAddress || "—"}</dd></div>
           {order.note && <div><dt className="muted">Ghi chú</dt><dd style={{ margin: 0 }}>{order.note}</dd></div>}

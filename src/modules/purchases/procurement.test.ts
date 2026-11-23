@@ -26,7 +26,7 @@ describe("procurement phase A", () => {
     let seq = 0;
     const clock = fixedClock("2026-11-12T09:00:00+07:00");
     const store = createMemoryPurchaseStore({ clock, newId: () => `id${++seq}`, projects: createMemoryProjectStore({ clock }) });
-    const order = (budgetCode: string | null, unitPrice: number) => store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode, advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ điện", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice }] });
+    const order = (budgetCode: string | null, unitPrice: number) => store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode, advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ điện", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice }] });
     await expect(store.submit((await order(null, 1_000)).id)).rejects.toThrow("PO_BUDGET_CODE_REQUIRED");
     await expect(store.submit((await order("175", 1_000)).id)).rejects.toThrow("PO_NO_BUDGET");
     const sheet = await store.newBudgetSheet("proj-1");
@@ -116,7 +116,7 @@ describe("procurement phase A", () => {
     await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
     await store.submitBudgetSheet(sheet);
     for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
-    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
     await store.submit(order.id);
     for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
     await expect(store.requestPayment(order.id, { kind: "advance", amount: 1_000_000, vatAmount: 0, invoiceNo: "", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_PAYMENT_NOT_NEEDED");
@@ -144,7 +144,7 @@ describe("procurement phase A", () => {
     await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
     await store.submitBudgetSheet(sheet);
     for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
-    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: true, advancePct: 30, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: true, advancePct: 30, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
     await store.submit(order.id);
     for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
     await store.issuePo(order.id, "NCC A", "");
@@ -177,7 +177,7 @@ describe("procurement phase A", () => {
     await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
     await store.submitBudgetSheet(sheet);
     for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
-    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
     await store.submit(order.id);
     for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
     await expect(store.supplierAccept(order.id, "")).rejects.toThrow("PO_BAD_STATUS");
@@ -198,7 +198,7 @@ describe("procurement phase A", () => {
     await store.saveBudgetSheet(sheet, header, [line("175", 100_000_000)]);
     await store.submitBudgetSheet(sheet);
     for (const step of await store.listSteps("budget", sheet)) if (step.result === "pending") await store.sign(step.id, true, "");
-    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 10_000_000 }] });
     await store.submit(order.id);
     for (const step of (await store.listSteps("purchase", order.id)).filter((item) => item.role !== "admin_office")) await store.sign(step.id, true, "");
     await store.issuePo(order.id, "Công ty ABC", "");

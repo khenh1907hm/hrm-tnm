@@ -264,7 +264,10 @@ export async function fillPurchaseOrder(template: ArrayBuffer | Uint8Array, inpu
   const { workbook, sheet: ws } = await open(template);
   const { order } = input;
   fillOrderHeader(ws, input, vnDay(order.poIssuedAt ?? order.approvedAt ?? order.createdAt), order.poNo || order.code);
-  for (const address of ["F12", "F14", "F16"]) put(ws, address, null);
+  // Địa chỉ, điện thoại, email NCC (ô vàng của mẫu)
+  put(ws, "F12", order.supplierAddress || null);
+  put(ws, "F14", order.supplierPhone || null);
+  put(ws, "F16", order.supplierEmail || null);
   putDate(ws, "J39", order.expectedDelivery ?? order.neededBy);
   put(ws, "J41", order.deliveryAddress || null);
   const termLines = splitLines([paymentTermsText(order), order.note].filter(Boolean).join(" · "), 80, 2);

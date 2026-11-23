@@ -8,7 +8,7 @@ export const maxDuration = 90;
 
 const PROMPT = `Bạn đọc báo giá / đơn đặt hàng (quotation / PO) của NHÀ CUNG CẤP gửi cho Công ty TNHH Thiên Nhật Minh (TNM, bên mua, MST 0303590774).
 Trả về DUY NHẤT một JSON theo đúng khuôn sau (không thêm chữ nào khác):
-{"supplier": "tên công ty nhà cung cấp (KHÔNG phải Thiên Nhật Minh)", "taxCode": "MST nhà cung cấp", "contact": "người liên hệ / điện thoại / email bên bán",
+{"supplier": "tên công ty nhà cung cấp (KHÔNG phải Thiên Nhật Minh)", "taxCode": "MST nhà cung cấp", "contact": "tên người liên hệ hoặc phòng ban bên bán", "address": "địa chỉ công ty nhà cung cấp", "phone": "số điện thoại liên hệ bên bán (ưu tiên di động người liên hệ)", "email": "email bên bán (ưu tiên email người liên hệ, không phải info@)",
  "quoteNo": "số báo giá hoặc số PO", "quoteDate": "YYYY-MM-DD hoặc null",
  "items": [{"name": "tên hàng", "spec": "quy cách / mã hàng / model", "unit": "đơn vị tính", "quantity": số, "unitPrice": số, "amount": số}],
  "subtotal": số hoặc null, "vat": số tiền thuế hoặc null, "total": tổng thanh toán hoặc null,

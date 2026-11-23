@@ -74,7 +74,7 @@ export function normalizeAi(raw: unknown): QuoteData {
   const date = text(data.quoteDate);
   const pct = num(data.advancePct);
   return {
-    supplier: text(data.supplier), taxCode: text(data.taxCode), contact: text(data.contact), quoteNo: text(data.quoteNo),
+    supplier: text(data.supplier), taxCode: text(data.taxCode), contact: text(data.contact), address: text(data.address), phone: text(data.phone), email: text(data.email), quoteNo: text(data.quoteNo),
     quoteDate: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null, items,
     subtotal: num(data.subtotal), vat: num(data.vat), total: num(data.total),
     vatIncluded: typeof data.vatIncluded === "boolean" ? data.vatIncluded : null,

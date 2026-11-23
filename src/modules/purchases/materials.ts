@@ -111,7 +111,7 @@ export function ordersFromQuote(request: Pick<MaterialRequest, "projectId" | "nu
   return [...byCode.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, items]) => ({
     kind: "project", projectId: request.projectId, budgetCode: code,
     title: `${request.number} · ${items.length === 1 ? items[0]!.name : `${items[0]!.name} và ${items.length - 1} mục khác`}`.slice(0, 200),
-    department: "", neededBy: items.map((item) => item.neededOn).filter((day): day is string => Boolean(day)).sort()[0] ?? null, deliveryAddress: projectAddress, supplier: quote.supplier, supplierContact: quote.supplierContact,
+    department: "", neededBy: items.map((item) => item.neededOn).filter((day): day is string => Boolean(day)).sort()[0] ?? null, deliveryAddress: projectAddress, supplier: quote.supplier, supplierContact: quote.supplierContact, supplierAddress: "", supplierPhone: "", supplierEmail: "",
     note: [`Theo phiếu ${request.number}`, quote.quoteRef ? `báo giá ${quote.quoteRef}` : "", quote.paymentTerms ? `ĐK thanh toán: ${quote.paymentTerms}` : ""].filter(Boolean).join(" · "),
     advanceRequired: false, advancePct: null, prepayRequired: false,
     items: items.map((item) => ({ id: "", name: item.name, spec: [item.spec, item.maker].filter(Boolean).join(" · "), unit: item.unit, quantity: item.quantity, unitPrice: quote.prices[item.id] ?? 0 })),

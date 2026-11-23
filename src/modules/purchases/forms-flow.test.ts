@@ -44,7 +44,7 @@ describe("báo cáo giải thích P-COST-05", () => {
   it("PRC_41 Lãnh đạo duyệt thì mã được cộng E và đơn vượt ngân sách gửi được", async () => {
     const { store, signAll, approvedBudget } = setup();
     await approvedBudget(12_000_000);
-    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 16_000_000 }] });
+    const order = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "175", advanceRequired: false, advancePct: null, prepayRequired: false, title: "Tủ", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Tủ", spec: "", unit: "cái", quantity: 1, unitPrice: 16_000_000 }] });
     await expect(store.submit(order.id)).rejects.toThrow("PO_OVER_BUDGET");
     const id = await store.saveExplanatory({ projectId: "proj-1", kind: "budget_change", warrantyDoneOn: null, explanation: "Khách đổi tủ 400A lên 630A", attachments: noAttachments(), orderId: order.id, lines: [{ code: "175", budgetA: 12_000_000, orderedB: 0, neededC: 16_000_000 }] });
     expect((await store.listExplanatory("proj-1"))[0]).toMatchObject({ number: "GT-DA-01", status: "draft" });

@@ -39,7 +39,12 @@ export type PurchaseOrder = {
   neededBy: string | null;
   deliveryAddress: string;
   supplier: string;
+  /** Người liên hệ bên NCC (ô "Tới" trên PO). */
   supplierContact: string;
+  /** Địa chỉ, điện thoại, email NCC (ô Địa chỉ / Điện thoại / Email trên P-CC-08). */
+  supplierAddress: string;
+  supplierPhone: string;
+  supplierEmail: string;
   expectedDelivery: string | null;
   note: string;
   status: PurchaseStatus;
@@ -82,7 +87,7 @@ export type PurchaseOrder = {
   docsNote: string;
 };
 
-export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "note" | "budgetCode" | "advanceRequired" | "advancePct" | "prepayRequired"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
+export type PurchaseDraft = Pick<PurchaseOrder, "kind" | "projectId" | "title" | "department" | "neededBy" | "deliveryAddress" | "supplier" | "supplierContact" | "supplierAddress" | "supplierPhone" | "supplierEmail" | "note" | "budgetCode" | "advanceRequired" | "advancePct" | "prepayRequired"> & { items: Omit<PurchaseItem, "receivedQty" | "acceptedQty" | "inspectionNote">[] };
 
 export type PaymentKind = "advance" | "prepayment" | "final";
 export const PAYMENT_KIND_LABELS: Record<PaymentKind, string> = { advance: "Tạm ứng", prepayment: "Thanh toán trước", final: "Thanh toán còn lại" };

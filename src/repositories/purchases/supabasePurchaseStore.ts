@@ -23,7 +23,7 @@ function raise(error: PostgrestError): never {
 const itemFromRow = (row: Row): PurchaseItem => ({ id: str(row.id), name: str(row.name), spec: str(row.spec), unit: str(row.unit), quantity: num(row.quantity), unitPrice: num(row.unit_price), receivedQty: num(row.received_qty), acceptedQty: num(row.accepted_qty), inspectionNote: str(row.inspection_note) });
 const orderFromRow = (row: Row): PurchaseOrder => ({
   id: str(row.id), code: str(row.code), kind: row.kind as PurchaseOrder["kind"], projectId: strOrNull(row.project_id), title: str(row.title), requesterId: str(row.requester_id), requesterName: str(row.requester_name),
-  department: str(row.department), neededBy: strOrNull(row.needed_by), deliveryAddress: str(row.delivery_address), supplier: str(row.supplier), supplierContact: str(row.supplier_contact), expectedDelivery: strOrNull(row.expected_delivery),
+  department: str(row.department), neededBy: strOrNull(row.needed_by), deliveryAddress: str(row.delivery_address), supplier: str(row.supplier), supplierContact: str(row.supplier_contact), supplierAddress: str(row.supplier_address), supplierPhone: str(row.supplier_phone), supplierEmail: str(row.supplier_email), expectedDelivery: strOrNull(row.expected_delivery),
   note: str(row.note), status: row.status as PurchaseOrder["status"], totalEstimate: num(row.total_estimate), totalActual: row.total_actual === null ? null : num(row.total_actual), decisionNote: str(row.decision_note),
   submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at), orderedAt: strOrNull(row.ordered_at), receivedAt: strOrNull(row.received_at), completedAt: strOrNull(row.completed_at), createdAt: str(row.created_at),
   items: ((row.purchase_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map(itemFromRow),
@@ -107,7 +107,7 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     },
     async saveDraft(draft) {
       const payload = { kind: draft.kind, project_id: draft.kind === "project" ? draft.projectId : null, budget_code: draft.kind === "project" ? draft.budgetCode : null,
-        advance_required: draft.advanceRequired, advance_pct: draft.advanceRequired ? draft.advancePct : null, prepay_required: draft.prepayRequired, title: draft.title.trim(), department: draft.department.trim(), needed_by: draft.neededBy, delivery_address: draft.deliveryAddress.trim(), supplier: draft.supplier.trim(), supplier_contact: draft.supplierContact.trim(), note: draft.note.trim() };
+        advance_required: draft.advanceRequired, advance_pct: draft.advanceRequired ? draft.advancePct : null, prepay_required: draft.prepayRequired, title: draft.title.trim(), department: draft.department.trim(), needed_by: draft.neededBy, delivery_address: draft.deliveryAddress.trim(), supplier: draft.supplier.trim(), supplier_contact: draft.supplierContact.trim(), supplier_address: draft.supplierAddress.trim(), supplier_phone: draft.supplierPhone.trim(), supplier_email: draft.supplierEmail.trim(), note: draft.note.trim() };
       let id = draft.id;
       if (id) await check(client.from("purchase_orders").update(payload).eq("id", id));
       else {

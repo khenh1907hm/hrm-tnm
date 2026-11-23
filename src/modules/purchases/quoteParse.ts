@@ -8,7 +8,11 @@ export type QuoteItem = { name: string; spec: string; unit: string; quantity: nu
 export type QuoteData = {
   supplier: string;
   taxCode: string;
+  /** Người liên hệ / phòng ban bên bán (ô "Tới"). */
   contact: string;
+  address: string;
+  phone: string;
+  email: string;
   quoteNo: string;
   quoteDate: string | null;
   items: QuoteItem[];
@@ -75,9 +79,23 @@ export function parseQuoteRows(rows: readonly (readonly string[])[]): QuoteParse
   const supplier = clean(joined.find((line) => /c[oô]ng\s*ty|company|co\.,?\s*ltd|corporation|jsc/i.test(line) && !BUYER.test(line) && line.length < 120)?.replace(/^(kính gửi|to|bên bán|seller)\s*:?/i, "") ?? "");
   const taxCode = [...all.matchAll(/(?:MST|M[aã] s[oố] thu[eế]|Tax\s*code)\s*[:.]?\s*([0-9][0-9 -]{8,15}[0-9])/gi)].map((match) => match[1]!.replace(/\s/g, "")).find((code) => !BUYER.test(code)) ?? "";
   const emails = [...all.matchAll(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g)].map((match) => match[0]).filter((mail) => !BUYER.test(mail));
-  const phoneLine = joined.find((line) => /cell\s*phone|di[dđ]\s*[dđ]ộng|hotline|mobile/i.test(line) && !BUYER.test(line));
-  const phone = phoneLine?.match(/(\+?\d[\d .-]{7,}\d)/)?.[1]?.trim() ?? "";
-  const contact = [phone, emails.find((mail) => !/^info@/i.test(mail)) ?? emails[0] ?? ""].filter(Boolean).join(" · ");
+  // Phần đầu báo giá (trước "Kính gửi" / bảng hàng) là thông tin bên bán
+  const toAt = joined.findIndex((line) => /^(k[ií]nh\s*g[uửư]i|to\b|customer|kh[aá]ch\s*h[aà]ng)\s*:?/i.test(line));
+  const headEnd = toAt >= 0 ? toAt : Math.max(0, foldedLines.findIndex((line) => HEADER.test(line)));
+  const head = joined.slice(0, headEnd || joined.length);
+  const phoneAt = joined.findIndex((line) => /cell\s*phone|di[dđ]\s*[dđ]ộng|hotline|mobile/i.test(line) && !BUYER.test(line));
+  const cellPhone = phoneAt >= 0 ? joined[phoneAt]!.match(/(\+?\d[\d .-]{7,}\d)/)?.[1]?.trim() ?? "" : "";
+  const companyPhone = head.find((line) => /^(đi[eệ]n\s*tho[aạ]i|tel|phone|đt)\b/i.test(line) && !BUYER.test(line))?.match(/(\+?\d[\d .()-]{7,}\d)/)?.[1]?.trim() ?? "";
+  const phone = cellPhone || companyPhone;
+  const email = emails.find((mail) => !/^(info|sales|contact)@/i.test(mail)) ?? emails[0] ?? "";
+  const ADDRESS_HINT = /(ph[uư][oờ]ng|qu[aậ]n|huy[eệ]n|t[iỉ]nh|th[aà]nh\s*ph[oố]|tp\.?|vi[eệ]t\s*nam|h[oồ]\s*ch[ií]\s*minh|h[aà]\s*n[oộ]i|đ[aà]\s*n[aẵ]ng|b[iì]nh\s*d[uư][oơ]ng|đ[oồ]ng\s*nai|kcn|khu\s*c[oô]ng\s*nghi[eệ]p|street|district|ward|city)/i;
+  const addressLine = head.find((line) => /^(đ[iị]a\s*ch[iỉ]|address|add)\s*:/i.test(line) && !BUYER.test(line))
+    ?? head.find((line) => /^\d/.test(line) && ADDRESS_HINT.test(line) && !BUYER.test(line) && !/@|www\.|t[aà]i\s*kho[aả]n/i.test(line));
+  const address = clean((addressLine ?? "").replace(/^(đ[iị]a\s*ch[iỉ]|address|add)\s*:\s*/i, "").split(/\s+(?:đi[eệ]n\s*tho[aạ]i|tel|phone|fax|email|mst)\b/i)[0] ?? "");
+  // Người liên hệ: dòng chữ ngay trên dòng Cellphone (vd "Phòng kinh doanh"), không thì "Người gởi / Sender / Liên hệ / Attn"
+  const above = phoneAt > 0 ? lines[phoneAt - 1]![0] ?? "" : "";
+  const sender = all.match(/(?:ng[uư][oờ]i\s*g[uửởơ]i|sender|li[eê]n\s*h[eệ]|contact\s*person|attn)\s*(?:\([^)]*\))?\s*:\s*([^\n:]{2,40}?)(?=\s{2,}|\n|$)/i)?.[1] ?? "";
+  const contact = clean(above && !/\d|c[oô]ng\s*ty|company/i.test(above) && above.length <= 60 ? above : sender);
 
   const quoteNo = all.match(/(?:S[oố]\s*(?:P\.?\s*O|b[aá]o\s*gi[aá]|BG|đơn hàng)[^:\n]{0,25}:|Quotation\s*No\.?\s*:?|Quote\s*No\.?\s*:?|Ref\.?\s*No\.?\s*:?|P\.?O\s*No\.?\s*:?)\s*([A-Z0-9][A-Z0-9\-/._]{2,30})/i)?.[1] ?? "";
   const dateMatch = all.match(/(?:ng[aà]y|date)[^0-9\n]{0,40}(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})/i);
@@ -149,7 +167,7 @@ export function parseQuoteRows(rows: readonly (readonly string[])[]): QuoteParse
   const confident = items.length > 0 && Boolean(supplier) && matchesTotal !== false;
 
   return {
-    supplier, taxCode, contact, quoteNo, quoteDate, items, subtotal, vat, total, vatIncluded,
+    supplier, taxCode, contact, address, phone, email, quoteNo, quoteDate, items, subtotal, vat, total, vatIncluded,
     paymentTerms: clean(payLine), advancePct, prepay, deliveryText, confident, problems,
   };
 }

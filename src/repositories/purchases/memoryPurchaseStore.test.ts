@@ -14,7 +14,7 @@ describe("memory purchase store", () => {
     await store.saveBudgetSheet(sheetId, { confirmation: "confirmed", exchangeRate: 25_000, quoteNo: "", offerPrice: 0, contractValue: 0, note: "" }, [{ code: "177", nett: 8_000_000, budget: 10_000_000, supplier: "", contingency: 0, remark: "" }]);
     await store.submitBudgetSheet(sheetId);
     for (const step of await store.listSteps("budget", sheetId)) if (step.result === "pending") await store.sign(step.id, true, "");
-    const draft = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "177", advanceRequired: true, advancePct: 40, prepayRequired: false, title: "Ống đồng đợt 2", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", note: "", items: [{ id: "", name: "Ống đồng", spec: "D12", unit: "m", quantity: 100, unitPrice: 50_000 }] });
+    const draft = await store.saveDraft({ kind: "project", projectId: "proj-1", budgetCode: "177", advanceRequired: true, advancePct: 40, prepayRequired: false, title: "Ống đồng đợt 2", department: "", neededBy: null, deliveryAddress: "", supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: "", items: [{ id: "", name: "Ống đồng", spec: "D12", unit: "m", quantity: 100, unitPrice: 50_000 }] });
     expect(draft).toMatchObject({ code: "DH-2611-0001", status: "draft", totalEstimate: 5_000_000 });
     await expect(store.decide(draft.id, true, "")).rejects.toThrow("PO_BAD_STATUS");
     await store.submit(draft.id);

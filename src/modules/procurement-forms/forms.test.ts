@@ -28,7 +28,7 @@ const cell = (workbook: ExcelJS.Workbook, address: string, sheet = 0) => {
 
 const order: PurchaseOrder = {
   id: "o1", code: "DH-2611-0001", kind: "project", projectId: "p1", title: "Tủ điện tổng MSB", requesterId: "u1", requesterName: "Kỹ sư A", department: "", neededBy: "2026-11-20",
-  deliveryAddress: "Công trường Murata", supplier: "Công ty TNHH ABC", supplierContact: "Ông Nguyễn Văn A · 0909 000 000", expectedDelivery: "2026-11-25", note: "Giao giờ hành chính", status: "approved",
+  deliveryAddress: "Công trường Murata", supplier: "Công ty TNHH ABC", supplierContact: "Ông Nguyễn Văn A · 0909 000 000", supplierAddress: "", supplierPhone: "", supplierEmail: "", expectedDelivery: "2026-11-25", note: "Giao giờ hành chính", status: "approved",
   totalEstimate: 40_000_000, totalActual: null, decisionNote: "", submittedAt: "2026-11-11T03:00:00Z", approvedAt: "2026-11-12T03:00:00Z", orderedAt: null, receivedAt: null, completedAt: null, createdAt: "2026-11-11T02:00:00Z",
   items: [{ id: "i1", name: "Tủ MSB 400A", spec: "IP54", unit: "bộ", quantity: 2, unitPrice: 20_000_000, receivedQty: 0, acceptedQty: 0, inspectionNote: "" }],
   budgetCode: "175", budgetA: 100_000_000, budgetB: 50_000_000, usesChain: true, advanceRequired: true, advancePct: 30, prepayRequired: false,
@@ -92,6 +92,12 @@ describe("procurement forms (Excel theo mẫu công ty)", () => {
     expect(`${cell(book, "J43")} ${cell(book, "J44")}`).toContain(paymentTermsText(order).slice(0, 40));
     expect(book.worksheets.map((sheet) => sheet.name)).toEqual(["P-CC-08"]);
     expect(book.worksheets[0]!.getImages().length).toBe(1);
+  });
+
+  it("P-CC-08: địa chỉ, điện thoại, email NCC vào ô vàng; người liên hệ vào ô Tới", async () => {
+    const withSupplier = { ...order, supplierContact: "Phòng kinh doanh", supplierAddress: "205/5 Thích Quảng Đức, Phường Đức Nhuận, Hồ Chí Minh", supplierPhone: "0938 473 168", supplierEmail: "kinhdoanh@namlong.vn" };
+    const book = await reopen(await fillPurchaseOrder(template("P-CC-08"), { order: withSupplier, project, steps: [], budgetNumber: "" }));
+    expect([cell(book, "F12"), cell(book, "F14"), cell(book, "F16"), cell(book, "C18")]).toEqual(["205/5 Thích Quảng Đức, Phường Đức Nhuận, Hồ Chí Minh", "0938 473 168", "kinhdoanh@namlong.vn", "Phòng kinh doanh"]);
   });
 
   it("PRC_74 P-CF-03: dòng thanh toán theo PO + hóa đơn, lịch sử các khoản đã chi", async () => {
