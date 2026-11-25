@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonDetail, SkeletonLines } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { ChevronRight, Download, FileText, Eye, EyeOff, ImagePlus, Printer, RefreshCw, RotateCcw, Save, Trash2, Users, X } from "lucide-react";
 import {
@@ -237,7 +238,7 @@ export function OrgChartEditor(props: OrgChartEditorProps) {
   }, [printing]);
 
   const dirty = useMemo(() => chart !== null && JSON.stringify(chart) !== JSON.stringify(saved ?? null), [chart, saved]);
-  if (!chart) return <div className="loading">Đang dựng sơ đồ từ dữ liệu…</div>;
+  if (!chart) return <SkeletonLines label="Đang dựng sơ đồ từ dữ liệu…" />;
 
   const setHeader = (patch: Partial<OrgChartHeader>) => setChart({ ...chart, header: { ...chart.header, ...patch } });
   const setPerson = (id: string, patch: Partial<OrgPerson>) => setChart({ ...chart, people: chart.people.map((person) => person.id === id ? { ...person, ...patch } : person) });
@@ -393,7 +394,7 @@ export function OrgChartTool(props: { store: ProjectStore; ready: boolean; actor
           {(projects ?? []).map((item) => <option key={item.id} value={item.id}>{item.code} · {item.name}</option>)}
         </select>
       </label>
-      {!current ? <div className="loading">Đang tải dữ liệu dự án…</div> : (
+      {!current ? <SkeletonDetail label="Đang tải dữ liệu dự án…" /> : (
         <OrgChartEditor key={current.project?.id ?? "free"} store={store} project={current.project} members={current.members} today={today} canEdit={current.canEdit}
           canSetTemplate={actor.role === "admin" || hasAccess(actor, "projects.manage")} employees={employees} setNotice={setNotice} />
       )}

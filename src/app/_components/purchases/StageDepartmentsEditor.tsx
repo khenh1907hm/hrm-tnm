@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, Workflow } from "lucide-react";
 import { ASSIGNABLE_STAGES, type AssignableStage, FLOW_STEPS, STAGE_DEPARTMENT_DEFAULTS, STAGE_DEPARTMENT_OPTIONS, stageDepartmentLabel, type StageDepartment, type StageDepartments } from "../../../modules/purchases/flow";
@@ -26,7 +27,7 @@ export function StageDepartmentsEditor(props: { load: () => Promise<StageDepartm
       (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setValue({ ...STAGE_DEPARTMENT_DEFAULTS }); setSaved(JSON.stringify(STAGE_DEPARTMENT_DEFAULTS)); } });
     return () => { active = false; };
   }, [load, setNotice]);
-  if (!value) return <div className="loading">Đang tải giai đoạn…</div>;
+  if (!value) return <SkeletonLines label="Đang tải giai đoạn…" />;
   const dirty = JSON.stringify(value) !== saved;
   const submit = async () => {
     setBusy(true);

@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { Fragment, useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, ShieldCheck } from "lucide-react";
 import { approvalTrees, directorPeople, TREE_FALLBACK, type ApprovalBlock, type TreeDocType } from "../accountApi";
@@ -35,7 +36,7 @@ export function ApprovalsTab(props: { projectId: string; canEdit: boolean; membe
     return () => { active = false; };
   }, [load]);
   const refresh = () => void load().then(([list]) => setTrees(list), () => setNotice("Không tải lại được cây duyệt.", "error"));
-  if (!trees) return <section className="panel pj-section"><div className="loading">Đang tải quy trình duyệt…</div></section>;
+  if (!trees) return <section className="panel pj-section"><SkeletonLines label="Đang tải quy trình duyệt…" /></section>;
 
   const participants = participantsOf(props.members, props.today);
   const nameOf = (id: string) => participants.find((person) => person.id === id)?.name ?? "Người ngoài dự án";

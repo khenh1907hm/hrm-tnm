@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonPage } from "./Skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { BadgeCheck, FileStack, GitBranch } from "lucide-react";
 import { COMPANY_ROLES, DEFAULT_PROJECT_ROLES, type CompanyRole } from "../../modules/purchases/companyRoles";
@@ -67,7 +68,7 @@ export function ApprovalSettingsPage(props: { live: boolean; employees: Employee
   const loadStages = useCallback(() => stageDepartmentsSettings(), []);
 
   if (!props.live) return <section className="pj-page"><div className="panel empty-state"><p>Quy trình duyệt chỉ cấu hình được ở chế độ thật (đã đăng nhập).</p></div></section>;
-  if (!roles || !company) return <div className="loading">Đang tải quy trình duyệt…</div>;
+  if (!roles || !company) return <SkeletonPage kind="detail" label="Đang tải quy trình duyệt…" />;
   const dirty = JSON.stringify([roles, modes]) !== saved;
   const setList = (key: CompanyRole, list: string[]) => setRoles({ ...roles, [key]: list });
   const save = async () => {

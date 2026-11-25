@@ -1,3 +1,4 @@
+import { SkeletonPage } from "./Skeleton";
 import { TopBarActions } from "./TopBarActions";
 import { ApprovalBoardPage } from "./ApprovalBoardPage";
 import { useCallback, useEffect, useState } from "react";
@@ -9,6 +10,7 @@ import { usePathname } from "next/navigation";
 import { Camera, ClipboardCheck, FolderKanban, KeyRound, LogOut, PackageSearch, ShoppingCart, Sparkles, Users, Wrench, type LucideIcon, ClipboardSignature } from "lucide-react";
 import { PurchasesPage } from "./purchases/PurchasesPage";
 import { getPurchaseStore } from "./purchases/usePurchaseStore";
+import { MyOrdersBoard } from "./purchases/MyOrdersBoard";
 import SkillsClient from "../skills/SkillsClient";
 import { BeforeAfterTool } from "./BeforeAfterTool";
 import { ToolFold } from "./ToolFold";
@@ -114,7 +116,6 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
     if (path !== window.location.pathname) window.history.pushState(null, "", path);
   }, []);
 
-  const links = nav.map((key) => [key, ...NAV_META[key]!] as const);
   const go = (event: React.MouseEvent, key: PageView) => {
     // Giữ Ctrl/Cmd/Shift hoặc chuột giữa thì để trình duyệt mở tab mới
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -122,6 +123,16 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
     setMenuOpen(false);
     navigate(key);
   };
+  // Đặt hàng dự án là tab trong Dự án: chỉ hiện riêng trên thanh bên khi người này không vào được trang Dự án
+  const links = nav.filter((key) => key !== "projectPurchases" || !nav.includes("projects")).map((key) => [key, ...NAV_META[key]!] as const);
+  const isActive = (key: PageView) => view === key || (key === "projects" && view === "projectPurchases" && nav.includes("projects"));
+  const projectTabs = (view === "projects" || view === "projectPurchases") && nav.includes("projects") && nav.includes("projectPurchases") && !route?.projectId && !route?.purchaseId ? (
+    <nav className="section-tabs" aria-label="Dự án">
+      {(["projects", "projectPurchases"] as const).map((key) => (
+        <a key={key} href={routePath(key)} className={view === key ? "is-active" : undefined} aria-current={view === key ? "page" : undefined} onClick={(event) => go(event, key)}>{key === "projects" ? "Danh sách dự án" : "Đặt hàng dự án"}</a>
+      ))}
+    </nav>
+  ) : null;
   const initials = (props.email ?? "?").replace(/@.*/, "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
   // Tài khoản chấm công hiện mã nhân viên (TNM001) thay cho email nội bộ
   const login = props.email ? (isWorkerEmail(props.email) ? props.email.split("@")[0]!.toUpperCase() : props.email) : "";
@@ -147,7 +158,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       {menuOpen && <div className="emp-menu" role="dialog" aria-label="Tài khoản">{account}</div>}
       <nav className="emp-tabbar" aria-label="Chức năng">
         {links.map(([key, text, Icon]) => (
-          <a key={key} href={routePath(key)} className={view === key ? "active" : undefined} aria-current={view === key ? "page" : undefined} onClick={(event) => go(event, key)}>
+          <a key={key} href={routePath(key)} className={isActive(key) ? "active" : undefined} aria-current={isActive(key) ? "page" : undefined} onClick={(event) => go(event, key)}>
             <Icon size={22} aria-hidden="true" /><span>{text}</span>
           </a>
         ))}
@@ -160,7 +171,7 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
         </div>
         <nav aria-label="Chức năng">
           {links.map(([key, label, Icon]) => (
-            <a className={view === key ? "nav-item active" : "nav-item"} key={key} href={routePath(key)} aria-current={view === key ? "page" : undefined} onClick={(event) => go(event, key)}>
+            <a className={isActive(key) ? "nav-item active" : "nav-item"} key={key} href={routePath(key)} aria-current={isActive(key) ? "page" : undefined} onClick={(event) => go(event, key)}>
               <Icon size={18} aria-hidden="true" />
               <span className="nav-label">{label}</span>
             </a>
@@ -171,14 +182,16 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
       <main className="main-content emp-main" onClick={() => setMenuOpen(false)}>
         {props.mode === "live" && <div className="emp-desktop-only"><TopBarActions email={props.email} onSignOut={props.onSignOut} onNotice={(message) => setNotice(message, "success")} /></div>}
+        {projectTabs}
         {view === "skills" && <SkillsClient embedded />}
-        {view === "approvals" && <ApprovalBoardPage live={props.mode === "live"} setNotice={setNotice} />}
+        {view === "approvals" && <><ApprovalBoardPage live={props.mode === "live"} setNotice={setNotice} />
+          {projects.buys && <MyOrdersBoard store={getPurchaseStore(props.mode)} projectStore={projectStore.ready ? projectStore.store : null} onOpenOrder={(orderId) => window.history.pushState(null, "", purchasePath(orderId))} />}</>}
         {view === "tools" && <ToolsPage orgChart={props.actor ? { store: projectStore.store, ready: projectStore.ready, actor: props.actor, employees: null, setNotice } : undefined} />}
-        {view === "projects" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
+        {view === "projects" && (!props.actor || waitingProjects ? <SkeletonPage kind="cards" /> : <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} projectId={route?.projectId ?? null} setNotice={setNotice}
           onOpen={(projectId) => { const path = projectId ? projectPath(projectId) : routePath("projects"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />)}
         {(view === "purchases" || view === "projectPurchases") && props.actor && <PurchasesPage key={view} scope={view === "projectPurchases" ? "project" : "office"} store={getPurchaseStore(props.mode)} projectStore={projectStore.store} ready={projectStore.ready} actor={props.actor} employees={null} orderId={route?.purchaseId ?? null} setNotice={setNotice}
           onOpen={(orderId) => { const path = orderId ? purchasePath(orderId) : routePath("purchases"); if (path !== window.location.pathname) window.history.pushState(null, "", path); }} />}
-        {view === "timesheet" && (!props.actor || waitingProjects ? <div className="loading">Đang tải…</div> : <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} setNotice={setNotice} onOpenProject={(projectId) => window.history.pushState(null, "", projectPath(projectId))} />)}
+        {view === "timesheet" && (!props.actor || waitingProjects ? <SkeletonPage kind="cards" /> : <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={props.actor} setNotice={setNotice} onOpenProject={(projectId) => window.history.pushState(null, "", projectPath(projectId))} />)}
       </main>
     </div>
   );

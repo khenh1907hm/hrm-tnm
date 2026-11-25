@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { Check, FileText, X } from "lucide-react";
 import { canReview, REASON_CODE_LABELS, reasonNote, REQUEST_KIND_LABELS, REQUEST_STATUS_LABELS, type AttendanceRequest, type RequestStatus } from "../../../modules/projects/attendanceRequests";
@@ -56,7 +57,7 @@ export function RequestsPanel(props: { store: ProjectStore; projectId?: string; 
           <option value="pending">Chờ duyệt</option><option value="approved">Đã duyệt</option><option value="rejected">Bị từ chối</option><option value="*">Tất cả</option>
         </select>
       </div>
-      {!requests ? <div className="loading">Đang tải…</div> : !shown.length ? <p className="muted">Không có phiếu nào.</p> : (
+      {!requests ? <SkeletonTable rows={4} /> : !shown.length ? <p className="muted">Không có phiếu nào.</p> : (
         <div className="table-scroll">
           <table className="pj-table">
             <thead><tr><th>Người gửi</th>{!props.projectId && <th>Dự án</th>}<th>Ngày</th><th>Nội dung</th><th>Giờ đề nghị</th><th>Trạng thái · người duyệt</th><th /></tr></thead>

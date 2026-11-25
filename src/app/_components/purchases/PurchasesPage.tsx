@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { LayoutGrid, List, Plus, Settings2, ShoppingCart, Trash2 } from "lucide-react";
+import { Plus, Settings2, ShoppingCart, Trash2 } from "lucide-react";
 import { normalizeText } from "../../../lib/text";
 import type { Actor } from "../../../modules/auth/permissions";
 import { formatVnd } from "../../../modules/projects/cost";
@@ -13,7 +13,6 @@ import { EmployeePicker } from "../projects/ProjectsPage";
 import { errorMessage, viewerFor, type EmployeeSource } from "../projects/projectShared";
 import { PurchaseDetail } from "./PurchaseDetail";
 import { OrderMiniPath } from "./OrderProgress";
-import { PurchaseBoard } from "./PurchaseBoard";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { MyApprovals } from "./ApprovalChain";
 import { DEPARTMENTS, emptyDepartments, ROLE_LABELS, type Department, type DepartmentMembers } from "../../../modules/purchases/approval";
@@ -21,6 +20,7 @@ import { projectPath, routePath } from "../routes";
 import "../projects/projects.css";
 import "./purchases.css";
 import { StageDepartmentsEditor } from "./StageDepartmentsEditor";
+import { SkeletonLines, SkeletonPage } from "../Skeleton";
 import { mergeStageDepartments, type StageDepartments } from "../../../modules/purchases/flow";
 
 type Tab = "todo" | "mine" | "all";
@@ -28,8 +28,9 @@ type Context = { roles: PurchaseRoles; userId: string; projects: Project[]; lead
 
 async function loadContext(store: PurchaseStore, projectStore: ProjectStore, actor: Actor): Promise<Context> {
   const [roles, userId, projects, approvers, me, stageDepartments] = await Promise.all([store.myRoles(), store.myUserId(), projectStore.listProjects(), store.approvers(), projectStore.myEmployeeId(), store.stageDepartments().catch(() => mergeStageDepartments(null))]);
-  const leadProjectIds = new Set<string>();
-  for (const project of projects) if (viewerFor(actor, me, project, await projectStore.listMembers(project.id)).isLead) leadProjectIds.add(project.id);
+  // Một truy vấn lấy mọi vai trò của tôi trong các dự án (trước đây mỗi dự án một truy vấn, chạy nối tiếp → rất chậm khi nhiều dự án)
+  const mine = me ? await projectStore.listMembershipsOf(me).catch(() => []) : [];
+  const leadProjectIds = new Set(projects.filter((project) => viewerFor(actor, me, project, mine).isLead).map((project) => project.id));
   return { roles, userId, projects, leadProjectIds, approvers, stageDepartments };
 }
 
@@ -71,7 +72,7 @@ export function PurchaseList(props: { orders: PurchaseOrder[]; projects: readonl
 
 /**
  * Trang đặt hàng theo phạm vi: Đặt hàng dự án (/dat-hang-du-an) hoặc Văn phòng (/dat-hang, chỉ đơn phục vụ văn phòng).
- * Mặc định xem dạng bảng theo tình trạng: người dùng thấy đơn của mình, quản lý thấy tất cả.
+ * Danh sách đơn: người dùng thấy đơn của mình, quản lý thấy tất cả. Bảng tình trạng (dạng cột) nằm ở trang Việc của tôi.
  */
 export function PurchasesPage(props: { /** "project": Đặt hàng dự án (mục Dự án); "office": Văn phòng (mục Mua hàng). */ scope: PurchaseKind; store: PurchaseStore; projectStore: ProjectStore; ready: boolean; actor: Actor; employees: EmployeeSource; orderId: string | null; onOpen: (orderId: string | null) => void; setNotice: Notify }) {
   const { store, setNotice } = props;
@@ -79,7 +80,6 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
   const [orders, setOrders] = useState<PurchaseOrder[] | null>(null);
   const [pending, setPending] = useState<PurchasePayment[]>([]);
   const [tabChoice, setTab] = useState<Tab | null>(null);
-  const [layout, setLayout] = useState<"board" | "list">("board");
   const kind = props.scope;
   const [status, setStatus] = useState<PurchaseStatus | "*">("*");
   const [query, setQuery] = useState("");
@@ -108,7 +108,7 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
       && tokens.every((token) => normalizeText(`${order.code} ${order.title} ${order.supplier} ${order.requesterName}`).includes(token)));
   }, [orders, context, pending, tabChoice, kind, status, query]);
 
-  if (!orders || !context) return <div className="loading">Đang tải đơn hàng…</div>;
+  if (!orders || !context) return props.orderId ? <SkeletonPage kind="detail" label="Đang tải đơn hàng…" /> : <SkeletonPage label="Đang tải đơn hàng…" />;
   // Đơn dự án mở từ /dat-hang/<id>: quay lại trang Đặt hàng dự án
   const backFromDetail = () => {
     const opened = orders.find((order) => order.id === props.orderId);
@@ -144,19 +144,14 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
         <button type="button" role="tab" aria-selected={tab === "mine"} onClick={() => setTab("mine")}>Đơn của tôi</button>
         {context.roles.seesAll && <button type="button" role="tab" aria-selected={tab === "all"} onClick={() => setTab("all")}>Tất cả</button>}
       </div>
-        <div className="po-view-switch" role="group" aria-label="Cách xem">
-          <button type="button" aria-pressed={layout === "board"} onClick={() => setLayout("board")}><LayoutGrid size={15} aria-hidden="true" /> Bảng tình trạng</button>
-          <button type="button" aria-pressed={layout === "list"} onClick={() => setLayout("list")}><List size={15} aria-hidden="true" /> Danh sách</button>
-        </div>
       </div>
       <div className="pj-toolbar">
         <label className="sr-only" htmlFor="po-search">Tìm đơn</label>
         <input id="po-search" type="search" placeholder="Tìm theo mã, nội dung, nhà cung cấp, người lập" value={query} onChange={(event) => setQuery(event.target.value)} />
         <select aria-label="Trạng thái" value={status} onChange={(event) => setStatus(event.target.value as PurchaseStatus | "*")}><option value="*">Mọi trạng thái</option>{(Object.keys(PURCHASE_STATUS_LABELS) as PurchaseStatus[]).map((key) => <option key={key} value={key}>{PURCHASE_STATUS_LABELS[key]}</option>)}</select>
       </div>
-      {layout === "board"
-        ? <PurchaseBoard orders={shown} projects={context.projects} pending={pending} onOpen={(id) => props.onOpen(id)} hideProject={!isProject} />
-        : <section className="panel pj-section"><PurchaseList orders={shown} projects={context.projects} pending={pending} onOpen={(id) => props.onOpen(id)} hideProject={!isProject} /></section>}
+      {/* Bảng tình trạng đơn hàng đã chuyển sang trang Việc của tôi */}
+      <section className="panel pj-section"><PurchaseList orders={shown} projects={context.projects} pending={pending} onOpen={(id) => props.onOpen(id)} hideProject={!isProject} /></section>
       {creating && <PurchaseFormModal store={store} projects={context.projects} initial={null} fixedKind={props.scope} onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi ${order.kind === "project" ? "ký duyệt" : "sếp duyệt"}.` : `Đã lưu nháp ${order.code}.`, "success"); void reload(); props.onOpen(order.id); }} />}
     </section>
   );
@@ -178,7 +173,7 @@ function DepartmentSettings(props: { store: PurchaseStore; employees: EmployeeSo
     }, () => { if (active) setMembers(emptyDepartments()); });
     return () => { active = false; };
   }, [props.store]);
-  if (!members) return <div className="loading">Đang tải bộ phận…</div>;
+  if (!members) return <SkeletonLines lines={4} label="Đang tải bộ phận…" />;
   const set = (department: Department, ids: string[]) => setMembers({ ...members, [department]: ids });
   const save = async () => {
     try { await props.store.setDepartments(members); props.setNotice("Đã lưu bộ phận ký duyệt.", "success"); props.onSaved(); }

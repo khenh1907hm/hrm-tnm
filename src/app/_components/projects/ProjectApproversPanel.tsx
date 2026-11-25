@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Crown, GripVertical, ShieldCheck, X } from "lucide-react";
 import { ROLE_LABELS, type ApprovalRole } from "../../../modules/purchases/approval";
@@ -171,7 +172,7 @@ export function ProjectApproversPanel(props: { projectId: string; canEdit: boole
     }, () => { if (active) { setSaved([]); setDraft([]); } });
     return () => { active = false; };
   }, [props.projectId]);
-  if (!saved) return <div className="loading">Đang tải người duyệt…</div>;
+  if (!saved) return <SkeletonLines label="Đang tải người duyệt…" />;
   const key = (list: ApproverDraft[]) => JSON.stringify(list.map((item) => [item.role, item.employeeId]).sort());
   const dirty = key(saved) !== key(draft);
   const participants = participantsOf(props.members, props.today);

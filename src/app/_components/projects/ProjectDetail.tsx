@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonDetail } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, MapPin, Pencil } from "lucide-react";
 import { isLink, siteMapUrl } from "../../../lib/mapsLink";
@@ -164,7 +165,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
       <div className="pj-tabs" role="tablist" aria-label="Mục của dự án">
         {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key || (key === "reports" && tab === "daily") || (key === "materials" && PROCUREMENT.has(tab))} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key === "materials" && PROCUREMENT.has(tab) ? tab : key)}>{label}</button>)}
       </div>
-      {!data || !viewer ? <div className="loading">Đang tải dữ liệu dự án…</div> : (() => {
+      {!data || !viewer ? <SkeletonDetail label="Đang tải dữ liệu dự án…" /> : (() => {
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
         if (tab === "overview") return <OverviewTab {...tabProps} />;
         // Confirm Contract, Ngân sách, Đặt hàng: bên phải là khung người duyệt (Admin, Giám đốc sửa được)

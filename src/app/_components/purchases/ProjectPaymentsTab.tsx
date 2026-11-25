@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { useEffect, useState } from "react";
 import { formatVnd } from "../../../modules/projects/cost";
 import { PAYMENT_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, type PurchaseOrder, type PurchasePayment } from "../../../modules/purchases/types";
@@ -34,7 +35,7 @@ export function ProjectPaymentsTab({ store, data, setNotice }: TabProps) {
       <div className="pj-section-head"><h2 id="pj-rfp-title">Request for Payment (P-CF-03)</h2></div>
       <small className="muted">Đề nghị thanh toán cho nhà cung cấp. Lập đề nghị mới trong đơn ở tab Purchase Order (sau khi phát hành PO); ký duyệt xong Kế toán chi.
         {rows && rows.length > 0 && <> Chờ duyệt {formatVnd(sum("requested"))} · Chờ chi {formatVnd(sum("approved"))} · Đã chi {formatVnd(sum("paid"))}.</>}</small>
-      {!rows ? <div className="loading">Đang tải…</div> : !rows.length ? <p className="muted">Chưa có đề nghị thanh toán nào.</p> : (
+      {!rows ? <SkeletonTable rows={4} /> : !rows.length ? <p className="muted">Chưa có đề nghị thanh toán nào.</p> : (
         <div className="table-scroll">
           <table className="pj-table">
             <thead><tr><th>RFP No.</th><th>PO / Đơn</th><th>Loại</th><th>Người nhận</th><th className="pj-num">Trước thuế</th><th className="pj-num">VAT</th><th className="pj-num">Tổng</th><th>Ngày đề nghị</th><th>Trạng thái</th></tr></thead>

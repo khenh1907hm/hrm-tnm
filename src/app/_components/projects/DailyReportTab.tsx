@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { useCallback, useEffect, useId, useMemo, useState, type KeyboardEvent } from "react";
 import { Camera, ClipboardList, Copy, Download, ImagePlus, PenLine, Plus, ScanText, Send, Trash2, X } from "lucide-react";
 import { getSupabaseClient } from "../../../lib/supabase/client";
@@ -260,7 +261,7 @@ function NameChips(props: { names: NameRef[]; suggestions: string[]; onChange: (
 }
 
 function ReportHistory(props: { reports: DailyReport[] | null; onCopy: (report: DailyReport) => void }) {
-  if (!props.reports) return <div className="loading">Đang tải báo cáo ngày…</div>;
+  if (!props.reports) return <SkeletonTable rows={5} label="Đang tải báo cáo ngày…" />;
   if (!props.reports.length) return null;
   return (
     <section className="panel pj-section">

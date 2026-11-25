@@ -85,11 +85,14 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
   const check = async (request: PromiseLike<{ error: PostgrestError | null }>) => { const { error } = await request; if (error) raise(error); };
   return {
     mode: "live",
-    async myUserId() { const { data } = await client.auth.getUser(); return data.user?.id ?? ""; },
+    // Đọc phiên trong máy (getSession), không gọi máy chủ xác thực mỗi lần như getUser(); RLS vẫn kiểm tra ở máy chủ
+    async myUserId() { const { data } = await client.auth.getSession(); return data.session?.user.id ?? ""; },
     async myRoles() {
-      const row = ((await rpc("purchase_my_roles", {})) as Row[] | null)?.[0];
+      // Hai hàm chạy song song (trước đây chạy nối tiếp)
+      const [roles, myDepartments] = await Promise.all([rpc("purchase_my_roles", {}), rpc("procurement_my_departments", {}).catch(() => [])]);
+      const row = (roles as Row[] | null)?.[0];
       // P. Vật tư phát hành PO; máy chủ chưa có hàm thì coi như không
-      const departments = ((await rpc("procurement_my_departments", {}).catch(() => [])) ?? []) as string[];
+      const departments = (myDepartments ?? []) as string[];
       return { isApprover: Boolean(row?.is_approver), isPayer: Boolean(row?.is_payer), seesAll: Boolean(row?.sees_all), isPoIssuer: departments.includes("material") };
     },
     async approvers() { return (((await rpc("purchase_approvers", {})) ?? []) as Row[]).map((row) => ({ employeeId: str(row.employee_id), name: str(row.name), hasAccount: Boolean(row.has_account) })); },

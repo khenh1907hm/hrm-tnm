@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonDetail, SkeletonTable } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { hasAccess, type Actor } from "../../../modules/auth/permissions";
@@ -120,7 +121,7 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
           </div>
         )}
       </div>
-      {!choices || !mode || !common ? <div className="loading">Đang tải…</div> : mode === "self" ? (
+      {!choices || !mode || !common ? <SkeletonDetail /> : mode === "self" ? (
         <>
           {store.actAs && <div className="pj-toolbar">
             <label htmlFor="demo-as" className="muted">Bản demo · thử chấm như:</label>
@@ -146,7 +147,7 @@ export function TimesheetPage(props: { store: ProjectStore; ready: boolean; acto
               {choices.map((item, index) => <option key={`${item.project.id}|${item.team}`} value={index}>{item.project.code} · {teamLabel(item.team)}</option>)}
             </select>
           </div>}
-          {!loaded || !viewer || !choice ? <div className="loading">Đang tải phiếu công…</div> : (
+          {!loaded || !viewer || !choice ? <SkeletonTable rows={6} cols={6} label="Đang tải phiếu công…" /> : (
             <TimesheetEntry store={store} project={choice.project} members={loaded.members} timesheets={loaded.timesheets} settings={common.settings} holidays={common.holidays} locks={loaded.locks}
               today={today} team={choice.team} date={date} onDateChange={setDate} isLead={viewer.isLead} isAdmin={viewer.isAdmin} onChanged={reload} setNotice={setNotice} checks={loaded.checks} />
           )}

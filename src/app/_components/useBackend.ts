@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { checkSession, claimSession, forgetSessionKey, kickLocal } from "./singleSession";
 import type { Session } from "@supabase/supabase-js";
 import { createHrApp } from "../../app-core/createHrApp";
@@ -148,6 +148,8 @@ export function useBackend(): Backend {
   useEffect(() => () => { liveRef.current?.dispose(); liveRef.current = null; }, []);
 
   const cache = live?.cache ?? null;
+  // Một kho tệp cho cả phiên (trước đây tạo mới mỗi lần vẽ lại, làm các hàm phụ thuộc đổi liên tục)
+  const fileStore = useMemo(() => client ? createStorageFileStore(client) : null, [client]);
   const subscribe = useCallback((listener: () => void) => cache ? cache.subscribe(listener) : () => undefined, [cache]);
   const getStatus = useCallback(() => cache ? cache.status() : NO_STATUS, [cache]);
   const dataStatus = useSyncExternalStore(subscribe, getStatus, getStatus);
@@ -186,5 +188,5 @@ export function useBackend(): Backend {
   // Chỉ trả app dựng cho đúng người và đúng vai trò hiện tại; trong lúc dựng lại thì hiện "đang tải"
   const ready = readyLive(live, { userId: session.user.id, role: currentRole });
   if (!ready || !currentRole || !ownProfile || ownProfile.role === "pending") return { status: "loading" };
-  return { status: "ready", mode: "live", app: ready.app, actor: { id: session.user.id, role: ownProfile.role, ...(ownProfile.role === "admin" ? {} : { access }) }, setActor: () => undefined, email: session.user.email ?? null, fileStore: createStorageFileStore(client), signOut, dataStatus };
+  return { status: "ready", mode: "live", app: ready.app, actor: { id: session.user.id, role: ownProfile.role, ...(ownProfile.role === "admin" ? {} : { access }) }, setActor: () => undefined, email: session.user.email ?? null, fileStore, signOut, dataStatus };
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { FolderKanban, Plus, Search } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { addDays } from "../../../lib/dates";
@@ -17,6 +17,7 @@ import { ProjectDetail } from "./ProjectDetail";
 import { canCreateProject, defaultJoinDate, defaultLeaveDate, errorMessage, type EmployeeOption, type EmployeeSource } from "./projectShared";
 import "./projects.css";
 import { SiteFields } from "./SiteFields";
+import { SkeletonCards, SkeletonPage } from "../Skeleton";
 
 type Props = {
   store: ProjectStore;
@@ -47,16 +48,16 @@ export function ProjectsPage(props: Props) {
     return () => { active = false; };
   }, [store.mode, projects]);
 
-  const apply = useCallback((result: Awaited<ReturnType<typeof fetchProjectList>>) => { setProjects(result.list); setUsage(result.usage); }, []);
   const fail = useCallback((error: unknown) => { setNotice(errorMessage(error), "error"); setProjects([]); }, [setNotice]);
-  const load = useCallback(async () => { try { apply(await fetchProjectList(store)); } catch (error) { fail(error); } }, [store, apply, fail]);
+  const load = useCallback(async () => { try { setProjects(await store.listProjects()); } catch (error) { fail(error); } }, [store, fail]);
 
+  // Danh sách dự án hiện ngay khi có (một truy vấn); mở /du-an/<id> không phải chờ tính ngân sách của mọi dự án
   useEffect(() => {
     if (!ready) return;
     let active = true;
-    void fetchProjectList(store).then((result) => { if (active) apply(result); }, (error: unknown) => { if (active) fail(error); });
+    void store.listProjects().then((list) => { if (active) setProjects(list); }, (error: unknown) => { if (active) fail(error); });
     return () => { active = false; };
-  }, [ready, store, apply, fail]);
+  }, [ready, store, fail]);
 
   const shown = useMemo(() => {
     const tokens = normalizeText(query).split(/\s+/).filter(Boolean);
@@ -64,12 +65,28 @@ export function ProjectsPage(props: Props) {
       && tokens.every((token) => normalizeText(`${project.code} ${project.name} ${project.customerName} ${project.site}`).includes(token)));
   }, [projects, query, status]);
 
+  // % ngân sách trên thẻ tải sau, chỉ cho thẻ đang hiện và chưa tải (mỗi dự án vài truy vấn); mở /du-an/<id> thì không tải
+  const fetchedUsage = useRef(new Set<string>());
+  const [usageRound, setUsageRound] = useState(0);
+  const usageIds = props.projectId ? "" : shown.filter((project) => project.status !== "archived").map((project) => project.id).join(",");
+  useEffect(() => {
+    if (!usageIds || !projects) return;
+    const wanted = new Set(usageIds.split(",").filter((id) => !fetchedUsage.current.has(id)));
+    if (!wanted.size) return;
+    for (const id of wanted) fetchedUsage.current.add(id);
+    void fetchUsage(store, projects.filter((project) => wanted.has(project.id))).then((value) => setUsage((current) => ({ ...current, ...value })), () => { for (const id of wanted) fetchedUsage.current.delete(id); });
+    // Chỉ chạy khi tập thẻ đang hiện đổi hoặc tải lại
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, usageIds, usageRound]);
+  // Tải lại sau khi sửa / tạo dự án: tính lại ngân sách
+  const reloadAll = useCallback(async () => { fetchedUsage.current.clear(); setUsage({}); await load(); setUsageRound((value) => value + 1); }, [load]);
+
   const current = props.projectId ? projects?.find((project) => project.id === props.projectId) ?? null : null;
   if (props.projectId) {
-    if (!projects) return <div className="loading">Đang tải dự án…</div>;
+    if (!projects) return <SkeletonPage kind="detail" label="Đang tải dự án…" />;
     if (!current) return <section className="pj-page"><div className="panel empty-state"><p>Không tìm thấy dự án, hoặc bạn không có quyền xem dự án này.</p><button type="button" className="button" onClick={() => props.onOpen(null)}>Về danh sách dự án</button></div></section>;
-    return <ProjectDetail key={current.id} {...props} project={current} onBack={() => props.onOpen(null)} onEdit={() => setForm(current)} onChanged={() => void load()}>
-      {form && <ProjectFormModal store={store} employees={props.employees} initial={form === "new" ? null : form} onClose={() => setForm(null)} onSaved={(saved) => { setForm(null); setNotice("Đã lưu dự án.", "success"); void load(); if (form === "new") props.onOpen(saved.id); }} />}
+    return <ProjectDetail key={current.id} {...props} project={current} onBack={() => props.onOpen(null)} onEdit={() => setForm(current)} onChanged={() => void reloadAll()}>
+      {form && <ProjectFormModal store={store} employees={props.employees} initial={form === "new" ? null : form} onClose={() => setForm(null)} onSaved={(saved) => { setForm(null); setNotice("Đã lưu dự án.", "success"); void reloadAll(); if (form === "new") props.onOpen(saved.id); }} />}
     </ProjectDetail>;
   }
 
@@ -88,7 +105,7 @@ export function ProjectsPage(props: Props) {
           {(Object.keys(PROJECT_STATUS_LABELS) as ProjectStatus[]).map((key) => <option key={key} value={key}>{PROJECT_STATUS_LABELS[key]}</option>)}
         </select>
       </div>
-      {!projects ? <div className="loading">Đang tải dự án…</div> : !shown.length ? (
+      {!projects ? <SkeletonCards label="Đang tải dự án…" /> : !shown.length ? (
         <div className="panel empty-state">
           <Search size={28} aria-hidden="true" />
           <p>{projects.length ? "Không có dự án khớp bộ lọc." : canCreateProject(actor) ? "Chưa có dự án nào. Bấm “Tạo dự án” để bắt đầu." : "Bạn chưa được giao dự án nào."}</p>
@@ -118,22 +135,21 @@ export function ProjectsPage(props: Props) {
           })}
         </div>
       )}
-      {form && <ProjectFormModal store={store} employees={props.employees} initial={form === "new" ? null : form} onClose={() => setForm(null)} onSaved={(saved) => { setForm(null); setNotice("Đã tạo dự án.", "success"); void load(); props.onOpen(saved.id); }} />}
+      {form && <ProjectFormModal store={store} employees={props.employees} initial={form === "new" ? null : form} onClose={() => setForm(null)} onSaved={(saved) => { setForm(null); setNotice("Đã tạo dự án.", "success"); void reloadAll(); props.onOpen(saved.id); }} />}
     </section>
   );
 }
 
-/** Danh sách dự án kèm % ngân sách cho thẻ (chỉ dự án người xem được xem tiền: RLS trả rỗng với người khác). */
-async function fetchProjectList(store: ProjectStore) {
-  const list = await store.listProjects();
+/** % ngân sách cho thẻ dự án (chỉ dự án người xem được xem tiền: RLS trả rỗng với người khác). */
+async function fetchUsage(store: ProjectStore, list: readonly Project[]) {
   const today = todayVN(systemClock);
-  const entries = await Promise.all(list.filter((project) => project.status !== "archived").map(async (project) => {
+  const entries = await Promise.all(list.map(async (project) => {
     const [budgets, costs, expenses, subcontracts, payments] = await Promise.all([store.getBudgets(project.id), store.listCosts(project.id, "0001-01-01", "9999-12-31"), store.listExpenses(project.id), store.listSubcontracts(project.id), store.listPayments(project.id)]);
     // Cùng công thức với trang chi tiết (PRJ-09) để số trên thẻ khớp số ở Tổng quan
     const { total } = budgetSummary({ budgets: budgets ?? [], costs: costs ?? [], expenses: expenses ?? [], subcontracts, payments: payments ?? [], today, remainingWorkdays: 0 });
     return [project.id, { used: total.used, budget: total.budget }] as const;
   }));
-  return { list, usage: Object.fromEntries(entries.filter(([, value]) => value.budget > 0)) as Record<string, { used: number; budget: number }> };
+  return Object.fromEntries(entries.filter(([, value]) => value.budget > 0)) as Record<string, { used: number; budget: number }>;
 }
 
 export const formatDateVn = (date: string | null) => date ? `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : "—";

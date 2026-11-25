@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonPage } from "../Skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, FolderCheck, PackageCheck, Pencil, Send, Truck, Warehouse, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
@@ -55,7 +56,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   };
   const ask = (question: string, min = 3) => { const answer = window.prompt(question) ?? ""; return answer.trim().length >= min ? answer.trim() : null; };
 
-  if (order === undefined) return <div className="loading">Đang tải đơn hàng…</div>;
+  if (order === undefined) return <SkeletonPage kind="detail" label="Đang tải đơn hàng…" />;
   if (order === null) return <section className="pj-page"><div className="panel empty-state"><p>Không tìm thấy đơn hàng, hoặc bạn không có quyền xem.</p><button type="button" className="button" onClick={props.onBack}>Về danh sách</button></div></section>;
 
   const project = order.projectId ? props.projects.find((item) => item.id === order.projectId) : null;

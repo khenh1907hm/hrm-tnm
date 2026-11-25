@@ -21,9 +21,11 @@ export function ProcurementNav(props: { store: PurchaseStore; projectId: string;
   const [counts, setCounts] = useState<Counts | null>(null);
   useEffect(() => {
     let active = true;
-    void Promise.all([store.listMaterialRequests(projectId).catch(() => []), store.listOrders().catch(() => [])]).then(async ([requests, all]) => {
+    // Khoản chi đang mở (chờ ký / chờ chi) lấy một lượt cho mọi đơn, thay vì mỗi đơn một truy vấn
+    void Promise.all([store.listMaterialRequests(projectId).catch(() => []), store.listOrders().catch(() => []), store.listPendingPayments().catch(() => [])]).then(([requests, all, pending]) => {
       const orders = all.filter((order) => order.projectId === projectId);
-      const payments = (await Promise.all(orders.map((order) => store.listPayments(order.id).catch(() => [])))).flat();
+      const ids = new Set(orders.map((order) => order.id));
+      const payments = pending.filter((payment) => ids.has(payment.orderId));
       if (!active) return;
       setCounts({
         materials: { open: requests.filter((r) => r.status !== "closed").length, waiting: requests.filter((r) => r.status === "submitted").length },

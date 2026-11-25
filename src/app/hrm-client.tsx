@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonPage, SkeletonShell } from "./_components/Skeleton";
 
 import { TopBarActions } from "./_components/TopBarActions";
 import { ApprovalSettingsPage } from "./_components/ApprovalSettingsPage";
@@ -62,7 +63,7 @@ import type { EmployeeSource } from "./_components/projects/projectShared";
 export default function HrmClient() {
   const backend = useBackend();
   const pathname = usePathname();
-  if (backend.status === "loading") return <div className="loading">Đang tải dữ liệu…</div>;
+  if (backend.status === "loading") return <SkeletonShell />;
   // Kho Skill xem công khai được, không bắt đăng nhập
   if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
   if (backend.status === "pending") return <PendingAccessScreen email={backend.email} onSignOut={() => void backend.signOut()} />;
@@ -228,8 +229,10 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   }, [listInput]);
 
 
+  // Danh sách nhân sự chỉ dùng ở trang Nhân sự và FORM báo cáo: trang khác không tải (trước đây trang nào cũng tải cả danh sách)
+  const needsEmployeeList = view === "employees" || view === "reports";
   useEffect(() => {
-    if (!app) return;
+    if (!app || !needsEmployeeList) return;
     let current = true;
     const key = JSON.stringify(listInput);
     // Một lượt gọi trả cả danh sách lẫn tình trạng chứng chỉ của từng người trên trang
@@ -248,7 +251,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
       setListError(true);
     });
     return () => { current = false; };
-  }, [app, actor, listInput, revision, listAttempt]);
+  }, [app, actor, listInput, revision, listAttempt, needsEmployeeList]);
 
   // Giữ bộ lọc trên URL của màn danh sách (thay mục lịch sử hiện tại, không tạo thêm mục)
   useEffect(() => {
@@ -454,7 +457,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     }
     setSelectedIds((current) => Array.from(new Set([...current, ...ids])));
   };
-  if (!app) return <div className="loading">Đang nạp dữ liệu mẫu…</div>;
+  if (!app) return <SkeletonShell />;
 
   return (
     <div className="app-shell">
@@ -463,7 +466,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {backend.mode === "live" && <TopBarActions email={backend.email} onSignOut={() => void backend.signOut()} onNotice={(message) => setNotice(message, "success")} />}
         {!detail && <SectionTabs actor={actor} view={view} onNavigate={(key) => navigate(key)} />}
         {view === "employees" && !routeEmployeeId && <EmployeeListView actor={actor} rows={rows} pageInfo={pageInfo} loading={loadedListKey !== JSON.stringify(listInput)} error={listError} onRetry={() => setListAttempt((value) => value + 1)} stale={stale} onSelectAllMatching={() => void selectAllMatching()} onExportRoster={() => void exportRoster()} rosterBusy={rosterBusy} certificateHealth={employeeCertificateHealth} employeeProjects={employeeProjects} onOpenProject={openProject} alertCount={certRows.length} signatureCount={signatureRows.length} filters={filters} onFiltersChange={setFilters} certificateTypes={listTypes} selectedIds={selectedIds} onSelectedIdsChange={setSelectedIds} onExportSelected={() => void loadSelectedEmployees().then(setBatchEmployees)} onExportCertificates={() => void loadSelectedEmployees().then(setCertFolderEmployees)} onCreate={openCreate} onImport={() => setShowImport(true)} {...(backend.mode === "live" ? { onImportClaude: () => setShowClaudeImport(true) } : {})} onOpen={openDetail} onRestore={(employee) => void restoreEmployee(employee)} />}
-        {view === "employees" && routeEmployeeId && !detail && <div className="loading">Đang tải hồ sơ…</div>}
+        {view === "employees" && routeEmployeeId && !detail && <SkeletonPage kind="detail" label="Đang tải hồ sơ…" />}
         {detail && <EmployeeDetailView
           app={app}
           actor={actor}
@@ -511,7 +514,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "timesheet" && <TimesheetPage store={projectStore.store} ready={projectStore.ready} actor={actor} setNotice={setNotice} onOpenProject={openProject} />}
         {(view === "purchases" || view === "projectPurchases") && <PurchasesPage key={view} scope={view === "projectPurchases" ? "project" : "office"} store={purchaseStore} projectStore={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} orderId={route.purchaseId ?? null} onOpen={openPurchase} setNotice={setNotice} />}
         {view === "bugReports" && actor.role === "admin" && <BugReportsPage setNotice={setNotice} />}
-        {view === "approvals" && <MyWorkPage live={backend.mode === "live"} actor={actor} store={purchaseStore} certCount={certRows.length} onNavigate={(key) => navigate(key)} onOpenOrder={(id) => openPurchase(id)} setNotice={setNotice} />}
+        {view === "approvals" && <MyWorkPage live={backend.mode === "live"} actor={actor} store={purchaseStore} projectStore={projectStore.ready ? projectStore.store : null} certCount={certRows.length} onNavigate={(key) => navigate(key)} onOpenOrder={(id) => openPurchase(id)} setNotice={setNotice} />}
         {view === "approvalSettings" && actor.role === "admin" && <ApprovalSettingsPage live={backend.mode === "live"} employees={employeeSource} setNotice={setNotice} />}
         {view === "laborRates" && <LaborRatesPage store={projectStore.store} ready={projectStore.ready} employees={employeeSource} setNotice={setNotice} />}
         {view === "accounts" && actor.role === "admin" && <AccountsView employees={employeeSource} actor={actor} mode={backend.mode} setNotice={setNotice} onPreviewActor={setActor} />}

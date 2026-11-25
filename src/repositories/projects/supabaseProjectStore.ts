@@ -78,6 +78,7 @@ const SHEET_COLUMNS = "id, project_id, work_date, team, status, submitted_at, ap
 
 /** Store chế độ thật: đọc ghi qua RLS; gửi, duyệt, từ chối, mở lại, tính lại tiền gọi hàm security definer. */
 export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore {
+  let myEmployee: { userId: string; request: Promise<string | null> } | null = null;
   const rpc = async (name: string, args: Record<string, unknown>) => { const { data, error } = await client.rpc(name, args); if (error) raise(error); return data as unknown; };
 
   /** Tải ảnh rồi gọi check_in / check_out; máy chủ ghi giờ và kiểm tra khoảng cách. */
@@ -193,10 +194,18 @@ export function createSupabaseProjectStore(client: SupabaseClient): ProjectStore
       return data?.signedUrl ?? null;
     },
     async myEmployeeId() {
-      const { data: auth } = await client.auth.getUser();
-      if (!auth.user) return null;
-      const { data } = await client.from("profiles").select("employee_id").eq("id", auth.user.id).maybeSingle();
-      return strOrNull((data as Row | null)?.employee_id);
+      // Phiên đọc trong máy (không gọi máy chủ xác thực); hồ sơ liên kết nhớ theo người dùng, các trang gọi cùng lúc dùng chung một lượt
+      const { data: auth } = await client.auth.getSession();
+      const userId = auth.session?.user.id;
+      if (!userId) return null;
+      if (myEmployee?.userId !== userId) {
+        const request = Promise.resolve(client.from("profiles").select("employee_id").eq("id", userId).maybeSingle()).then(({ data, error }) => {
+          if (error) { myEmployee = null; raise(error); }
+          return strOrNull((data as Row | null)?.employee_id);
+        });
+        myEmployee = { userId, request };
+      }
+      return await myEmployee.request;
     },
 
     async listProjects() {

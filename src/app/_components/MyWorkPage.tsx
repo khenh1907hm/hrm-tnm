@@ -2,8 +2,11 @@
 import { useEffect, useState } from "react";
 import { BellRing, Banknote, FileSignature, Inbox, PackageCheck, type LucideIcon } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
+import type { ProjectStore } from "../../modules/projects/store";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import { ApprovalBoardPage } from "./ApprovalBoardPage";
+import { MyOrdersBoard } from "./purchases/MyOrdersBoard";
+import { SkeletonTiles } from "./Skeleton";
 import { canOpenView } from "./routes";
 import type { PageView } from "./shared";
 import type { Notify } from "./Toast";
@@ -12,9 +15,10 @@ type Tile = { key: string; label: string; hint: string; count: number; icon: Luc
 
 /**
  * "Việc của tôi": trang mở đầu của mọi người. Ô tóm tắt những việc đang chờ người đăng nhập
- * (chứng chỉ cần chú ý, khoản chờ chi, PO cần phát hành, hàng về chờ nhập kho), bên dưới là bảng phiếu cần duyệt.
+ * (chứng chỉ cần chú ý, khoản chờ chi, PO cần phát hành, hàng về chờ nhập kho), bên dưới là bảng phiếu cần duyệt
+ * và bảng tình trạng đơn hàng (đơn của tôi; người xem được mọi đơn chọn "Tất cả").
  */
-export function MyWorkPage(props: { live: boolean; actor: Actor; store: PurchaseStore; certCount: number; onNavigate: (view: PageView) => void; onOpenOrder: (orderId: string) => void; setNotice: Notify }) {
+export function MyWorkPage(props: { live: boolean; actor: Actor; store: PurchaseStore; projectStore: ProjectStore | null; certCount: number; onNavigate: (view: PageView) => void; onOpenOrder: (orderId: string) => void; setNotice: Notify }) {
   const { store } = props;
   const [work, setWork] = useState<{ pay: number; po: number; stock: number; firstStock: string | null } | null>(null);
   useEffect(() => {
@@ -47,6 +51,7 @@ export function MyWorkPage(props: { live: boolean; actor: Actor; store: Purchase
       <div className="page-head">
         <div><h1><Inbox className="ico" size={22} aria-hidden="true" /> Việc của tôi</h1><p>Những việc đang chờ bạn. Bấm một ô để mở.</p></div>
       </div>
+      {!work && <SkeletonTiles />}
       {work && shown.length > 0 && (
         <div className="mywork-tiles">
           {shown.map((tile) => {
@@ -62,6 +67,7 @@ export function MyWorkPage(props: { live: boolean; actor: Actor; store: Purchase
         </div>
       )}
       <ApprovalBoardPage live={props.live} setNotice={props.setNotice} />
+      <MyOrdersBoard store={store} projectStore={props.projectStore} onOpenOrder={props.onOpenOrder} />
     </>
   );
 }

@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, ChevronLeft, ChevronRight, Download, Pencil } from "lucide-react";
 import { addDays } from "../../../lib/dates";
@@ -98,7 +99,7 @@ export function DailySummary({ store, data, viewer, setNotice, refreshKey, reloa
       </div>
       {!isCurrent && <button type="button" className="button dr-today" onClick={() => setAnchor(today)}>Về {kind === "week" ? "tuần" : "tháng"} này</button>}
 
-      {!summary ? <div className="loading">Đang tổng hợp…</div> : (
+      {!summary ? <SkeletonLines label="Đang tổng hợp…" /> : (
         <>
           <div className="dr-kpis">
             <div><span>Ngày có báo cáo</span><b>{summary.reportedDays}<small>/{summary.days.length}</small></b></div>

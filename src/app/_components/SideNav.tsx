@@ -1,5 +1,5 @@
 "use client";
-import { BellRing, ClipboardCheck, FileSpreadsheet, FolderKanban, Inbox, PackageSearch, PanelLeftClose, PanelLeftOpen, Settings, ShoppingCart, Users, type LucideIcon } from "lucide-react";
+import { BellRing, ClipboardCheck, FileSpreadsheet, FolderKanban, Inbox, PanelLeftClose, PanelLeftOpen, Settings, ShoppingCart, Users, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { Actor } from "../../modules/auth/permissions";
@@ -10,7 +10,7 @@ import type { PageView } from "./shared";
 
 /** Biểu tượng từng phần của thanh bên (xem navSections.ts). */
 const SECTION_ICONS: Record<NavSectionKey, LucideIcon> = {
-  inbox: Inbox, people: Users, certs: BellRing, projects: FolderKanban, timesheet: ClipboardCheck, projectPurchases: PackageSearch, purchases: ShoppingCart, docs: FileSpreadsheet, settings: Settings,
+  inbox: Inbox, people: Users, certs: BellRing, projects: FolderKanban, timesheet: ClipboardCheck, purchases: ShoppingCart, docs: FileSpreadsheet, settings: Settings,
 };
 const COLLAPSED_KEY = "tnm.sideNav.collapsed";
 const ROLE_LABELS: Record<Actor["role"], string> = { admin: "Admin", hr: "HR", engineer: "Kỹ sư", employee: "Nhân viên" };

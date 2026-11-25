@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonDetail } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SavedAttachments } from "../purchases/AttachmentsField";
 import { contractFiles, filesAvailable, type Attachment } from "../purchases/purchaseFiles";
@@ -42,7 +43,7 @@ export function ContractTab({ store: projectStore, data, viewer, setNotice }: Ta
     void load().then((items) => { if (active) setList(items); }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setList([]); } });
     return () => { active = false; };
   }, [load, setNotice, attempt]);
-  if (!list) return <div className="loading">Đang tải xác nhận dự án…</div>;
+  if (!list) return <SkeletonDetail label="Đang tải xác nhận dự án…" />;
 
   const current = list.find((item) => item.id === selected) ?? list[0] ?? null;
   const canEdit = viewer.isLead || viewer.canEditProject;

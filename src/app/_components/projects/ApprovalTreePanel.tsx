@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, Crown, GripVertical, Plus, Send, ShieldCheck, Trash2, X } from "lucide-react";
 import type { ProjectMember } from "../../../modules/projects/types";
@@ -58,7 +59,7 @@ export function ApprovalTreePanel(props: { projectId: string; docType: TreeDocTy
     return () => { active = false; };
   }, [projectId, docType]);
   const shell = `panel pj-section${props.embedded ? " ap-embedded" : " ap-aside"}`;
-  if (!saved) return <section className={shell}><div className="loading">Đang tải người duyệt…</div></section>;
+  if (!saved) return <section className={shell}><SkeletonLines label="Đang tải người duyệt…" /></section>;
 
   const participants = participantsOf(props.members, props.today);
   const personName = (id: string) => participants.find((person) => person.id === id)?.name ?? directors.find((item) => item.employeeId === id)?.name ?? company?.names[id] ?? "Người ngoài dự án";

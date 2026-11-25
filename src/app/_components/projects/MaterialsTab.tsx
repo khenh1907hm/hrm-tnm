@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ClipboardList, FilePlus2, Plus, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
@@ -61,7 +62,7 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
   }, [store, openedId, showQuotes, attempt]);
   const quotes = showQuotes ? loadedQuotes.filter((quote) => quote.requestId === openedId) : [];
 
-  if (!list) return <div className="loading">Đang tải phiếu yêu cầu vật tư…</div>;
+  if (!list) return <SkeletonTable rows={4} label="Đang tải phiếu yêu cầu vật tư…" />;
 
   const run = async (action: () => Promise<unknown>, done: string) => {
     setBusy(true);

@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "./Skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { Bug, CheckCircle2, ExternalLink, ImagePlus, RotateCcw } from "lucide-react";
 import { dispatchNotificationEmails } from "../../lib/approvalEmailDispatch";
@@ -111,7 +112,7 @@ export function BugReportsPage(props: { setNotice: Notify }) {
         <button type="button" role="tab" aria-selected={filter === "done"} onClick={() => setFilter("done")}>Đã xử lý</button>
         <button type="button" role="tab" aria-selected={filter === "all"} onClick={() => setFilter("all")}>Tất cả</button>
       </div>
-      {!items ? <div className="loading">Đang tải…</div> : !shown.length ? <div className="panel empty-state"><p>Không có báo lỗi nào.</p></div> : (
+      {!items ? <SkeletonTable rows={5} /> : !shown.length ? <div className="panel empty-state"><p>Không có báo lỗi nào.</p></div> : (
         <div className="bug-list">
           {shown.map((item) => (
             <article key={item.id} className={`panel bug-item ${item.status}`}>

@@ -1,5 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { invalidatePurchaseCache } from "./purchases/usePurchaseStore";
+import { SkeletonBoard } from "./Skeleton";
 import { Check, ClipboardSignature, Crown, ExternalLink, GripVertical, RefreshCw, Undo2 } from "lucide-react";
 import { systemClock, todayVN } from "../../lib/clock";
 import { normalizeText } from "../../lib/text";
@@ -84,7 +86,7 @@ export function ApprovalBoardPage(props: { live: boolean; setNotice: Notify }) {
           {Object.entries(DOC_TYPE_LABELS).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
         </select>
       </div>
-      {!cards ? <div className="loading">Đang tải phiếu…</div> : (
+      {!cards ? <SkeletonBoard columns={4} label="Đang tải phiếu…" /> : (
         <div className="ab-board">
           {COLUMNS.map((column) => {
             const list = shown.filter((card) => card.column === column.key);
@@ -159,6 +161,8 @@ function SignDialog(props: { pending: Pending; onClose: () => void; onDone: (mes
     try {
       if (action === "director") await directorApprove(card.docType, card.docId, note.trim());
       else await signStep(card.stepId!, action === "approve", note.trim());
+      // Phiếu vừa ký có thể đổi tình trạng đơn hàng: bỏ dữ liệu đơn nhớ tạm
+      invalidatePurchaseCache();
       props.onDone(action === "return" ? "Đã trả về người lập." : action === "director" ? "Giám đốc đã duyệt phiếu." : "Đã ký. Người kế tiếp đã nhận thông báo.");
     } catch (error) { props.setNotice(errorMessage(error), "error"); setBusy(false); }
   };

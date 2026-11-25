@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { addDays } from "../../../lib/dates";
@@ -79,7 +80,7 @@ export function TimesheetOverview(props: { store: ProjectStore; projects: Projec
         {date !== props.today && <button type="button" className="link-button" onClick={() => setDate(props.today)}>Về hôm nay</button>}
       </div>
 
-      {!days ? <div className="loading">Đang tải chấm công…</div> : !projects.length ? <div className="panel empty-state"><p>Không có dự án nào đang thi công.</p></div> : <>
+      {!days ? <SkeletonTable rows={6} cols={7} label="Đang tải chấm công…" /> : !projects.length ? <div className="panel empty-state"><p>Không có dự án nào đang thi công.</p></div> : <>
         <div className="pj-kpis">
           <div className="pj-kpi"><span>Đang thi công</span><b>{projects.length} dự án</b><small>{rows.length} người trong dự án</small></div>
           <div className="pj-kpi"><span>Có mặt</span><b>{count("present")}</b><small>Theo phiếu đã gửi hoặc đã duyệt</small></div>

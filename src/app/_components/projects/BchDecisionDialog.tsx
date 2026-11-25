@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, FileDown, FileSpreadsheet, Plus, Trash2, X } from "lucide-react";
 import { isLink } from "../../../lib/mapsLink";
@@ -117,7 +118,7 @@ export function BchDecisionDialog(props: { store: ProjectStore; project: Project
           <label className="field"><span>Giám đốc ký</span><input value={directorName} placeholder="Để trống = dòng chấm" onChange={(event) => setDirectorName(event.target.value)} /></label>
           <div style={{ gridColumn: "1 / -1" }}>
             <b>Thành viên Ban chỉ huy</b> <small className="muted">Chỉ lấy người trên sơ đồ tổ chức (bỏ Giám đốc, còn lại chọn sẵn hết), chức vụ tiếng Việt và số điện thoại theo sơ đồ. Ô viền đỏ là còn trống, điền tay rồi tải.</small>
-            {!rows ? <div className="loading">Đang tải thành viên…</div> : (
+            {!rows ? <SkeletonLines label="Đang tải thành viên…" /> : (
               <div className="table-scroll">
                 <table className="pj-table bch-table">
                   <thead><tr><th /><th>Họ và tên</th><th>Chức vụ</th><th>Số điện thoại</th><th /></tr></thead>

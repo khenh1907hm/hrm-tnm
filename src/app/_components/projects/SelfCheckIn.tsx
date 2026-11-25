@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Building2, Camera, Check, CheckCircle2, Clock3, Coffee, FolderX, Loader2, LogIn, LogOut, MapPin, RefreshCw, ShieldCheck, X } from "lucide-react";
 import "./checkin.css";
@@ -85,7 +86,7 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
     finally { setBusy(null); }
   };
 
-  if (!contexts) return <div className="loading">Đang tải…</div>;
+  if (!contexts) return <SkeletonLines label="Đang tải…" />;
 
   return (
     <div className="ci-wrap">

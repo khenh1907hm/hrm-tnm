@@ -6,15 +6,15 @@ import type { PageView } from "./shared";
  * Thanh bên gọn (phương án A): mỗi mục là một "phần", có thể gồm nhiều màn hình hiện thành tab ở đầu trang.
  * Người xem chỉ thấy phần có ít nhất một màn hình họ mở được; bấm phần là mở màn hình đầu tiên họ được vào.
  */
-export type NavSectionKey = "inbox" | "people" | "certs" | "projects" | "timesheet" | "projectPurchases" | "purchases" | "docs" | "settings";
+export type NavSectionKey = "inbox" | "people" | "certs" | "projects" | "timesheet" | "purchases" | "docs" | "settings";
 export type NavSection = { key: NavSectionKey; label: string; group: string; views: readonly PageView[] };
 export const NAV_SECTIONS: readonly NavSection[] = [
   { key: "inbox", label: "Việc của tôi", group: "", views: ["approvals"] },
   { key: "people", label: "Nhân sự", group: "Nhân sự", views: ["employees", "signatures"] },
   { key: "certs", label: "Chứng chỉ hết hạn", group: "Nhân sự", views: ["alerts"] },
-  { key: "projects", label: "Dự án", group: "Dự án", views: ["projects"] },
+  // Đặt hàng dự án là một tab trong phần Dự án
+  { key: "projects", label: "Dự án", group: "Dự án", views: ["projects", "projectPurchases"] },
   { key: "timesheet", label: "Chấm công", group: "Dự án", views: ["timesheet"] },
-  { key: "projectPurchases", label: "Đặt hàng dự án", group: "Dự án", views: ["projectPurchases"] },
   { key: "purchases", label: "Văn phòng", group: "Mua hàng", views: ["purchases"] },
   { key: "docs", label: "Tài liệu", group: "Khác", views: ["reports", "skills", "tools"] },
   { key: "settings", label: "Cài đặt", group: "Khác", views: ["accounts", "approvalSettings", "certTypes", "settings", "laborRates", "audit", "bugReports"] },
@@ -22,6 +22,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
 /** Tên tab của từng màn hình trong phần nhiều màn hình. */
 export const TAB_LABELS: Partial<Record<PageView, string>> = {
   employees: "Danh sách nhân sự", signatures: "Thư viện chữ ký",
+  projects: "Danh sách dự án", projectPurchases: "Đặt hàng dự án",
   reports: "FORM báo cáo (Excel)", skills: "Kho Skill AI", tools: "Công cụ",
   accounts: "Tài khoản & phân quyền", approvalSettings: "Quy trình duyệt", certTypes: "Loại chứng chỉ", settings: "Email nhắc hạn",
   laborRates: "Đơn giá & lịch làm việc", audit: "Nhật ký thay đổi", bugReports: "Báo lỗi",

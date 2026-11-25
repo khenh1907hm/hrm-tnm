@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, FileText, Send, X } from "lucide-react";
 import { addMonths } from "../../../lib/dates";
@@ -59,7 +60,7 @@ export function AttendanceMonthView(props: { store: ProjectStore; holidays: Holi
         <div><b>{formatHours(calendar.summary.regular)}</b><small>giờ thường</small></div>
         <div><b>{formatHours(calendar.summary.ot)}</b><small>giờ tăng ca</small></div>
       </div>
-      {!records ? <div className="loading">Đang tải…</div> : (
+      {!records ? <SkeletonTable rows={5} cols={7} /> : (
         <div className="mv-grid" role="grid" aria-label={`Lịch tháng ${monthNumber}/${year}`}>
           {WEEKDAYS.map((label) => <span key={label} className="mv-weekday" role="columnheader">{label}</span>)}
           {calendar.days.map((day) => {

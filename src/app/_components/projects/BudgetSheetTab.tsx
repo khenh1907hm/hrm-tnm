@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonTable } from "../Skeleton";
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { FilePlus2, FileUp, Save, Send, Trash2 } from "lucide-react";
 import type { ProjectContract } from "../../../modules/purchases/contract";
@@ -58,7 +59,7 @@ export function BudgetSheetTab({ store: projectStore, data, viewer, setNotice, r
   const dirty = Boolean(draft && current && draft.id === current.id);
   const refresh = () => { setDraft(null); setAttempt((value) => value + 1); };
 
-  if (!sheets) return <div className="loading">Đang tải ngân sách…</div>;
+  if (!sheets) return <SkeletonTable rows={6} cols={6} label="Đang tải ngân sách…" />;
 
   const setHeader = (patch: Partial<BudgetSheetHeader>) => working && setDraft({ ...working, header: { ...working.header, ...patch } });
   const setLine = (code: string, patch: Partial<BudgetLine>) => {

@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useEffect, useState } from "react";
 import { Paperclip, Trash2, Upload } from "lucide-react";
 import type { Notify } from "../Toast";
@@ -85,7 +86,7 @@ export function SavedAttachments(props: { parentId: string; api: AttachmentApi; 
     void api.list(parentId).then((list) => { if (active) { setItems(list); onChanged?.(list, parentId); } }, () => { if (active) setItems([]); });
     return () => { active = false; };
   }, [parentId, api, attempt, onChanged]);
-  if (!items) return <div className="loading">Đang tải tệp…</div>;
+  if (!items) return <SkeletonLines label="Đang tải tệp…" />;
   return <AttachmentsField existing={items} parentId={parentId} api={api} kinds={props.kinds} editable={props.editable} requireSigned={props.requireSigned} onChanged={() => setAttempt((value) => value + 1)} setNotice={props.setNotice} />;
 }
 

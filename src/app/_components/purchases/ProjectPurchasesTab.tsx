@@ -9,6 +9,7 @@ import { purchasePath } from "../routes";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { PurchaseList } from "./PurchasesPage";
 import { getPurchaseStore } from "./usePurchaseStore";
+import { SkeletonTable } from "../Skeleton";
 import "./purchases.css";
 
 const open = (orderId: string) => window.history.pushState(null, "", purchasePath(orderId));
@@ -40,7 +41,7 @@ export function ProjectPurchasesTab({ store, data, setNotice, view }: TabProps &
       {orders && <small className="muted">{view === "draft"
         ? `${active.length} đơn nháp / chờ ký, dự kiến ${formatVnd(active.reduce((sum, order) => sum + order.totalEstimate, 0))}. Gửi ký xong, Lãnh đạo duyệt thì đơn chuyển sang tab Purchase Order.`
         : `${active.length} đơn đang xử lý, ${formatVnd(active.reduce((sum, order) => sum + (order.totalActual ?? order.totalEstimate), 0))}. Phát hành PO, nhận hàng, đề nghị thanh toán ở từng đơn. Khi hoàn tất, tiền thực nhận ghi vào chi phí vật tư.`}</small>}
-      {!orders ? <div className="loading">Đang tải…</div> : <PurchaseList orders={shown} projects={[data.project]} pending={pending} onOpen={open} hideProject />}
+      {!orders ? <SkeletonTable rows={4} cols={5} /> : <PurchaseList orders={shown} projects={[data.project]} pending={pending} onOpen={open} hideProject />}
       {creating && <PurchaseFormModal store={purchases} projects={[data.project]} initial={null} defaultProjectId={data.project.id} lockProject onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi ký duyệt.` : `Đã lưu nháp ${order.code}.`, "success"); open(order.id); }} />}
     </section>
   );

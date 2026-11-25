@@ -1,4 +1,5 @@
 "use client";
+import { SkeletonLines } from "../Skeleton";
 import { useEffect, useMemo, useState } from "react";
 import type { CostCode } from "../../../modules/purchases/budget";
 import { getPurchaseStore } from "../purchases/usePurchaseStore";
@@ -15,6 +16,6 @@ export function ExplanatoryTab({ store: projectStore, data, viewer, setNotice, r
     void store.costCodes().then((list) => { if (active) setCodes(list); }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setCodes([]); } });
     return () => { active = false; };
   }, [store, setNotice]);
-  if (!codes) return <div className="loading">Đang tải…</div>;
+  if (!codes) return <SkeletonLines label="Đang tải…" />;
   return <ExplanatoryPanel store={store} project={data.project} codes={codes} canEdit={viewer.isLead || viewer.canEditProject || viewer.isPm} setNotice={setNotice} onApproved={() => void reload()} />;
 }

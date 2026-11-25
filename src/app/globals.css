@@ -641,3 +641,36 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .ab-title{font-size:18px;margin:0}
 .rq-attachments{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}.rq-thumb{width:56px;height:56px;padding:0;border:1px solid var(--line);border-radius:6px;background:var(--soft);overflow:hidden;display:grid;place-items:center;font-size:10px;line-height:1.2;color:var(--muted);text-align:center;cursor:zoom-in}.rq-thumb img{width:100%;height:100%;object-fit:cover;display:block}.rq-thumb-empty{cursor:default}
 .rq-zoom{align-items:center;cursor:zoom-out}.rq-zoom figure{position:relative;margin:0;background:#fff;border-radius:10px;padding:10px;max-width:min(92vw,1100px);cursor:default}.rq-zoom figure img{display:block;max-width:100%;max-height:80vh;border-radius:6px;margin:0 auto}.rq-zoom figcaption{margin-top:6px;font-size:13px;color:var(--muted);text-align:center}.rq-zoom .close{position:absolute;top:-14px;right:-14px;width:32px;height:32px;border-radius:50%;border:1px solid var(--line);background:#fff;display:grid;place-items:center;color:var(--ink)}
+
+/* Skeleton: khung xương lúc tải (Skeleton.tsx) */
+@keyframes sk-shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.sk-bone{display:block;flex-shrink:0;background:linear-gradient(90deg,#e8edf3 0%,#f4f7fa 40%,#e8edf3 80%);background-size:200% 100%;animation:sk-shimmer 1.3s ease-in-out infinite}
+.sk-wrap{display:block}
+.sk-row{display:flex;align-items:center;gap:10px}
+.sk-stack{display:flex;flex-direction:column;gap:8px}
+.sk-lines{display:flex;flex-direction:column;gap:10px;padding:16px 0}
+.sk-toolbar{margin-bottom:16px}
+.sk-card{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:16px}
+.sk-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.sk-table{overflow:hidden}
+.sk-tr{display:grid;gap:16px;padding:14px 16px;border-bottom:1px solid var(--line);align-items:center}
+.sk-tr:last-child{border-bottom:0}
+.sk-th{background:var(--table-head)}
+.sk-board{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(220px,1fr);gap:12px;overflow-x:auto;padding-bottom:6px}
+.sk-col{display:flex;flex-direction:column;gap:10px;background:var(--soft);border-radius:var(--radius-card);padding:12px}
+.sk-col .sk-row{justify-content:space-between}
+.sk-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;margin-bottom:22px}
+.sk-tile{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-card);padding:14px 16px}
+.sk-tile .sk-stack{flex:1}
+.sk-detail{display:flex;flex-direction:column;gap:14px}
+.sk-tabs{display:flex;gap:6px;flex-wrap:wrap}
+.sk-tabs:empty{display:none}
+.sk-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.sk-block{gap:12px}
+.sk-side{gap:26px}
+.sk-side .sk-bone{background:linear-gradient(90deg,rgba(255,255,255,.08) 0%,rgba(255,255,255,.16) 40%,rgba(255,255,255,.08) 80%);background-size:200% 100%}
+.mywork-board{margin-top:26px}
+.mywork-board h2{display:flex;align-items:center;gap:8px;font-size:17px;margin:0}
+.mywork-board-filters{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mywork-board-filters select{background:#fff;border:1px solid var(--line);border-radius:6px;padding:7px 10px}
+@media (prefers-reduced-motion:reduce){.sk-bone{animation:none}}
