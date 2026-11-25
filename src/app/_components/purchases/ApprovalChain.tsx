@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Check, ClipboardSignature, Crown, Undo2 } from "lucide-react";
 import { directorApprove, myAccount } from "../accountApi";
 import { systemClock, todayVN } from "../../../lib/clock";
-import { DOC_TYPE_LABELS, isOverdue, ROLE_LABELS, stepTitle, type ApprovalDocType, type ApprovalStep } from "../../../modules/purchases/approval";
+import { DOC_TYPE_LABELS, isOverdue, ROLE_LABELS, signerLabel, stepTitle, type ApprovalDocType, type ApprovalStep } from "../../../modules/purchases/approval";
 import { formatVnd } from "../../../modules/projects/cost";
 import { DOC_PROJECT_TAB, type PendingApproval, type PurchaseStore } from "../../../modules/purchases/store";
 import type { Notify } from "../Toast";
@@ -69,7 +69,7 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
               <div className="ap-body">
                 <b>{stepTitle(step.role, step.assigneeName)}</b>
                 <small className={late ? "warn-text" : "muted"}>Mục tiêu {dmy(step.targetDate)}{late ? " · quá hạn" : ""}</small>
-                {step.signerName && <small>{step.signerName}{step.actedAt ? ` · ${new Date(step.actedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}</small>}
+                {step.signerName && <small>{signerLabel(step.signerName)}{step.actedAt ? ` · ${new Date(step.actedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : ""}</small>}
                 {step.note && <small className="muted">“{step.note}”</small>}
               </div>
               <span className={`pill ${tone}`}>{label}</span>

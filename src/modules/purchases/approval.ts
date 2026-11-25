@@ -129,3 +129,16 @@ export const isDecided = (steps: readonly ApprovalStep[]) => steps.some((step) =
 
 /** Quá hạn: bước đang chờ đã qua ngày mục tiêu. */
 export const isOverdue = (step: ApprovalStep, today: string) => step.result === "pending" && step.targetDate < today;
+
+/**
+ * Tên người ký để hiện / in lên biểu mẫu. Tài khoản chưa có họ tên thì máy chủ lưu email:
+ * admin@… in là "Admin", email khác in phần trước @.
+ */
+export function signerLabel(name: string | null | undefined): string {
+  const text = (name ?? "").trim();
+  if (!text.includes("@")) return text;
+  return text.split(", ").map((part) => {
+    const local = part.trim().split("@")[0] ?? "";
+    return local.toLowerCase() === "admin" ? "Admin" : local;
+  }).join(", ");
+}

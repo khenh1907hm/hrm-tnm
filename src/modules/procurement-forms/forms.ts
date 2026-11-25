@@ -4,7 +4,7 @@
  * P-COST-08 dựng mẫu mới (file .xls gốc có virus macro, không dùng lại).
  */
 import ExcelJS from "exceljs";
-import type { ApprovalRole, ApprovalStep } from "../purchases/approval";
+import { signerLabel, type ApprovalRole, type ApprovalStep } from "../purchases/approval";
 import { costCodeLabel, sheetTotals, type BudgetSheet, type CostCode } from "../purchases/budget";
 import type { ContractDraft, ProjectContract } from "../purchases/contract";
 import { lineD, lineE, type ExplanatoryReport } from "../purchases/explanatory";
@@ -86,11 +86,12 @@ function putDate(sheet: ExcelJS.Worksheet, address: string, iso: string | null |
 function merge(sheet: ExcelJS.Worksheet, range: string) {
   try { sheet.mergeCells(range); } catch { /* đã gộp sẵn trong mẫu */ }
 }
-const signText = (step: SignStep | undefined) => {
+/** Chữ trong ô ký: tên người duyệt; mẫu không có ô ngày riêng bên dưới thì thêm dòng thời gian duyệt. */
+const signText = (step: SignStep | undefined, withTime = true) => {
   if (!step) return "";
-  // Tên người duyệt, dòng dưới là thời gian duyệt
-  if (step.result === "signed") return `${step.signerName || "Đã ký"}\n${vnDateTime(step.actedAt)}`.trim();
-  if (step.result === "returned") return `${step.signerName}\n(trả về)`;
+  const name = signerLabel(step.signerName);
+  if (step.result === "signed") return withTime ? `${name || "Đã ký"}\n${vnDateTime(step.actedAt)}`.trim() : name || "Đã ký";
+  if (step.result === "returned") return `${name}\n(trả về)`;
   if (step.result === "skipped") return "";
   return "";
 };
@@ -112,7 +113,8 @@ function signBox(sheet: ExcelJS.Worksheet, steps: readonly SignStep[], boxes: re
   for (const [role, nameCell, dateCell] of boxes) {
     const step = stepOf(steps, role);
     const cell = sheet.getCell(nameCell);
-    cell.value = signText(step) || null;
+    // Có ô ngày bên dưới thì ô tên chỉ ghi tên (không lặp lại ngày giờ)
+    cell.value = signText(step, !dateCell) || null;
     cell.alignment = { ...cell.alignment, wrapText: true, vertical: "middle", horizontal: "center" };
     cell.font = { ...cell.font, size: 8 };
     if (dateCell) putDate(sheet, dateCell, step?.result === "signed" ? vnDay(step.actedAt) : null);
@@ -436,7 +438,7 @@ export async function fillContract(template: ArrayBuffer | Uint8Array, input: Co
     merge(ws, `${col}6:${String.fromCharCode(col.charCodeAt(0) + 1)}9`);
     const step = stepOf(input.steps, role);
     const name = ws.getCell(`${col}6`);
-    name.value = step?.result === "signed" ? step.signerName || "Đã ký" : step?.result === "returned" ? `${step.signerName}\n(trả về)` : null;
+    name.value = step?.result === "signed" || step?.result === "returned" ? signText(step, false) : null;
     name.alignment = { ...name.alignment, wrapText: true, vertical: "middle", horizontal: "center" };
     name.font = { ...name.font, size: 8 };
     const time = ws.getCell(`${col}10`);
@@ -521,7 +523,7 @@ export async function buildMaterialRequest(input: MaterialFormInput): Promise<Ui
     ws.getCell(`${col}${row}`).font = { bold: true };
     ws.getCell(`${col}${row}`).alignment = { horizontal: "center" };
     const sign = ws.getCell(`${col}${row + 1}`);
-    sign.value = step === "requester" ? `${request.requesterName}\n${dmy(request.requestedOn)}` : step?.result === "signed" ? `${step.signerName}\n${vnDateTime(step.actedAt)}` : null;
+    sign.value = step === "requester" ? `${request.requesterName}\n${dmy(request.requestedOn)}` : step?.result === "signed" ? signText(step) : null;
     sign.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     sign.font = { size: 9 };
   }
