@@ -1,12 +1,16 @@
 "use client";
 import { SkeletonTable } from "../Skeleton";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ClipboardList, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { AsideSlotContext } from "./asideSlot";
+import { OrderMiniPath } from "../purchases/OrderProgress";
+import type { PurchaseOrder } from "../../../modules/purchases/types";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { ArrowLeft, Check, ClipboardList, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { CostCode } from "../../../modules/purchases/budget";
 import {
-  MATERIAL_STATUS_LABELS, MIN_TWO_QUOTES_FROM, cheapestByItem, materialIssue, needsSecondQuote, quoteTotal, quotedCount,
+  MATERIAL_STATUS_LABELS, MIN_TWO_QUOTES_FROM, materialCurrentLabel, materialProgress, type MaterialStage, cheapestByItem, materialIssue, needsSecondQuote, quoteTotal, quotedCount,
   type MaterialItem, type MaterialQuote, type MaterialQuoteDraft, type MaterialRequest, type MaterialRequestDraft,
 } from "../../../modules/purchases/materials";
 import { ApprovalChain } from "../purchases/ApprovalChain";
@@ -57,13 +61,23 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
   const [attempt, setAttempt] = useState(0);
   const [importing, setImporting] = useState(false);
   const [importNotes, setImportNotes] = useState<string[]>([]);
+  // Đơn hàng lập từ các phiếu và số báo giá của từng phiếu (để hiện tiến độ ở danh sách)
+  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [quoteCounts, setQuoteCounts] = useState<Record<string, number>>({});
+  const asideSlot = useContext(AsideSlotContext);
   const projectId = scope.projectId;
-  const load = useCallback(() => Promise.all([store.listMaterialRequests(projectId), store.costCodes(), store.departments().catch(() => [])]), [store, projectId]);
+  const load = useCallback(async () => {
+    const [items, catalog, members, allOrders] = await Promise.all([store.listMaterialRequests(projectId), store.costCodes(), store.departments().catch(() => []), store.listOrders().catch(() => [] as PurchaseOrder[])]);
+    const quoted = items.filter((item) => item.status === "approved" || item.status === "ordered" || item.status === "closed");
+    const counts: Record<string, number> = Object.fromEntries(await Promise.all(quoted.map(async (item) => [item.id, (await store.listQuotes(item.id).catch(() => [])).length] as const)));
+    const ids = new Set(items.flatMap((item) => item.orderIds));
+    return { items, catalog, members, linked: allOrders.filter((order) => ids.has(order.id)), counts };
+  }, [store, projectId]);
   useEffect(() => {
     let active = true;
-    void load().then(([items, catalog, members]) => {
+    void load().then(({ items, catalog, members, linked, counts }) => {
       if (!active) return;
-      setList(items); setCodes(catalog);
+      setList(items); setCodes(catalog); setOrders(linked); setQuoteCounts(counts);
       const me = myEmployeeId;
       setCanQuote(isAdmin || isLead || (store.mode === "demo") || members.some((member) => member.employeeId === me && (member.department === "material" || member.department === "technical")));
     }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setList([]); } });
@@ -116,10 +130,22 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
   };
   const setItem = (index: number, patch: Partial<MaterialItem>) => editing && setEditing({ ...editing, items: editing.items.map((item, i) => i === index ? { ...item, ...patch } : item) });
   const project = { code: scope.code, name: scope.name, site: scope.site };
+  const ordersOf = (request: MaterialRequest) => orders.filter((order) => request.orderIds.includes(order.id));
+  const progressOf = (request: MaterialRequest) => materialProgress(request, request.id === openedId && showQuotes ? quotes.length : quoteCounts[request.id] ?? 0, ordersOf(request));
+  const codeName = (code: string | null) => code ? `${code} ${codes.find((item) => item.code === code)?.name ?? ""}`.trim() : "Chưa có hạng mục";
+  /** Vật tư theo hạng mục (mã ngân sách); văn phòng không chia hạng mục. */
+  const groupsOf = (request: MaterialRequest) => office ? [{ code: null as string | null, items: request.items }]
+    : [...new Set(request.items.map((item) => item.budgetCode))].sort((a, b) => (a ?? "~").localeCompare(b ?? "~", "vi", { numeric: true }))
+      .map((code) => ({ code, items: request.items.filter((item) => item.budgetCode === code) }));
+  const openRequest = (id: string | null) => { setOpenId(id); setQuoteDraft(null); setCodeDraft(null); setCreated([]); };
+  // Chuỗi ký của phiếu đang mở: ở tab dự án nằm khung bên phải, trên Người duyệt
+  const chain = opened && opened.status !== "draft"
+    ? <ApprovalChain store={store} docType="material" docId={opened.id} refreshKey={attempt} title={`Chuỗi ký ${opened.number}`} compact={Boolean(asideSlot)} onChanged={() => setAttempt((value) => value + 1)} setNotice={setNotice} />
+    : null;
 
   return (
     <div className="pj-page">
-      <section className="panel pj-section">
+      {!opened && <section className="panel pj-section">
         <div className="pj-section-head">
           <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Yêu cầu vật tư <small className="muted">(P-COST-08)</small></h2>
           {!editing && <div className="button-row">
@@ -174,29 +200,39 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
 
         {!list.length && !editing ? <p className="muted">Chưa có phiếu yêu cầu vật tư nào.</p> : list.length > 0 && (
           <div className="table-scroll">
-            <table className="pj-table">
-              <thead><tr><th>Số phiếu</th><th>Ngày</th><th>Người yêu cầu</th><th>Vật tư</th><th>Trạng thái</th><th /></tr></thead>
-              <tbody>{list.map((request) => (
-                <tr key={request.id} className={request.id === openId ? "row-selected" : undefined}>
-                  <td><b>{request.number}</b></td>
-                  <td>{dmy(request.requestedOn)}</td>
-                  <td>{request.requesterName || "—"}</td>
-                  <td>{request.items.slice(0, 2).map((item) => item.name).join(", ")}{request.items.length > 2 ? ` và ${request.items.length - 2} dòng khác` : ""}</td>
-                  <td><span className={`pill ${TONE[request.status]}`}>{MATERIAL_STATUS_LABELS[request.status]}</span>{request.orderIds.length > 0 && <><br /><small className="muted">{request.orderIds.length} đơn hàng</small></>}</td>
-                  <td className="button-row">
-                    <button type="button" className="button" onClick={() => { setOpenId(openId === request.id ? null : request.id); setQuoteDraft(null); setCodeDraft(null); setCreated([]); }}>{openId === request.id ? "Thu gọn" : "Xem"}</button>
-                    {(request.status === "draft" || request.status === "rejected") && <button type="button" className="button" onClick={() => { setEditing({ id: request.id, projectId, requestedOn: request.requestedOn, note: request.note, items: request.items }); setOpenId(null); }}>Sửa</button>}
-                    {request.status === "draft" && <button type="button" className="button danger" aria-label="Xóa" onClick={() => { if (window.confirm(`Xóa ${request.number}?`)) void run(() => store.deleteMaterialRequest(request.id), "Đã xóa phiếu nháp."); }}><Trash2 className="ico" size={15} aria-hidden="true" /></button>}
-                  </td>
-                </tr>
-              ))}</tbody>
+            <table className="pj-table mr-list">
+              <thead><tr><th>Số phiếu</th><th>Người yêu cầu</th><th>Vật tư</th><th className="pj-num">Báo giá</th><th className="pj-num">Đơn hàng</th><th>Tiến độ</th><th /></tr></thead>
+              <tbody>{list.map((request) => {
+                const groups = office ? 0 : new Set(request.items.map((item) => item.budgetCode ?? "")).size;
+                return (
+                  <tr key={request.id} className="mr-row" onClick={() => openRequest(request.id)}>
+                    <td><button type="button" className="link-button" onClick={(event) => { event.stopPropagation(); openRequest(request.id); }}><b>{request.number}</b></button><br /><small className="muted">{dmy(request.requestedOn)}</small></td>
+                    <td>{request.requesterName || "—"}</td>
+                    <td>{request.items.slice(0, 2).map((item) => item.name).join(", ")}{request.items.length > 2 ? ` và ${request.items.length - 2} dòng khác` : ""}<br />
+                      <small className="muted">{request.items.length} dòng{groups ? ` · ${groups} hạng mục` : ""}</small></td>
+                    <td className="pj-num">{quoteCounts[request.id] ?? 0}</td>
+                    <td className="pj-num">{request.orderIds.length}</td>
+                    <td><MaterialMiniPath stages={progressOf(request)} /></td>
+                    <td className="button-row" onClick={(event) => event.stopPropagation()}>
+                      {(request.status === "draft" || request.status === "rejected") && <button type="button" className="button" onClick={() => { setEditing({ id: request.id, projectId, requestedOn: request.requestedOn, note: request.note, items: request.items }); setOpenId(null); }}>Sửa</button>}
+                      {request.status === "draft" && <button type="button" className="button danger" aria-label="Xóa" onClick={() => { if (window.confirm(`Xóa ${request.number}?`)) void run(() => store.deleteMaterialRequest(request.id), "Đã xóa phiếu nháp."); }}><Trash2 className="ico" size={15} aria-hidden="true" /></button>}
+                    </td>
+                  </tr>
+                );
+              })}</tbody>
             </table>
           </div>
         )}
-      </section>
+      </section>}
 
+      {opened && <>
+        <button type="button" className="back-button" onClick={() => openRequest(null)}><ArrowLeft className="ico" size={16} aria-hidden="true" /> Danh sách yêu cầu vật tư</button>
+        <section className="panel pj-section" aria-label="Tiến độ phiếu">
+          <MaterialProgressBar stages={progressOf(opened)} />
+        </section>
+      </>}
       {opened && (
-        <section className="panel pj-section" aria-labelledby="mr-open-title">
+        <section className="panel pj-section" aria-labelledby="mr-open-title" id="mr-sec-items">
           <div className="pj-section-head">
             <h2 id="mr-open-title">{opened.number} <span className={`pill ${TONE[opened.status]}`}>{MATERIAL_STATUS_LABELS[opened.status]}</span></h2>
             <div className="button-row">
@@ -211,7 +247,9 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
           <div className="table-scroll">
             <table className="pj-table">
               <thead><tr><th>STT</th><th>Tên vật tư</th><th>Thông số</th><th>NSX</th><th>ĐVT</th><th className="pj-num">SL</th><th>Cần ngày</th>{!office && <th>Mã NS</th>}<th>Ghi chú</th></tr></thead>
-              <tbody>{opened.items.map((item, index) => (
+              {groupsOf(opened).map((group) => <tbody key={group.code ?? "-"}>
+                {!office && <tr className="mr-group"><td colSpan={9}><b>{codeName(group.code)}</b> <small className="muted">· {group.items.length} dòng</small></td></tr>}
+                {group.items.map((item) => { const index = opened.items.indexOf(item); return (
                 <tr key={item.id}>
                   <td>{index + 1}</td><td>{item.name}</td><td>{item.spec}</td><td>{item.maker}</td><td>{item.unit}</td>
                   <td className="pj-num">{item.quantity.toLocaleString("vi-VN")}</td><td>{dmy(item.neededOn)}</td>
@@ -220,7 +258,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
                     : item.budgetCode ?? <span className="warn-text">chưa có</span>}</td>}
                   <td>{item.note}</td>
                 </tr>
-              ))}</tbody>
+              ); })}</tbody>)}
             </table>
           </div>
           {!office && canQuote && opened.status !== "submitted" && opened.status !== "closed" && (
@@ -233,10 +271,10 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
           )}
         </section>
       )}
-      {opened && opened.status !== "draft" && <ApprovalChain store={store} docType="material" docId={opened.id} refreshKey={attempt} title={`Chuỗi ký ${opened.number}`} onChanged={() => setAttempt((value) => value + 1)} setNotice={setNotice} />}
+      {chain && (asideSlot ? createPortal(chain, asideSlot) : chain)}
 
       {opened && showQuotes && (
-        <section className="panel pj-section" aria-labelledby="mr-quote-title">
+        <section className="panel pj-section" aria-labelledby="mr-quote-title" id="mr-sec-quotes">
           <div className="pj-section-head">
             <h2 id="mr-quote-title"><ShoppingCart className="ico" size={18} aria-hidden="true" /> Hỏi giá và bảng so sánh</h2>
             {canQuote && opened.status !== "closed" && !quoteDraft && <button type="button" className="button primary" onClick={() => setQuoteDraft(blankQuote(opened.id))}><Plus className="ico" size={16} aria-hidden="true" /> Nhập báo giá NCC</button>}
@@ -280,7 +318,57 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
           {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id, index) => <a key={id} className="link-button" href={orderHref(id)}>Mở đơn {index + 1}</a>)}</p>}
         </section>
       )}
+
+      {opened && ordersOf(opened).length > 0 && (
+        <section className="panel pj-section" aria-labelledby="mr-orders-title" id="mr-sec-orders">
+          <h2 id="mr-orders-title">Đơn hàng lập từ {opened.number}</h2>
+          <div className="table-scroll">
+            <table className="pj-table">
+              <thead><tr><th>Đơn</th><th>Nhà cung cấp</th>{!office && <th>Hạng mục</th>}<th className="pj-num">Giá trị</th><th>Tiến độ</th></tr></thead>
+              <tbody>{ordersOf(opened).map((order) => (
+                <tr key={order.id} className="mr-row" onClick={() => { window.location.href = orderHref(order.id); }}>
+                  <td><a className="link-button" href={orderHref(order.id)} onClick={(event) => event.stopPropagation()}><b>{order.code}</b></a><br /><small className="muted">{order.title}</small></td>
+                  <td>{order.supplier || "—"}</td>
+                  {!office && <td>{codeName(order.budgetCode)}</td>}
+                  <td className="pj-num">{formatVnd(order.totalActual ?? order.totalEstimate)}</td>
+                  <td><OrderMiniPath order={order} payments={[]} /></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </section>
+      )}
     </div>
+  );
+}
+
+/** Dải nhỏ ở danh sách: mỗi giai đoạn một vạch + bước hiện tại. */
+function MaterialMiniPath({ stages }: { stages: readonly MaterialStage[] }) {
+  const label = materialCurrentLabel(stages);
+  return (
+    <div className="op-mini">
+      <div className="op-mini-bar" role="img" aria-label={`${label}: ${stages.filter((stage) => stage.state === "done").length}/${stages.length} giai đoạn`}>
+        {stages.map((stage) => <span key={stage.key} className={`is-${stage.state === "bad" ? "current" : stage.state}`} />)}
+      </div>
+      <small className={stages.some((stage) => stage.state === "bad") ? "warn-text" : undefined}>{label}</small>
+    </div>
+  );
+}
+
+/** Thanh tiến độ ở trang chi tiết phiếu; bấm một giai đoạn để cuộn tới phần tương ứng. */
+function MaterialProgressBar({ stages }: { stages: readonly MaterialStage[] }) {
+  const target: Record<MaterialStage["key"], string> = { draft: "mr-sec-items", signing: "mr-sec-items", quoting: "mr-sec-quotes", ordering: "mr-sec-quotes", orders: "mr-sec-orders", done: "mr-sec-orders" };
+  return (
+    <ol className="op-track op-pickable mr-progress" aria-label="Tiến độ phiếu yêu cầu vật tư">
+      {stages.map((stage, index) => (
+        <li key={stage.key} className={`op-step is-${stage.state === "bad" ? "current" : stage.state}${stage.state === "bad" ? " is-bad" : ""}`} aria-current={stage.state === "current" ? "step" : undefined}>
+          <button type="button" className="op-nav-btn" onClick={() => document.getElementById(target[stage.key])?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+            <span className="op-num" aria-hidden="true">{stage.state === "done" ? <Check size={13} strokeWidth={3} /> : index + 1}</span>
+            <span className="op-text"><span className="op-label">{stage.label}</span>{stage.note && <small className="op-dept">{stage.note}</small>}</span>
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }
 

@@ -295,3 +295,16 @@
 .of-bar { height: 8px; border-radius: 999px; background: var(--soft); overflow: hidden; margin-top: 10px; }
 .of-bar span { display: block; height: 100%; background: var(--success); border-radius: inherit; transition: width .4s ease; }
 .of-bar.is-over span { background: var(--bad); }
+
+/* Tab Purchasing: 3 danh sách (Yêu cầu vật tư · Đơn hàng · Đề nghị thanh toán) */
+.pc-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; padding: 4px; background: var(--soft); border-radius: 12px; width: fit-content; max-width: 100%; }
+.pc-tabs button { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 9px 16px; border-radius: 9px; font-weight: 600; color: var(--muted); cursor: pointer; transition: background-color .2s ease, color .2s ease, box-shadow .2s ease; }
+.pc-tabs button:hover { color: var(--ink); }
+.pc-tabs button.is-on { background: #15803d; color: #fff; box-shadow: 0 2px 8px rgb(21 128 61 / .25); }
+.pc-count { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; font-size: 12px; background: var(--accent); color: #fff; }
+.pc-tabs button.is-on .pc-count { background: #fff; color: #15803d; }
+.mr-row { cursor: pointer; }
+.mr-row:hover td { background: var(--soft); }
+.mr-group td { background: var(--ok-bg); color: var(--ok); font-size: 13px; padding-top: 6px; padding-bottom: 6px; }
+.mr-progress .op-step.is-bad { --op-bg: var(--bad-bg); --op-ink: var(--bad); }
+.op-mini-bar .is-bad { background: var(--bad); }

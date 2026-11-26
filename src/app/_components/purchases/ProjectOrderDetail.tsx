@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import type { PurchaseRoles } from "../../../modules/purchases/types";
+import type { PathKey } from "../../../modules/purchases/flow";
 import type { TabProps } from "../projects/ProjectDetail";
 import { errorMessage } from "../projects/projectShared";
 import { orderIdFromUrl, projectOrderPath, projectPath } from "../routes";
@@ -19,7 +20,7 @@ export function useProjectOrder(projectId: string, slug: string) {
     window.addEventListener("popstate", sync);
     return () => window.removeEventListener("popstate", sync);
   }, []);
-  const open = useCallback((id: string) => { window.history.pushState(null, "", projectOrderPath(projectId, id, slug)); setOrderId(id); }, [projectId, slug]);
+  const open = useCallback((id: string, step?: string) => { window.history.pushState(null, "", `${projectOrderPath(projectId, id, slug)}${step ? `&buoc=${step}` : ""}`); setOrderId(id); }, [projectId, slug]);
   const close = useCallback(() => { window.history.pushState(null, "", `${projectPath(projectId)}?muc=${slug}`); setOrderId(null); }, [projectId, slug]);
   return { orderId, open, close };
 }
@@ -35,6 +36,7 @@ export function ProjectOrderDetail(props: TabProps & { orderId: string; onBack: 
     return () => { active = false; };
   }, [purchases, setNotice]);
   if (!ctx) return <SkeletonPage kind="detail" label="Đang tải đơn hàng…" />;
-  return <PurchaseDetail key={props.orderId} store={purchases} orderId={props.orderId} projects={[data.project]} roles={ctx.roles} userId={ctx.userId} isAdmin={actor.role === "admin"}
+  const step = typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("buoc") as PathKey | null;
+  return <PurchaseDetail key={props.orderId} initialStep={step} store={purchases} orderId={props.orderId} projects={[data.project]} roles={ctx.roles} userId={ctx.userId} isAdmin={actor.role === "admin"}
     leadProjectIds={new Set(viewer.isLead ? [data.project.id] : [])} onBack={props.onBack} onChanged={() => props.onChanged?.()} setNotice={setNotice} />;
 }

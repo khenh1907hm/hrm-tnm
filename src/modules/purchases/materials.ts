@@ -118,3 +118,31 @@ export function ordersFromQuote(request: Pick<MaterialRequest, "projectId" | "nu
     items: items.map((item) => ({ id: "", name: item.name, spec: [item.spec, item.maker].filter(Boolean).join(" · "), unit: item.unit, quantity: item.quantity, unitPrice: quote.prices[item.id] ?? 0 })),
   }));
 }
+
+/**
+ * Tiến độ một phiếu YCVT (hiện ở danh sách và trang chi tiết):
+ * Lập phiếu → Ký duyệt → Hỏi giá (nhiều báo giá) → Chọn NCC, lên đơn → Đơn hàng (mua, nhận, thanh toán) → Hoàn tất.
+ */
+export type MaterialStageKey = "draft" | "signing" | "quoting" | "ordering" | "orders" | "done";
+export type MaterialStage = { key: MaterialStageKey; label: string; state: "done" | "current" | "todo" | "bad" | "skipped"; note: string };
+export function materialProgress(request: Pick<MaterialRequest, "status">, quoteCount: number, orders: readonly { status: string }[]): MaterialStage[] {
+  const { status } = request;
+  const signed = status === "approved" || status === "ordered" || status === "closed";
+  const finished = orders.filter((order) => order.status === "completed" || order.status === "cancelled").length;
+  const allOrdersDone = orders.length > 0 && finished === orders.length;
+  const closed = status === "closed";
+  const stages: MaterialStage[] = [
+    { key: "draft", label: "Lập phiếu", state: status === "draft" ? "current" : status === "rejected" ? "bad" : "done", note: status === "rejected" ? "Bị trả về: sửa và gửi lại" : status === "draft" ? "Đang soạn" : "" },
+    { key: "signing", label: "Ký duyệt", state: status === "submitted" ? "current" : signed ? "done" : "todo", note: status === "submitted" ? "Đang chờ ký" : "" },
+    { key: "quoting", label: "Hỏi giá", state: status === "approved" && quoteCount === 0 ? "current" : quoteCount > 0 && signed ? "done" : closed ? "skipped" : "todo", note: quoteCount ? `${quoteCount} báo giá` : "" },
+    { key: "ordering", label: "Chọn NCC, lên đơn", state: status === "ordered" || orders.length > 0 ? "done" : status === "approved" && quoteCount > 0 ? "current" : closed ? "skipped" : "todo", note: orders.length ? `${orders.length} đơn` : "" },
+    { key: "orders", label: "Mua, nhận hàng, thanh toán", state: allOrdersDone ? "done" : orders.length > 0 ? "current" : closed ? "skipped" : "todo", note: orders.length ? `${finished}/${orders.length} đơn xong` : "" },
+    { key: "done", label: "Hoàn tất", state: closed || allOrdersDone ? "done" : "todo", note: closed ? "Đã đóng phiếu" : "" },
+  ];
+  return stages;
+}
+export const materialCurrentLabel = (stages: readonly MaterialStage[]) => {
+  const current = stages.find((stage) => stage.state === "current" || stage.state === "bad");
+  if (current) return current.note || current.label;
+  return stages[stages.length - 1]!.state === "done" ? "Hoàn tất" : "";
+};

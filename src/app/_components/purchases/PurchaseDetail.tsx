@@ -28,7 +28,7 @@ const dateTime = (iso: string) => new Date(iso).toLocaleString("vi-VN", { timeZo
 const dmy = (date: string | null) => date ? date.split("-").reverse().join("/") : "—";
 
 /** Chi tiết một đơn hàng: thanh tiến trình, các nút theo vai trò (PUR-04), khoản chi, theo dõi, nhận hàng, nhật ký. */
-export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; projects: readonly Project[]; roles: PurchaseRoles; userId: string; isAdmin: boolean; leadProjectIds: ReadonlySet<string>; onBack: () => void; onChanged: () => void; setNotice: Notify }) {
+export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (vd từ danh sách đề nghị thanh toán). */ initialStep?: PathKey | null; store: PurchaseStore; orderId: string; projects: readonly Project[]; roles: PurchaseRoles; userId: string; isAdmin: boolean; leadProjectIds: ReadonlySet<string>; onBack: () => void; onChanged: () => void; setNotice: Notify }) {
   const { store, setNotice } = props;
   const [order, setOrder] = useState<PurchaseOrder | null | undefined>(undefined);
   const [payments, setPayments] = useState<PurchasePayment[]>([]);
@@ -38,7 +38,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const [chainKey, setChainKey] = useState(0);
   const [departments, setDepartments] = useState<StageDepartments | undefined>(undefined);
   const [stages, setStages] = useState<ReadonlySet<EnforcedStage>>(new Set());
-  const [picked, setPicked] = useState<PathKey | null>(null);
+  const [picked, setPicked] = useState<PathKey | null>(props.initialStep ?? null);
   const [today] = useState(() => todayVN(systemClock));
   // Tab dự án có khung bên phải: chuỗi ký hiện ở đó, trên khung Người duyệt
   const asideSlot = useContext(AsideSlotContext);
