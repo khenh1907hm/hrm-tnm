@@ -1,11 +1,13 @@
 "use client";
 import { SkeletonPage } from "../Skeleton";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { AsideSlotContext } from "../projects/asideSlot";
 import { ArrowLeft, Check, FolderCheck, PackageCheck, Pencil, Send, Truck, Warehouse, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import { systemClock, todayVN } from "../../../lib/clock";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
+import { allowedActions, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
 import { OrderProgress } from "./OrderProgress";
 import { StepDetail } from "./StepDetail";
 import type { PurchaseStore } from "../../../modules/purchases/store";
@@ -16,11 +18,8 @@ import type { Notify } from "../Toast";
 import { errorMessage, moneyInput, parseMoney, projectText } from "../projects/projectShared";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { ApprovalChain } from "./ApprovalChain";
-import { OrderAttachments } from "./AttachmentsField";
-import { BudgetCheckBox } from "./BudgetCheckBox";
 import { FormExportButtons, PoBundleButton } from "./FormExport";
 import { listAttachments } from "./purchaseFiles";
-import { budgetCheck } from "../../../modules/purchases/budget";
 
 export const STATUS_TONE: Record<PurchaseOrder["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", ordered: "warn", received: "ok", completed: "ok", cancelled: "" };
 const PAY_TONE: Record<PurchasePayment["status"], string> = { requested: "warn", approved: "warn", paid: "ok", rejected: "bad" };
@@ -40,6 +39,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const [stages, setStages] = useState<ReadonlySet<EnforcedStage>>(new Set());
   const [picked, setPicked] = useState<PathKey | null>(null);
   const [today] = useState(() => todayVN(systemClock));
+  // Tab dự án có khung bên phải: chuỗi ký hiện ở đó, trên khung Người duyệt
+  const asideSlot = useContext(AsideSlotContext);
 
   const fetchAll = useCallback(() => Promise.all([store.getOrder(props.orderId), store.listPayments(props.orderId), store.listEvents(props.orderId), store.stagePermissions(props.orderId).catch(() => [] as EnforcedStage[])]), [store, props.orderId]);
   const apply = useCallback(([next, pays, logs, mine]: Awaited<ReturnType<typeof fetchAll>>) => { setOrder(next); setPayments(pays); setEvents(logs); setStages(new Set(mine)); }, []);
@@ -91,7 +92,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const PAY_KIND: Partial<Record<PathKey, PaymentKind>> = { advance: "advance", advance_pay: "advance", prepayment: "prepayment", prepayment_pay: "prepayment", final: "final", final_pay: "final" };
   const stepForms = (key: PathKey) => {
     if (key === "draft" || key === "submitted" || key === "approved") return <span className="po-form-item">Đơn nháp <FormExportButtons code="P-CC-07" fileBase={`${order.code} ${order.title}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseDraft(template!, await orderFormInput())} /></span>;
-    if (key === "po" && order.poNo) return <span className="po-form-item">PO <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} /></span>;
+    if (key === "po" && order.poNo) return <span className="po-form-item">PO <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} />
+      {store.mode === "live" && <PoBundleButton fileBase={`${order.poNo} ${order.supplier}`} orderId={order.id} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template, await orderFormInput())} />}</span>;
     const kind = PAY_KIND[key];
     const list = kind ? payments.filter((payment) => payment.kind === kind && payment.status !== "rejected") : [];
     return list.length ? <span className="po-form-item">Đề nghị thanh toán {list.map(paymentForm)}</span> : null;
@@ -99,6 +101,68 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   // Nhắc ngày giao: còn ≤ 3 ngày hoặc quá hẹn, đơn đang chờ giao → người lập nhắc NCC
   const due = (order.status === "approved" || order.status === "ordered") ? (order.expectedDelivery ?? order.neededBy) : null;
   const dueDays = due ? Math.round((Date.parse(`${due}T00:00:00+07:00`) - Date.parse(`${today}T00:00:00+07:00`)) / 86_400_000) : null;
+  /** Thông tin riêng của bước đang xem: hàng của đơn, hoặc các khoản chi của bước tạm ứng / thanh toán. */
+  const itemsTable = (
+    <div className="table-scroll">
+      <table className="pj-table">
+        <thead><tr><th>Tên hàng</th><th>Quy cách</th><th>ĐVT</th><th className="pj-num">SL đặt</th><th className="pj-num">Đơn giá</th><th className="pj-num">Thành tiền</th>{order.receivedAt && <><th className="pj-num">SL nhận</th><th className="pj-num">SL đạt</th><th>Kiểm tra</th></>}</tr></thead>
+        <tbody>{order.items.map((item) => (
+          <tr key={item.id}>
+            <td>{item.name}</td><td>{item.spec}</td><td>{item.unit}</td>
+            <td className="pj-num">{item.quantity.toLocaleString("vi-VN")}</td><td className="pj-num">{formatVnd(item.unitPrice)}</td><td className="pj-num">{formatVnd(lineTotal(item))}</td>
+            {order.receivedAt && <><td className="pj-num">{item.receivedQty.toLocaleString("vi-VN")}</td><td className={`pj-num ${item.acceptedQty < item.quantity ? "warn-text" : ""}`}>{item.acceptedQty.toLocaleString("vi-VN")}</td><td>{item.inspectionNote}</td></>}
+          </tr>
+        ))}</tbody>
+        <tfoot><tr><td colSpan={5}>Tổng dự kiến{order.totalActual !== null ? " / thực nhận" : ""}</td><td className="pj-num">{formatVnd(order.totalEstimate)}</td>{order.receivedAt && <td colSpan={3} className="pj-num">Thực nhận: {formatVnd(order.totalActual ?? 0)}</td>}</tr></tfoot>
+      </table>
+    </div>
+  );
+  const supplierInfo = [order.supplierContact, order.supplierAddress, order.supplierPhone, order.supplierEmail].filter(Boolean).join(" · ");
+  const stepExtra = (key: PathKey): ReactNode => {
+    if (key === "draft" || key === "submitted" || key === "approved") return <>
+      {itemsTable}
+      <p className="po-terms-line">Điều kiện NCC: <span className={`pill ${order.advanceRequired ? "warn" : ""}`}>{order.advanceRequired ? `Cần tạm ứng${order.advancePct ? ` ${order.advancePct}%` : ""}` : "Không tạm ứng"}</span> <span className={`pill ${order.prepayRequired ? "warn" : ""}`}>{order.prepayRequired ? "Thanh toán trước khi giao" : "Thanh toán sau khi nhận hàng"}</span>{order.note ? ` · ${order.note}` : ""}</p>
+    </>;
+    if (key === "po" || key === "ordered") return <p className="po-terms-line">NCC: <b>{order.supplier || "—"}</b>{supplierInfo ? ` · ${supplierInfo}` : ""} · Giao dự kiến {dmy(order.expectedDelivery)}{order.deliveryAddress ? ` · Giao tới ${order.deliveryAddress}` : ""}</p>;
+    if (key === "received" || key === "stocked") return itemsTable;
+    const kind = PAY_KIND[key];
+    if (!kind) return null;
+    const list = payments.filter((payment) => payment.kind === kind);
+    return <>
+      <p className="po-terms-line">Đã chi tạm ứng {formatVnd(summary.advance)} · Đã chi thanh toán {formatVnd(summary.prepayment + summary.final)} · Chờ duyệt / chờ chi {formatVnd(summary.pending)} · <b>Còn phải trả {formatVnd(summary.remaining)}</b></p>
+      {!list.length ? <p className="muted">Chưa có đề nghị nào ở bước này.</p> : (
+        <div className="table-scroll">
+          <table className="pj-table">
+            <thead><tr><th>Đề nghị</th><th>Hóa đơn</th><th className="pj-num">Giá trị</th><th>Người nhận</th><th>Trạng thái</th><th /></tr></thead>
+            <tbody>{list.map((payment) => (
+              <tr key={payment.id}>
+                <td>{payment.rfpNo || PAYMENT_KIND_LABELS[payment.kind]}<br /><small className="muted">{dateTime(payment.requestedAt)}{payment.note ? ` · ${payment.note}` : ""}</small></td>
+                <td>{payment.invoiceNo || "—"}{payment.invoiceDate ? <><br /><small className="muted">{dmy(payment.invoiceDate)}</small></> : null}</td>
+                <td className="pj-num"><b>{formatVnd(payment.amount + payment.vatAmount)}</b>{payment.vatAmount ? <><br /><small className="muted">VAT {formatVnd(payment.vatAmount)}</small></> : null}</td>
+                <td>{payment.payee}</td>
+                <td><span className={`pill ${PAY_TONE[payment.status]}`}>{PURCHASE_PAYMENT_STATUS_LABELS[payment.status]}</span>{payment.paidAt && <><br /><small className="muted">{dateTime(payment.paidAt)}{payment.paidMethod ? ` · ${payment.paidMethod}` : ""}</small></>}{payment.decisionNote && <><br /><small className="muted">{payment.decisionNote}</small></>}</td>
+                <td className="po-actions">
+                  {payment.status === "requested" && props.roles.isApprover && !payment.usesChain && <>
+                    <button type="button" className="button primary" onClick={() => void act(() => store.decidePayment(payment.id, true, ""), "Đã duyệt khoản chi.")}>Duyệt</button>
+                    <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối khoản chi:"); if (why) void act(() => store.decidePayment(payment.id, false, why), "Đã từ chối khoản chi."); }}>Từ chối</button>
+                  </>}
+                  {payment.status === "approved" && props.roles.isPayer && <button type="button" className="button primary" onClick={() => { const method = window.prompt("Hình thức chi (vd: Chuyển khoản Vietcombank, Tiền mặt):", "Chuyển khoản"); if (method !== null) void act(() => store.pay(payment.id, method, ""), "Đã thực hiện chi."); }}>Thực hiện chi</button>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      )}
+    </>;
+  };
+  // Chuỗi ký: đơn đặt hàng, và đề nghị chi của bước đang xem (nếu là bước tạm ứng / thanh toán)
+  const shownKind = PAY_KIND[shownStep.key];
+  const chains = <>
+    {order.usesChain && <ApprovalChain store={store} docType="purchase" docId={order.id} refreshKey={chainKey} title="Chuỗi ký đơn đặt hàng" compact={Boolean(asideSlot)} onChanged={() => void reload()} setNotice={setNotice} />}
+    {shownKind && payments.filter((payment) => payment.kind === shownKind && payment.usesChain && payment.status !== "rejected").map((payment) => (
+      <ApprovalChain key={payment.id} store={store} docType="payment" docId={payment.id} refreshKey={chainKey} title={`Ký đề nghị ${PAYMENT_KIND_LABELS[payment.kind].toLowerCase()} ${payment.rfpNo}`} compact={Boolean(asideSlot)} onChanged={() => void reload()} setNotice={setNotice} />
+    ))}
+  </>;
   const requestKinds = ([["advance", "requestAdvance"], ["prepayment", "requestPrepayment"], ["final", "requestFinal"]] as const).filter(([, action]) => actions.has(action)).map(([kind]) => kind);
 
   return (
@@ -151,99 +215,11 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
         {panel === "stockIn" && <StockInPanel order={order} onCancel={() => setPanel(null)} onSubmit={(receiptNo, location, note) => act(() => store.stockIn(order.id, receiptNo, location, note), "Đã nhập kho. Tiếp theo: thu thập chứng từ để thanh toán.")} />}
         {order.status === "received" && !order.stockedAt && !actions.has("stockIn") && deptName("stocked") && <p className="muted">Chờ <b>{deptName("stocked")}</b> nhập kho.</p>}
         {order.status === "received" && order.stockedAt && !order.docsCollectedAt && !actions.has("collectDocs") && deptName("final") && <p className="muted">Chờ <b>{deptName("final")}</b> thu thập chứng từ.</p>}
-        {order.stockedAt && <p className="po-terms-line">Nhập kho: <b>{order.stockReceiptNo}</b> · {dateTime(order.stockedAt)}{order.stockLocation ? ` · Kho: ${order.stockLocation}` : ""}{order.stockedByName ? ` · ${order.stockedByName}` : ""}{order.stockNote ? ` · ${order.stockNote}` : ""}
-          {order.docsCollectedAt ? <> · <span className="pill ok">Đủ chứng từ {dateTime(order.docsCollectedAt)}</span>{order.docsNote ? ` · ${order.docsNote}` : ""}</> : <> · <span className="pill warn">Chưa đủ chứng từ</span></>}</p>}
         {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
-        {order.poNo && <p className="po-terms-line">PO chính thức: <b>{order.poNo}</b> · phát hành {order.poIssuedAt ? dateTime(order.poIssuedAt) : "—"} · {order.supplierAcceptedAt ? <span className="pill ok">NCC đã ký nhận {dateTime(order.supplierAcceptedAt)}</span> : <span className="pill warn">Chờ NCC ký nhận</span>}{order.supplierAcceptNote ? ` · ${order.supplierAcceptNote}` : ""}{order.receiptRecordNo ? ` · Biên bản giao nhận ${order.receiptRecordNo}` : ""}</p>}
-        <StepDetail step={shownStep} order={order} payments={payments} events={events} forms={stepForms(shownStep.key)} live={store.mode === "live"} editable={order.status !== "cancelled"} setNotice={setNotice} />
-        <div className="po-forms">
-          <span className="muted">Biểu mẫu:</span>
-          <span className="po-form-item">Đơn nháp <FormExportButtons code="P-CC-07" fileBase={`${order.code} ${order.title}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseDraft(template!, await orderFormInput())} /></span>
-          {order.poNo && <span className="po-form-item">PO gửi NCC ký <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} />
-            {store.mode === "live" && <PoBundleButton fileBase={`${order.poNo} ${order.supplier}`} orderId={order.id} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template, await orderFormInput())} />}</span>}
-        </div>
+        <StepDetail step={shownStep} order={order} payments={payments} events={events} forms={stepForms(shownStep.key)} extra={stepExtra(shownStep.key)} live={store.mode === "live"} editable={order.status !== "cancelled"} setNotice={setNotice} />
       </section>
 
-      {order.usesChain && order.budgetCode && order.budgetA !== null && order.budgetB !== null && (
-        <BudgetCheckBox title="Xác nhận đặt hàng (P-CC-07)" check={budgetCheck(order.budgetCode, "", order.budgetA, order.budgetB, order.totalEstimate)} />
-      )}
-      {order.usesChain && <ApprovalChain store={store} docType="purchase" docId={order.id} refreshKey={chainKey} title="Chuỗi ký đơn đặt hàng" onChanged={() => void reload()} setNotice={setNotice} />}
-      {store.mode === "live" && <OrderAttachments orderId={order.id} editable={order.status !== "cancelled" && order.status !== "completed"} requireSigned={order.kind === "project"} setNotice={setNotice} />}
-
-      <section className="panel pj-section" aria-labelledby="po-items-title">
-        <h2 id="po-items-title">Hàng cần mua</h2>
-        <div className="table-scroll">
-          <table className="pj-table">
-            <thead><tr><th>Tên hàng</th><th>Quy cách</th><th>ĐVT</th><th className="pj-num">SL đặt</th><th className="pj-num">Đơn giá</th><th className="pj-num">Thành tiền</th>{order.receivedAt && <><th className="pj-num">SL nhận</th><th className="pj-num">SL đạt</th><th>Kiểm tra</th></>}</tr></thead>
-            <tbody>{order.items.map((item) => (
-              <tr key={item.id}>
-                <td>{item.name}</td><td>{item.spec}</td><td>{item.unit}</td>
-                <td className="pj-num">{item.quantity.toLocaleString("vi-VN")}</td><td className="pj-num">{formatVnd(item.unitPrice)}</td><td className="pj-num">{formatVnd(lineTotal(item))}</td>
-                {order.receivedAt && <><td className="pj-num">{item.receivedQty.toLocaleString("vi-VN")}</td><td className={`pj-num ${item.acceptedQty < item.quantity ? "warn-text" : ""}`}>{item.acceptedQty.toLocaleString("vi-VN")}</td><td>{item.inspectionNote}</td></>}
-              </tr>
-            ))}</tbody>
-            <tfoot><tr><td colSpan={5}>Tổng dự kiến{order.totalActual !== null ? " / thực nhận" : ""}</td><td className="pj-num">{formatVnd(order.totalEstimate)}</td>{order.receivedAt && <td colSpan={3} className="pj-num">Thực nhận: {formatVnd(order.totalActual ?? 0)}</td>}</tr></tfoot>
-          </table>
-        </div>
-        <dl className="po-inline" style={{ margin: 0 }}>
-          <div><dt className="muted">Nhà cung cấp</dt><dd style={{ margin: 0 }}>{order.supplier || "—"}{order.supplierContact ? ` · ${order.supplierContact}` : ""}
-            {(order.supplierAddress || order.supplierPhone || order.supplierEmail) && <><br /><small className="muted">{[order.supplierAddress, order.supplierPhone, order.supplierEmail].filter(Boolean).join(" · ")}</small></>}</dd></div>
-          <div><dt className="muted">Giao dự kiến</dt><dd style={{ margin: 0 }}>{dmy(order.expectedDelivery)}</dd></div>
-          <div><dt className="muted">Giao tới</dt><dd style={{ margin: 0 }}>{order.deliveryAddress || "—"}</dd></div>
-          {order.note && <div><dt className="muted">Ghi chú</dt><dd style={{ margin: 0 }}>{order.note}</dd></div>}
-        </dl>
-      </section>
-
-      <section className="panel pj-section" aria-labelledby="po-pay-title">
-        <h2 id="po-pay-title">Tạm ứng và thanh toán</h2>
-        <p className="po-terms-line">Điều kiện NCC: <span className={`pill ${order.advanceRequired ? "warn" : ""}`}>{order.advanceRequired ? `Cần tạm ứng${order.advancePct ? ` ${order.advancePct}%` : ""}` : "Không tạm ứng"}</span> <span className={`pill ${order.prepayRequired ? "warn" : ""}`}>{order.prepayRequired ? "Thanh toán trước khi giao" : "Thanh toán sau khi nhận hàng"}</span></p>
-        <div className="pj-kpis">
-          <div className="pj-kpi"><span>Đã chi tạm ứng</span><b>{formatVnd(summary.advance)}</b></div>
-          <div className="pj-kpi"><span>Đã chi thanh toán</span><b>{formatVnd(summary.prepayment + summary.final)}</b><small>Trước {formatVnd(summary.prepayment)} · Còn lại {formatVnd(summary.final)}</small></div>
-          <div className={`pj-kpi ${summary.pending ? "warn" : ""}`}><span>Đang chờ duyệt / chờ chi</span><b>{formatVnd(summary.pending)}</b></div>
-          <div className={`pj-kpi ${summary.remaining < 0 ? "over" : ""}`}><span>Còn phải trả</span><b>{formatVnd(summary.remaining)}</b><small>So với tổng {order.totalActual !== null ? "thực nhận" : "dự kiến"}</small></div>
-        </div>
-        {!payments.length ? <p className="muted">Chưa có khoản tạm ứng hay thanh toán nào.</p> : (
-          <div className="table-scroll">
-            <table className="pj-table">
-              <thead><tr><th>Đề nghị</th><th>Hóa đơn</th><th className="pj-num">Trước thuế</th><th className="pj-num">Thuế GTGT</th><th className="pj-num">Giá trị</th><th>Người nhận</th><th>Nội dung</th><th>Trạng thái</th><th /></tr></thead>
-              <tbody>{payments.map((payment) => (
-                <tr key={payment.id}>
-                  <td>{PAYMENT_KIND_LABELS[payment.kind]}{payment.rfpNo ? <><br /><b>{payment.rfpNo}</b></> : null}<br /><small className="muted">{dateTime(payment.requestedAt)}</small></td>
-                  <td>{payment.invoiceNo || "—"}{payment.invoiceDate ? <><br /><small className="muted">{dmy(payment.invoiceDate)}</small></> : null}</td>
-                  <td className="pj-num">{formatVnd(payment.amount)}</td>
-                  <td className="pj-num">{payment.vatAmount ? formatVnd(payment.vatAmount) : "—"}</td>
-                  <td className="pj-num"><b>{formatVnd(payment.amount + payment.vatAmount)}</b></td>
-                  <td>{payment.payee}</td>
-                  <td>{payment.note}{payment.decisionNote && <><br /><small className="muted">{payment.decisionNote}</small></>}</td>
-                  <td><span className={`pill ${PAY_TONE[payment.status]}`}>{PURCHASE_PAYMENT_STATUS_LABELS[payment.status]}</span>{payment.paidAt && <><br /><small className="muted">{dateTime(payment.paidAt)}{payment.paidMethod ? ` · ${payment.paidMethod}` : ""}</small></>}</td>
-                  <td className="po-actions">
-                    {payment.status === "requested" && props.roles.isApprover && !payment.usesChain && <>
-                      <button type="button" className="button primary" onClick={() => void act(() => store.decidePayment(payment.id, true, ""), "Đã duyệt khoản chi.")}>Duyệt</button>
-                      <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối khoản chi:"); if (why) void act(() => store.decidePayment(payment.id, false, why), "Đã từ chối khoản chi."); }}>Từ chối</button>
-                    </>}
-                    {payment.status === "approved" && props.roles.isPayer && <button type="button" className="button primary" onClick={() => { const method = window.prompt("Hình thức chi (vd: Chuyển khoản Vietcombank, Tiền mặt):", "Chuyển khoản"); if (method !== null) void act(() => store.pay(payment.id, method, ""), "Đã thực hiện chi."); }}>Thực hiện chi</button>}
-                    {payment.status !== "rejected" && paymentForm(payment)}
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      {payments.filter((payment) => payment.usesChain && payment.status !== "rejected").map((payment) => (
-        <ApprovalChain key={payment.id} store={store} docType="payment" docId={payment.id} refreshKey={chainKey} title={`Ký đề nghị ${PAYMENT_KIND_LABELS[payment.kind].toLowerCase()} ${payment.rfpNo}`} onChanged={() => void reload()} setNotice={setNotice} />
-      ))}
-
-      <section className="panel pj-section" aria-labelledby="po-log-title">
-        <h2 id="po-log-title">Theo dõi đơn hàng</h2>
-        {!events.length ? <p className="muted">Chưa có hoạt động.</p> : (
-          <ol className="po-timeline">{[...events].reverse().map((event) => (
-            <li key={event.id}><time dateTime={event.at}>{dateTime(event.at)}</time><span><b>{EVENT_LABELS[event.action] ?? event.action}</b>{event.actorName ? ` · ${event.actorName}` : ""}{event.note ? <><br /><span className="muted">{event.note}</span></> : null}</span></li>
-          ))}</ol>
-        )}
-      </section>
+      {asideSlot ? createPortal(chains, asideSlot) : chains}
 
       {editing && <PurchaseFormModal store={store} projects={props.projects} initial={order} onClose={() => setEditing(false)} onSaved={(_, submitted) => { setEditing(false); setNotice(submitted ? "Đã lập đơn, gửi sếp duyệt." : "Đã lưu nháp.", "success"); void reload(); }} />}
     </section>

@@ -63,6 +63,8 @@ export interface PurchaseStore {
   checkBudget(projectId: string, code: string, orderId: string | null): Promise<{ sheetNumber: string; a: number; b: number } | null>;
   listSteps(docType: ApprovalDocType, docId: string): Promise<(ApprovalStep & { canSign: boolean })[]>;
   sign(stepId: string, approve: boolean, note: string): Promise<void>;
+  /** Nhắc gấp người đang đến lượt ký (chuông + email); trả về số người được nhắc. */
+  remind(stepId: string, note: string): Promise<number>;
   myApprovals(): Promise<PendingApproval[]>;
   departments(): Promise<{ department: Department; employeeId: string; name: string }[]>;
   setDepartments(members: DepartmentMembers): Promise<void>;

@@ -296,6 +296,11 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const current = currentStep(steps);
       return clone(steps).map((step) => ({ ...step, canSign: step.id === current?.id }));
     },
+    async remind(stepId) {
+      const step = data.steps.find((item) => item.id === stepId) ?? fail("STEP_NOT_FOUND");
+      if (currentStep(docSteps(step.docType, step.docId))?.id !== stepId) fail("REMIND_NOT_PENDING");
+      return 1;
+    },
     async sign(stepId, approve, note) {
       const step = data.steps.find((item) => item.id === stepId) ?? fail("STEP_NOT_FOUND");
       if (currentStep(docSteps(step.docType, step.docId))?.id !== stepId) fail("STEP_NOT_CURRENT");

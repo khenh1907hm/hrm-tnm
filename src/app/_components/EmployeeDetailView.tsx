@@ -104,13 +104,12 @@ export function EmployeeDetailView(props: {
 function ActiveSwitch({ status, onChange }: { status: Employee["status"]; onChange: (active: boolean) => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   const on = status === "active";
-  const hint = status === "on_leave" || status === "resigned" ? ` (hiện: ${STATUS_LABELS[status]})` : "";
   return (
-    <label className={`active-switch${on ? " on" : ""}${busy ? " busy" : ""}`}>
+    <label className={`active-switch${on ? " on" : " off"}${busy ? " busy" : ""}`}>
       <input type="checkbox" role="switch" checked={on} disabled={busy} aria-checked={on}
         onChange={(event) => { const next = event.target.checked; setBusy(true); void onChange(next).finally(() => setBusy(false)); }} />
       <span className="active-switch-track" aria-hidden="true"><span className="active-switch-thumb" /></span>
-      <span className="active-switch-label">{on ? "Đang hoạt động" : `Không hoạt động${hint}`}</span>
+      <span className="active-switch-label">{on ? "Đang hoạt động" : "Không hoạt động"}</span>
     </label>
   );
 }

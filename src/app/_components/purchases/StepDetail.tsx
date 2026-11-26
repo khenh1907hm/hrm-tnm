@@ -62,7 +62,7 @@ function stepResults(key: PathKey, order: PurchaseOrder, payments: readonly Purc
  */
 export function StepDetail(props: {
   step: PathStep; order: PurchaseOrder; payments: readonly PurchasePayment[]; events: readonly PurchaseEvent[];
-  forms?: ReactNode; live: boolean; editable: boolean; setNotice: Notify;
+  forms?: ReactNode; /** Thông tin riêng của bước (bảng hàng, khoản chi…). */ extra?: ReactNode; live: boolean; editable: boolean; setNotice: Notify;
 }) {
   const { step, order, payments } = props;
   const history = props.events.filter((event) => eventStep(event, payments) === step.key);
@@ -74,6 +74,7 @@ export function StepDetail(props: {
         <h3>{step.label} <span className={`pill ${step.state === "done" ? "ok" : step.state === "current" ? "warn" : ""}`}>{STATE_TEXT[step.state]}</span></h3>
         {props.forms && <span className="po-forms">{props.forms}</span>}
       </div>
+      {props.extra && <div className="sd-extra">{props.extra}</div>}
       <div className="sd-grid">
         <div>
           <h4>Kết quả</h4>

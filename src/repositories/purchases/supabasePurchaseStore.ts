@@ -190,6 +190,7 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
       }));
     },
     async sign(stepId, approve, note) { await rpc("approval_sign", { p_step: stepId, p_approve: approve, p_note: note }); },
+    async remind(stepId, note) { const sent = Number(await rpc("approval_remind", { p_step: stepId, p_note: note }) ?? 0); dispatchNotificationEmails(); return sent; },
     async myApprovals() {
       return (((await rpc("my_approvals", {})) ?? []) as Row[]).map((row) => ({
         stepId: str(row.step_id), docType: row.doc_type as ApprovalStep["docType"], docId: str(row.doc_id), projectId: strOrNull(row.project_id), projectCode: str(row.project_code),

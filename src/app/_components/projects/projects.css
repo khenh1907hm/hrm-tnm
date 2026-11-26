@@ -276,3 +276,13 @@
 .mr-paper-signs { display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; font-weight: 600; color: var(--muted, #64748b); padding: 6px 0 2px; border-top: 1px dashed var(--line, #e2e8f0); }
 .mr-import-notes { margin: 0; padding: 8px 12px 8px 28px; }
 @media (max-width: 700px) { .mr-paper-head { grid-template-columns: 1fr; } .mr-paper-signs { display: none; } }
+
+/* Khung bên phải: chuỗi ký (nếu đang mở đơn) + Người duyệt; không cuộn ngang */
+.pj-aside-col { position: sticky; top: 8px; max-height: calc(100vh - 24px); overflow-y: auto; overflow-x: hidden; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.pj-aside-slot { display: grid; gap: 12px; min-width: 0; }
+.pj-aside-slot:empty { display: none; }
+.pj-aside-col .ap-aside { position: static; max-height: none; overflow: visible; min-width: 0; }
+.pj-aside-col .ap-aside *, .pj-aside-slot * { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.pj-aside-col .tb-head { flex-wrap: wrap; }
+.pj-aside-col .tb-name { width: 100%; }
+@media (max-width: 1100px) { .pj-aside-col { position: static; max-height: none; overflow: visible; order: -1; } }

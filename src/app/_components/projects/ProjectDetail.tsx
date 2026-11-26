@@ -17,6 +17,7 @@ import { ChecksTab } from "./ChecksTab";
 import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { ApprovalTreePanel } from "./ApprovalTreePanel";
+import { AsideSlotContext } from "./asideSlot";
 import { CONTRACT_STATE_UI, myAccount, projectApprovers, projectContractStates, type ContractState } from "../accountApi";
 import { BudgetSheetTab } from "./BudgetSheetTab";
 import { ContractTab } from "./ContractTab";
@@ -100,6 +101,8 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   const { store, project, actor, setNotice } = props;
   const [data, setData] = useState<ProjectData | null>(null);
   const [tab, setTab] = useState<Tab>(tabFromUrl);
+  // Ô đầu khung bên phải: đơn hàng đang mở đưa chuỗi ký vào đây
+  const [asideSlot, setAsideSlot] = useState<HTMLDivElement | null>(null);
   const purchaseStore = useMemo(() => getPurchaseStore(store.mode), [store.mode]);
 
   const reload = useCallback(async () => {
@@ -171,8 +174,11 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         // Confirm Contract, Ngân sách, Đặt hàng: bên phải là khung người duyệt (Admin, Giám đốc sửa được)
         const withApprovers = (content: ReactNode, docType: "contract" | "budget" | "explanatory" | "material" | "purchase" | "payment") => store.mode !== "live" ? content : (
           <div className="pj-with-aside">
-            <div className="pj-with-aside-main">{content}</div>
-            <ApprovalTreePanel key={docType} projectId={project.id} docType={docType} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />
+            <div className="pj-with-aside-main"><AsideSlotContext.Provider value={asideSlot}>{content}</AsideSlotContext.Provider></div>
+            <div className="pj-aside-col">
+              <div className="pj-aside-slot" ref={setAsideSlot} />
+              <ApprovalTreePanel key={docType} projectId={project.id} docType={docType} canEdit={actor.role === "admin" || approverAccess.isDirector} members={data.members} today={data.today} setNotice={setNotice} />
+            </div>
           </div>
         );
         if (tab === "budget") return withApprovers(<BudgetSheetTab {...tabProps} />, "budget");

@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { Check, ClipboardSignature, Crown, Undo2 } from "lucide-react";
+import { BellRing, Check, ClipboardSignature, Crown, Undo2 } from "lucide-react";
 import { directorApprove, myAccount } from "../accountApi";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { DOC_TYPE_LABELS, isOverdue, ROLE_LABELS, signerLabel, stepTitle, type ApprovalDocType, type ApprovalStep } from "../../../modules/purchases/approval";
@@ -13,7 +13,8 @@ const dmy = (date: string) => date.split("-").reverse().join("/");
 const RESULT: Record<ApprovalStep["result"], [string, string]> = { pending: ["Chờ ký", "warn"], signed: ["Đã ký", "ok"], returned: ["Trả về", "bad"], skipped: ["Bỏ qua", ""] };
 
 /** Chuỗi ký theo bộ phận của một phiếu (PRC-04): ai ký, ngày mục tiêu, nút Ký / Trả về cho người đến lượt. */
-export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDocType; docId: string; refreshKey?: unknown; onChanged: () => void; setNotice: Notify; title?: string }) {
+export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDocType; docId: string; refreshKey?: unknown; onChanged: () => void; setNotice: Notify; title?: string;
+  /** Gọn cho khung bên phải (hẹp). */ compact?: boolean }) {
   const { store, docType, docId, setNotice } = props;
   const [steps, setSteps] = useState<(ApprovalStep & { canSign: boolean })[] | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -42,6 +43,17 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
       props.onChanged();
     } catch (error) { setNotice(errorMessage(error), "error"); }
   };
+  // Nhắc gấp người đang đến lượt ký (chuông + email), tối đa 1 lần / 30 phút mỗi bước
+  const returned = steps.some((step) => step.result === "returned");
+  const currentId = returned ? null : steps.find((step) => step.result === "pending")?.id ?? null;
+  const remind = async (step: ApprovalStep) => {
+    const note = window.prompt(`Nhắc gấp ${stepTitle(step.role, step.assigneeName)} ký. Lời nhắn (có thể để trống):`, "Cần gấp, nhờ anh/chị ký sớm.");
+    if (note === null) return;
+    try {
+      const sent = await store.remind(step.id, note);
+      setNotice(`Đã nhắc ${sent} người (thông báo + email).`, "success");
+    } catch (error) { setNotice(errorMessage(error), "error"); }
+  };
   // Giám đốc duyệt ngay: bước Lãnh đạo còn chờ, phiếu chưa bị trả về
   const leaderPending = steps.some((step) => step.role === "leader" && step.result === "pending") && !steps.some((step) => step.result === "returned");
   const approveNow = async () => {
@@ -55,7 +67,7 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
     } catch (error) { setNotice(errorMessage(error), "error"); }
   };
   return (
-    <section className="panel pj-section" aria-label={props.title ?? "Chuỗi ký duyệt"}>
+    <section className={`panel pj-section${props.compact ? " ap-chain-compact" : ""}`} aria-label={props.title ?? "Chuỗi ký duyệt"}>
       <h2 className="ap-chain-head"><span><ClipboardSignature className="ico" size={18} aria-hidden="true" /> {props.title ?? "Chuỗi ký duyệt"}</span>
         {isDirector && leaderPending && <button type="button" className="button primary" onClick={() => void approveNow()}><Crown className="ico" size={15} aria-hidden="true" /> Giám đốc duyệt ngay</button>}
       </h2>
@@ -73,6 +85,11 @@ export function ApprovalChain(props: { store: PurchaseStore; docType: ApprovalDo
                 {step.note && <small className="muted">“{step.note}”</small>}
               </div>
               <span className={`pill ${tone}`}>{label}</span>
+              {step.id === currentId && !step.canSign && (
+                <span className="ap-actions">
+                  <button type="button" className="button ap-remind" onClick={() => void remind(step)} title="Đẩy thông báo gấp tới người cần ký"><BellRing className="ico" size={15} aria-hidden="true" /> Nhắc</button>
+                </span>
+              )}
               {step.canSign && (
                 <span className="ap-actions">
                   <button type="button" className="button primary" onClick={() => void sign(step, true)}><Check className="ico" size={15} aria-hidden="true" /> Ký</button>

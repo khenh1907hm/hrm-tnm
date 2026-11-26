@@ -258,3 +258,30 @@
 .av-zoom { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 23, 42, .92); display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 10px; overflow: auto; }
 .av-zoom-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: #fff; position: sticky; top: 0; }
 .av-zoom img { max-width: 100%; height: auto; background: #fff; }
+
+/* Thanh giai đoạn mua hàng + bước của đơn: kiểu dải mũi tên xanh lá; khối đang chọn nền xanh đậm, viền nhạt, chuyển mượt */
+.op-step { transition: background-color .25s ease, color .25s ease, transform .25s ease, filter .2s ease; }
+.op-step .op-num { transition: background-color .25s ease, color .25s ease, transform .25s ease; }
+.op-nav .op-step.is-todo, .op-nav .op-step.is-current { --op-bg: var(--ok-bg); --op-ink: var(--ok); }
+.op-nav .op-step .op-num { background: var(--success); color: #fff; }
+.op-nav .op-step:hover:not(.is-current) { --op-bg: #d1fadf; }
+.op-nav .op-step.is-current, .op-step.is-picked { --op-bg: #15803d; --op-ink: #fff; box-shadow: inset 0 0 0 2px rgb(255 255 255 / .45); }
+.op-nav .op-step.is-current .op-num, .op-step.is-picked .op-num { background: #fff; color: #15803d; transform: scale(1.08); }
+.op-step.is-picked .op-label { text-decoration: none; }
+.op-nav .op-step.is-current .op-label, .op-step.is-picked .op-label { animation: op-pick .3s ease; }
+.op-nav .op-step.is-current .op-badge { background: #fff; color: #15803d; }
+@keyframes op-pick { from { opacity: .4; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .op-step, .op-step .op-num { transition: none; } .op-step .op-label { animation: none !important; } }
+
+/* Thông tin riêng của bước đang xem */
+.sd-extra { display: grid; gap: 8px; margin: 4px 0 12px; }
+.sd { animation: sd-in .25s ease; }
+@keyframes sd-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Chuỗi ký ở khung bên phải (hẹp) */
+.ap-chain-compact { padding: 12px; }
+.ap-chain-compact h2 { font-size: 15px; flex-wrap: wrap; gap: 6px; }
+.ap-chain-compact .ap-step { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 6px; }
+.ap-chain-compact .ap-actions { grid-column: 1 / -1; justify-content: flex-end; }
+.ap-remind { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
+.ap-remind:hover { background: #fef3c7; }
