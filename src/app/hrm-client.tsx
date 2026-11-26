@@ -388,12 +388,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
     if (!selected || !app) return;
     const next = active ? "active" : "inactive";
     if (selected.status === next) return;
-    // Ảnh kiểu cũ (data URL) cần chuyển kho qua form sửa hồ sơ
-    if (typeof selected.photo === "string") { setNotice("Hồ sơ còn ảnh kiểu cũ, hãy đổi trạng thái trong Sửa hồ sơ."); void openEdit(); return; }
-    const revealed = await app.employees.revealCccd(actor, selected.id);
-    if (!revealed.ok) { setNotice(issueText(revealed.errors[0]?.code ?? "FORBIDDEN")); return; }
-    const initial = editInitial(selected, revealed.value);
-    const result = await app.employees.update(actor, { ...initial, photo: selected.photo ?? null, status: next, id: selected.id, expectedVersion: selected.version });
+    const result = await app.employees.setStatus(actor, { id: selected.id, expectedVersion: selected.version, status: next });
     if (!result.ok) { setNotice(issueText(result.errors[0]?.code ?? "FORBIDDEN"), "error"); return; }
     setSelected(result.value);
     setNotice(active ? "Đã chuyển hồ sơ sang Đang làm việc." : "Đã chuyển hồ sơ sang Không hoạt động: vẫn hiện trong danh sách, không nhắc hạn chứng chỉ.");

@@ -224,6 +224,19 @@ export function createEmployeeUseCases(ctx: HrAppContext) {
       await writeAudit(actor, "employee.extra.update", "employee", value.id, before, value);
       return success({ ...value, cccd: maskCccd(value.cccd) });
     },
+    /** Cần gạt Đang làm việc ↔ Không hoạt động: chỉ đổi trạng thái, không kiểm lại các trường khác của hồ sơ. */
+    setStatus: async (actor: Actor, input: { id: string; expectedVersion: number; status: "active" | "inactive" }): Promise<Result<Employee>> => {
+      if (!has(actor, "employeeWrite")) return err("FORBIDDEN");
+      if (input.status !== "active" && input.status !== "inactive") return err("FORBIDDEN");
+      const before = await getEmployee(input.id);
+      if (!before || before.archivedAt) return err("EMP_NOT_FOUND");
+      if (before.version !== input.expectedVersion) return err("CONFLICT");
+      if (before.status === input.status) return success({ ...before, cccd: maskCccd(before.cccd) });
+      const value: Employee = { ...before, status: input.status, endDate: input.status === "active" ? null : before.endDate, version: before.version + 1 };
+      if (!await repositories.employees.replace(value, input.expectedVersion)) return err("CONFLICT");
+      await writeAudit(actor, "employee.update", "employee", value.id, before, value);
+      return success({ ...value, cccd: maskCccd(value.cccd) });
+    },
     revealCccd: async (actor: Actor, id: string): Promise<Result<string>> => {
       if (!has(actor, "employeeReveal")) return err("FORBIDDEN");
       const employee = await getEmployee(id);
