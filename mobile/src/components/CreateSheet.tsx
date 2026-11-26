@@ -13,7 +13,9 @@ import { MODAL_ORIENTATIONS } from "@/lib/layout";
  */
 const ACTIONS: { icon: IconName; tone: Tone; title: string; sub: string; href?: Href }[] = [
   { icon: "report", tone: "rose", title: "Báo cáo ngày", sub: "Công việc, nhân lực, ảnh thi công", href: "/report" },
-  { icon: "shield", tone: "sky", title: "Kiểm tra dụng cụ điện", sub: "Tool & machine check, ảnh từng máy, OK / NG", href: "/tool-check" as Href },
+  { icon: "task", tone: "orange", title: "Báo cáo hằng tháng", sub: "Báo cáo công trình, báo cáo thiết bị", href: "/monthly" as Href },
+  { icon: "camera", tone: "rose", title: "Báo cáo công trình", sub: "Chụp lỗi, khoanh, giao trưởng dự án sửa", href: "/inspection" as Href },
+  { icon: "shield", tone: "sky", title: "Báo cáo thiết bị", sub: "Kiểm tra dụng cụ điện, ảnh từng máy, OK / NG", href: "/tool-check" as Href },
   { icon: "calendar", tone: "sky", title: "Đơn xin nghỉ phép", sub: "Nghỉ phép, nghỉ việc riêng" },
   { icon: "clock", tone: "orange", title: "Đăng ký tăng ca", sub: "Làm thêm giờ, ngày nghỉ" },
   { icon: "box", tone: "navy", title: "Đề xuất vật tư", sub: "Yêu cầu vật tư cho công trường" },

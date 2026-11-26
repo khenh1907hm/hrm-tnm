@@ -1,0 +1,26 @@
+/* Báo cáo công trình: lỗi trước / sau, vẽ khoanh trên ảnh */
+.si-item { display: grid; gap: 10px; }
+.si-item-head { display: flex; justify-content: space-between; align-items: center; }
+.si-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.si-side { display: grid; gap: 8px; align-content: start; padding: 10px; border-radius: 10px; border: 1px solid var(--line); }
+.si-side h4 { margin: 0; text-align: center; font-size: 14px; letter-spacing: .5px; }
+.si-side.is-before { background: #fff7f7; }
+.si-side.is-before h4 { color: #b91c1c; }
+.si-side.is-after { background: #f4fbf6; }
+.si-side.is-after h4 { color: #15803d; }
+.si-photo { display: grid; gap: 6px; }
+.si-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 10px; }
+.si-fields .field.wide { grid-column: 1 / -1; }
+.si-fields textarea { width: 100%; resize: vertical; }
+@media (max-width: 800px) { .si-grid, .si-fields { grid-template-columns: 1fr; } }
+
+.pm-photo, .pm-canvas { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #0f172a; }
+.pm-photo { all: unset; position: relative; display: block; width: 100%; border-radius: 8px; overflow: hidden; cursor: zoom-in; }
+.pm-photo:disabled { cursor: default; }
+.pm-photo img, .pm-canvas img { display: block; width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+.pm-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pm-canvas { cursor: crosshair; }
+.pm-empty { display: grid; place-items: center; min-height: 160px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); font-size: 13px; }
+.pm { display: grid; gap: 8px; }
+.pm-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pm-dialog { width: min(980px, 96vw); max-height: 94vh; overflow: auto; display: grid; gap: 10px; }

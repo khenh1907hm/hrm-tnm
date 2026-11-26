@@ -21,10 +21,11 @@ export const VIEW_PATHS: Record<PageView, string> = {
   approvals: "/don-can-duyet",
   approvalSettings: "/quy-trinh-duyet",
   bugReports: "/bao-loi",
+  monthlyReports: "/bao-cao-hang-thang",
 };
 
 /** Vai trò Nhân viên chỉ vào được các màn hình này. */
-export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet", "projectPurchases", "purchases", "approvals"];
+export const EMPLOYEE_VIEWS: readonly PageView[] = ["skills", "tools", "projects", "timesheet", "projectPurchases", "purchases", "approvals", "monthlyReports"];
 
 /** Mục quyền cần có để mở từng màn hình; null là ai cũng mở được, "admin" là chỉ Admin. */
 const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
@@ -49,6 +50,8 @@ const VIEW_ACCESS: Record<PageView, AccessKey | "admin" | null> = {
   approvals: null,
   approvalSettings: "admin",
   bugReports: "admin",
+  // Ai cũng mở được: RLS chỉ trả báo cáo người đó liên quan (người lập, người được giao, người trong dự án)
+  monthlyReports: null,
 };
 
 export function canOpenView(actor: Actor, view: PageView): boolean {
@@ -82,6 +85,7 @@ export const VIEW_TITLES: Record<PageView, string> = {
   approvals: "Việc của tôi",
   approvalSettings: "Quy trình duyệt",
   bugReports: "Báo lỗi",
+  monthlyReports: "Báo cáo hằng tháng",
 };
 
 /** projectId chỉ có khi mở một dự án (/du-an/<id>). */
@@ -114,4 +118,27 @@ export const purchasePath = (orderId: string) => `${VIEW_PATHS.purchases}/${enco
 /** URL của một màn hình; có employeeId thì mở thẳng hồ sơ nhân sự đó. */
 export function routePath(view: PageView, employeeId: string | null = null): string {
   return view === "employees" && employeeId ? `${VIEW_PATHS.employees}/${encodeURIComponent(employeeId)}` : VIEW_PATHS[view];
+}
+
+/**
+ * Mở web trên điện thoại: chuyển sang giao diện app (tnm.com.vn/app, cùng phiên đăng nhập) cho đồng bộ.
+ * Trang có màn tương ứng trong app thì mở đúng màn đó; còn lại về trang đầu của app.
+ * Người dùng chọn "Bản đầy đủ" (?desktop=1) thì giữ web, nhớ trên máy.
+ */
+export const PREFER_DESKTOP_KEY = "tnm.preferDesktop";
+export function mobileAppPath(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  if (pathname.startsWith(VIEW_PATHS.monthlyReports)) {
+    const id = params.get("phieu");
+    if (id) return `/app/inspection?id=${encodeURIComponent(id)}`;
+    return params.get("muc") === "thiet-bi" ? "/app/tool-check" : "/app/monthly";
+  }
+  if (pathname.startsWith(VIEW_PATHS.timesheet)) return "/app/";
+  return "/app/";
+}
+/** Chỉ chuyển ở điện thoại (màn hẹp, cảm ứng), không chuyển trang công khai / trang tạm. */
+export function shouldUseMobileApp(input: { width: number; coarse: boolean; pathname: string; search: string; preferDesktop: boolean }): boolean {
+  if (input.preferDesktop || new URLSearchParams(input.search).get("desktop") === "1") return false;
+  if (/^\/(app|chinh-sach-bao-mat|nhap-ho-so-tam|skills)(\/|$)/.test(input.pathname)) return false;
+  return input.coarse && input.width < 768;
 }

@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, type Href } from "expo-router";
 import { useCallback, useState } from "react";
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { AppIcon, Glyph, type IconName } from "@/components/AppIcon";
@@ -32,6 +32,9 @@ export default function NotificationsScreen() {
       setItems((list) => list?.map((n) => (n.id === item.id ? { ...n, readAt: new Date().toISOString() } : n)) ?? null);
       void markRead([item.id]).catch(() => undefined);
     }
+    // Báo cáo công trình mở ngay trong app
+    const inspection = /^\/bao-cao-hang-thang\?(?:.*&)?phieu=([0-9a-f-]{36})/i.exec(item.link ?? "");
+    if (inspection) { router.push(`/inspection?id=${encodeURIComponent(inspection[1]!)}` as Href); return; }
     if (item.link) void Linking.openURL(item.link.startsWith("http") ? item.link : `${webBase()}${item.link}`);
   };
 

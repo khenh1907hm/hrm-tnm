@@ -80,6 +80,32 @@ export async function deleteType(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** Danh mục thiết bị có sẵn (Báo cáo thiết bị): chọn từ danh sách thay vì gõ tên, kèm loại mặc định. */
+export type CatalogItem = { id: string; name: string; typeId: string | null };
+export async function loadCatalog(): Promise<CatalogItem[]> {
+  const { data, error } = await supabase.from("tool_check_catalog").select("id, name, type_id, position").order("position").order("name");
+  if (error) return [];
+  return ((data ?? []) as Row[]).map((row) => ({ id: str(row.id), name: str(row.name), typeId: row.type_id ? str(row.type_id) : null }));
+}
+/**
+ * Tên cho thiết bị mới cùng loại: "Máy khoan 1", "Máy khoan 2"… (số tiếp theo sau số lớn nhất đang có).
+ * Dòng đã đặt tên trùng hẳn "Máy khoan" (không số) được tính là số 1.
+ */
+export function nextSerial(name: string, rows: readonly Pick<ToolRow, "serial">[]): string {
+  const base = name.trim().replace(/\s+/g, " ");
+  const fold = (text: string) => text.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+  const prefix = fold(base);
+  let max = 0;
+  for (const row of rows) {
+    const serial = fold(row.serial);
+    if (serial === prefix) { max = Math.max(max, 1); continue; }
+    if (!serial.startsWith(`${prefix} `)) continue;
+    const number = Number(serial.slice(prefix.length + 1));
+    if (Number.isInteger(number) && number > 0) max = Math.max(max, number);
+  }
+  return `${base} ${max + 1}`;
+}
+
 export async function loadTemplate(projectId: string): Promise<TemplateRow[]> {
   const { data, error } = await supabase.from("tool_check_templates").select("rows").eq("project_id", projectId).maybeSingle();
   if (error) throw new Error(error.message);

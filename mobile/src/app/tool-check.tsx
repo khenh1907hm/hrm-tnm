@@ -18,7 +18,7 @@ import { errorText } from "@/lib/errors";
 import { MODAL_ORIENTATIONS } from "@/lib/layout";
 import { colors, fonts, radius, space, text } from "@/lib/theme";
 import {
-  canManageTypes, cloneRowsWithoutPhotos, deleteType, emptyRow, fromTemplate, ITEM_KEYS, ITEM_LABEL, itemsOf, photoCountOf, loadCheck, loadPreviousCheck, loadTemplate, loadToolProjects, loadTypes, newKey, OPTIONAL_ITEMS, readDraft, recentMonths, shiftMonth,
+  type CatalogItem, canManageTypes, cloneRowsWithoutPhotos, deleteType, emptyRow, fromTemplate, ITEM_KEYS, ITEM_LABEL, itemsOf, photoCountOf, loadCheck, loadPreviousCheck, loadTemplate, loadToolProjects, loadTypes, loadCatalog, nextSerial, newKey, OPTIONAL_ITEMS, readDraft, recentMonths, shiftMonth,
   saveCheck, saveTemplate, saveType, signedUrls, writeDraft, type ItemKey, type PhotoRef, type SavedCheck, type TemplateRow, type ToolProject, type ToolRow, type ToolType,
 } from "@/lib/toolCheck";
 
@@ -65,6 +65,9 @@ export default function ToolCheckScreen() {
   const [flow, setFlow] = useState<Flow | null>(null);
   const [cellMenu, setCellMenu] = useState<Slot | null>(null);
   const [typePickerFor, setTypePickerFor] = useState<string | null>(null);
+  // Chọn thiết bị từ danh mục có sẵn: cho một dòng (key) hoặc thêm dòng mới ("new")
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [devicePickerFor, setDevicePickerFor] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [askTemplate, setAskTemplate] = useState(false);
   const [askCopyPrev, setAskCopyPrev] = useState(false);
@@ -90,6 +93,19 @@ export default function ToolCheckScreen() {
     }
   }, []);
   useEffect(() => { void loadBase(); }, [loadBase]);
+  useEffect(() => { void loadCatalog().then(setCatalog); }, []);
+  const pickDevice = (item: CatalogItem) => {
+    const target = devicePickerFor;
+    setDevicePickerFor(null);
+    setRows((list) => {
+      if (target === "new" || !list.some((r) => r.key === target)) {
+        const kept = list.filter((r) => r.serial.trim() || Object.values(r.photos).some(Boolean));
+        return [...kept, { ...emptyRow(SUBCON, item.typeId), serial: nextSerial(item.name, kept) }];
+      }
+      const others = list.filter((r) => r.key !== target);
+      return list.map((r) => r.key === target ? { ...r, serial: nextSerial(item.name, others), typeId: item.typeId ?? r.typeId } : r);
+    });
+  };
 
   // Đổi dự án / tháng: ưu tiên bản nháp trên máy, rồi phiếu đã lưu của tháng; chưa có thì hỏi dùng danh sách tháng trước
   useEffect(() => {
@@ -362,10 +378,11 @@ export default function ToolCheckScreen() {
               )}
               <ToolTable rows={rows} types={types} urls={urls} highlight={highlight}
                 onSerial={(row, serial) => patchRow(row.key, { serial })} onNote={(row, note) => patchRow(row.key, { note })}
-                onShootRow={sequenceForRow} onType={(row) => setTypePickerFor(row.key)} onCell={setCellMenu}
+                onShootRow={sequenceForRow} onType={(row) => setTypePickerFor(row.key)} onCell={setCellMenu} onDevice={(row) => setDevicePickerFor(row.key)}
                 onResult={(row) => patchRow(row.key, { result: row.result === "OK" ? "NG" : "OK" })}
                 onRemove={(row) => setRows((list) => list.filter((r) => r.key !== row.key))} />
-              <SecondaryButton label="Thêm dụng cụ" icon={<Glyph name="add" size={18} color={colors.skyDeep} fillOpacity={0} />} onPress={() => setRows((list) => [...list, emptyRow(SUBCON, list.at(-1)?.typeId ?? null)])} />
+              {catalog.length > 0 && <GradientButton label="Thêm thiết bị từ danh sách" onPress={() => setDevicePickerFor("new")} />}
+              <SecondaryButton label="Thêm dụng cụ (gõ tên)" icon={<Glyph name="add" size={18} color={colors.skyDeep} fillOpacity={0} />} onPress={() => setRows((list) => [...list, emptyRow(SUBCON, list.at(-1)?.typeId ?? null)])} />
               <GradientButton label="Lưu phiếu kiểm tra" busy={Boolean(busy)} busyLabel={busy ?? "Đang lưu…"} onPress={trySave} />
               {checkId && <SecondaryButton label={template.length ? "Cập nhật dữ liệu mẫu theo danh sách này" : "Lưu làm dữ liệu mẫu"} onPress={() => setAskTemplate(true)} />}
             </>
@@ -378,6 +395,14 @@ export default function ToolCheckScreen() {
 
       <PickerSheet visible={pickingMonth} title="Chọn tháng nhập phiếu" placeholder="Tìm tháng, vd 05/2026" items={monthItems} selectedId={month} emptyText="Không có tháng nào"
         onSelect={(item) => { setPickingMonth(false); setMonth(item.id); }} onClose={() => setPickingMonth(false)} />
+
+      <PickerSheet visible={devicePickerFor !== null} title="Chọn thiết bị" placeholder="Tìm thiết bị, vd máy khoan" selectedId={null} emptyText="Chưa có danh mục thiết bị."
+        items={catalog.map((c) => {
+          const type = types.find((t) => t.id === c.typeId);
+          const count = Number(nextSerial(c.name, rows.filter((r) => r.key !== devicePickerFor)).split(" ").pop()) - 1;
+          return { id: c.id, title: c.name, subtitle: [type ? `${type.name} · ${photoCountOf(type)} ảnh` : "", count ? `đã có ${count}, thêm sẽ là số ${count + 1}` : ""].filter(Boolean).join(" · "), ...(type ? { number: photoCountOf(type) } : {}) };
+        })}
+        onSelect={(item) => { const found = catalog.find((c) => c.id === item.id); if (found) pickDevice(found); else setDevicePickerFor(null); }} onClose={() => setDevicePickerFor(null)} />
 
       <PickerSheet visible={typeRow !== null} title="Loại dụng cụ" placeholder="Tìm loại" selectedId={typeRow?.typeId ?? null} emptyText="Chưa có loại nào. Người quản lý đặt ở nút ⚙ trên cùng."
         items={types.map((t) => ({ id: t.id, title: t.name, subtitle: `${photoCountOf(t)} ảnh: ${["Bên ngoài", ...t.items.map((k) => ITEM_LABEL[k].vi)].join(" · ")}`, number: photoCountOf(t) }))}
@@ -477,8 +502,8 @@ function FlowView({ flow, title, item, onShoot, onSkip, onSave, onStop, onRetake
  * Bảng ngang như Excel: mỗi dụng cụ một dòng (Serial/Code, Loại, 4 cột ảnh, Result).
  * highlight: dòng còn thiếu ảnh tô đỏ nhạt, ô cần bổ sung tô đỏ đậm.
  */
-function ToolTable({ rows, types, urls, highlight, onSerial, onNote, onShootRow, onType, onCell, onResult, onRemove }: {
-  rows: ToolRow[]; types: ToolType[]; urls: Record<string, string>; highlight: boolean;
+function ToolTable({ rows, types, urls, highlight, onSerial, onNote, onShootRow, onType, onCell, onResult, onRemove, onDevice }: {
+  rows: ToolRow[]; types: ToolType[]; urls: Record<string, string>; highlight: boolean; onDevice: (row: ToolRow) => void;
   onSerial: (row: ToolRow, serial: string) => void; onNote: (row: ToolRow, note: string) => void; onShootRow: (row: ToolRow) => void;
   onType: (row: ToolRow) => void; onCell: (slot: Slot) => void; onResult: (row: ToolRow) => void; onRemove: (row: ToolRow) => void;
 }) {
@@ -500,6 +525,7 @@ function ToolTable({ rows, types, urls, highlight, onSerial, onNote, onShootRow,
               <View style={[styles.tdBox, styles.colName, styles.nameCell]}>
                 <TextInput style={styles.tdInput} value={row.serial} onChangeText={(v) => onSerial(row, v)} placeholder={`Dụng cụ #${index + 1}`} autoCapitalize="characters" multiline />
                 <View style={styles.nameActions}>
+                  <Pressable onPress={() => onDevice(row)} hitSlop={6} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={`Chọn thiết bị cho ${rowName(row, index)}`}><Glyph name="search" size={18} color={colors.skyDeep} fillOpacity={0.15} /></Pressable>
                   <Pressable onPress={() => onShootRow(row)} hitSlop={6} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={`Chụp lần lượt ${rowName(row, index)}`}><Glyph name="camera" size={18} color={colors.orange} fillOpacity={0.2} /></Pressable>
                   <Pressable onPress={() => onRemove(row)} hitSlop={6} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel={`Bỏ ${rowName(row, index)}`}><Glyph name="trash" size={18} color={colors.rose} fillOpacity={0.12} /></Pressable>
                 </View>

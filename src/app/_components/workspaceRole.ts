@@ -18,6 +18,6 @@ export function isLimitedRole(role: ProfileRole): role is LimitedRole {
 
 /** Nhãn, trang mở đầu và thứ tự menu của khung giới hạn theo vai trò. */
 export const LIMITED_ROLE_INFO: Record<LimitedRole, { label: string; home: PageView; nav: readonly PageView[] }> = {
-  engineer: { label: "Kỹ sư", home: "tools", nav: ["tools", "projects", "timesheet", "projectPurchases", "purchases", "approvals", "skills"] },
-  employee: { label: "Nhân viên", home: "skills", nav: ["skills", "projects", "timesheet", "projectPurchases", "purchases", "approvals", "tools"] },
+  engineer: { label: "Kỹ sư", home: "tools", nav: ["tools", "projects", "timesheet", "monthlyReports", "projectPurchases", "purchases", "approvals", "skills"] },
+  employee: { label: "Nhân viên", home: "skills", nav: ["skills", "projects", "timesheet", "monthlyReports", "projectPurchases", "purchases", "approvals", "tools"] },
 };

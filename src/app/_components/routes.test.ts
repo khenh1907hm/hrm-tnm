@@ -31,7 +31,8 @@ describe("routes", () => {
   it("trang Công cụ có URL riêng; Nhân viên chỉ vào Kho Skill AI và Công cụ", () => {
     expect(routePath("tools")).toBe("/cong-cu");
     expect(parseRoute("/cong-cu")).toEqual({ view: "tools", employeeId: null });
-    expect(EMPLOYEE_VIEWS).toEqual(["skills", "tools", "projects", "timesheet", "projectPurchases", "purchases", "approvals"]);
+    expect(EMPLOYEE_VIEWS).toEqual(["skills", "tools", "projects", "timesheet", "projectPurchases", "purchases", "approvals", "monthlyReports"]);
+    expect(parseRoute("/bao-cao-hang-thang")).toEqual({ view: "monthlyReports", employeeId: null });
   });
 
   it("đường dẫn lạ thì trả null", () => {
@@ -39,5 +40,22 @@ describe("routes", () => {
     expect(parseRoute("/canh-bao/x")).toBeNull();
     expect(parseRoute("/nhan-su/a/b")).toBeNull();
     expect(parseRoute("/nhan-su/%E0")).toBeNull();
+  });
+});
+
+import { mobileAppPath, shouldUseMobileApp } from "./routes";
+describe("web trên điện thoại chuyển sang giao diện app", () => {
+  it("mở đúng màn trong app", () => {
+    expect(mobileAppPath("/bao-cao-hang-thang", "?phieu=1b2c3d4e-0000-0000-0000-000000000000")).toBe("/app/inspection?id=1b2c3d4e-0000-0000-0000-000000000000");
+    expect(mobileAppPath("/bao-cao-hang-thang", "?muc=thiet-bi")).toBe("/app/tool-check");
+    expect(mobileAppPath("/du-an/abc", "")).toBe("/app/");
+  });
+  it("chỉ chuyển ở điện thoại, trừ khi chọn bản đầy đủ", () => {
+    const base = { width: 390, coarse: true, pathname: "/du-an", search: "", preferDesktop: false };
+    expect(shouldUseMobileApp(base)).toBe(true);
+    expect(shouldUseMobileApp({ ...base, width: 1280, coarse: false })).toBe(false);
+    expect(shouldUseMobileApp({ ...base, search: "?desktop=1" })).toBe(false);
+    expect(shouldUseMobileApp({ ...base, preferDesktop: true })).toBe(false);
+    expect(shouldUseMobileApp({ ...base, pathname: "/chinh-sach-bao-mat" })).toBe(false);
   });
 });

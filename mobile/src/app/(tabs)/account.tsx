@@ -47,7 +47,7 @@ export default function AccountScreen() {
         </Card>
       </FadeSlide>
       <FadeSlide delay={160}>
-        <Pressable onPress={() => void Linking.openURL("https://tnm.com.vn")} style={styles.link} accessibilityRole="link">
+        <Pressable onPress={() => void Linking.openURL("https://tnm.com.vn/?desktop=1")} style={styles.link} accessibilityRole="link">
           <Glyph name="home" size={18} color={colors.skyDeep} fillOpacity={0.15} />
           <Text style={styles.linkText}>Mở bản web đầy đủ: tnm.com.vn</Text>
         </Pressable>

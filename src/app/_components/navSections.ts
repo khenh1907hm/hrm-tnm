@@ -6,7 +6,7 @@ import type { PageView } from "./shared";
  * Thanh bên gọn (phương án A): mỗi mục là một "phần", có thể gồm nhiều màn hình hiện thành tab ở đầu trang.
  * Người xem chỉ thấy phần có ít nhất một màn hình họ mở được; bấm phần là mở màn hình đầu tiên họ được vào.
  */
-export type NavSectionKey = "inbox" | "people" | "certs" | "projects" | "timesheet" | "purchases" | "docs" | "settings";
+export type NavSectionKey = "inbox" | "people" | "certs" | "projects" | "timesheet" | "monthly" | "purchases" | "docs" | "settings";
 export type NavSection = { key: NavSectionKey; label: string; group: string; views: readonly PageView[] };
 export const NAV_SECTIONS: readonly NavSection[] = [
   { key: "inbox", label: "Việc của tôi", group: "", views: ["approvals"] },
@@ -15,6 +15,7 @@ export const NAV_SECTIONS: readonly NavSection[] = [
   // Đặt hàng dự án là một tab trong phần Dự án
   { key: "projects", label: "Dự án", group: "Dự án", views: ["projects", "projectPurchases"] },
   { key: "timesheet", label: "Chấm công", group: "Dự án", views: ["timesheet"] },
+  { key: "monthly", label: "Báo cáo hằng tháng", group: "Dự án", views: ["monthlyReports"] },
   { key: "purchases", label: "Văn phòng", group: "Mua hàng", views: ["purchases"] },
   { key: "docs", label: "Tài liệu", group: "Khác", views: ["reports", "skills", "tools"] },
   { key: "settings", label: "Cài đặt", group: "Khác", views: ["accounts", "approvalSettings", "certTypes", "settings", "laborRates", "audit", "bugReports"] },

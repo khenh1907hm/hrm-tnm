@@ -2,6 +2,7 @@
 import { SkeletonPage, SkeletonShell } from "./_components/Skeleton";
 
 import { TopBarActions } from "./_components/TopBarActions";
+import { MonthlyReportsPage } from "./_components/reports/MonthlyReportsPage";
 import { ApprovalSettingsPage } from "./_components/ApprovalSettingsPage";
 import { BugReportsPage } from "./_components/BugReports";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -47,7 +48,7 @@ import { LoginScreen, PendingAccessScreen } from "./_components/LoginScreen";
 import { EmployeeWorkspace, ToolsPage } from "./_components/EmployeeWorkspace";
 import type { FileFolder } from "./_components/fileStore";
 import { photoRef } from "../modules/employees/photo";
-import { canOpenView, firstOpenView, parseRoute, projectPath, purchasePath, routePath, VIEW_TITLES } from "./_components/routes";
+import { canOpenView, firstOpenView, mobileAppPath, parseRoute, PREFER_DESKTOP_KEY, projectPath, purchasePath, routePath, shouldUseMobileApp, VIEW_TITLES } from "./_components/routes";
 import { PurchasesPage } from "./_components/purchases/PurchasesPage";
 import { getPurchaseStore } from "./_components/purchases/usePurchaseStore";
 import SkillsClient from "./skills/SkillsClient";
@@ -63,6 +64,20 @@ import type { EmployeeSource } from "./_components/projects/projectShared";
 export default function HrmClient() {
   const backend = useBackend();
   const pathname = usePathname();
+  // Mở trên điện thoại: chuyển sang giao diện app (tnm.com.vn/app, cùng phiên đăng nhập) cho đồng bộ với app
+  useEffect(() => {
+    if (!getSupabaseClient()) return;
+    let preferDesktop = false;
+    try {
+      if (new URLSearchParams(window.location.search).get("desktop") === "1") window.localStorage.setItem(PREFER_DESKTOP_KEY, "1");
+      if (new URLSearchParams(window.location.search).get("desktop") === "0") window.localStorage.removeItem(PREFER_DESKTOP_KEY);
+      preferDesktop = window.localStorage.getItem(PREFER_DESKTOP_KEY) === "1";
+    } catch { /* trình duyệt chặn lưu trữ */ }
+    const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+    if (shouldUseMobileApp({ width: window.innerWidth, coarse, pathname: window.location.pathname, search: window.location.search, preferDesktop })) {
+      window.location.replace(mobileAppPath(window.location.pathname, window.location.search));
+    }
+  }, []);
   if (backend.status === "loading") return <SkeletonShell />;
   // Kho Skill xem công khai được, không bắt đăng nhập
   if (backend.status === "signedOut") return parseRoute(pathname)?.view === "skills" ? <SkillsClient /> : <LoginScreen onSignIn={backend.signIn} />;
@@ -508,6 +523,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
         {view === "signatures" && <SignaturesView app={app} actor={actor} signatureRows={signatureRows} onSignatureRowsChange={setSignatureRows} sessionFiles={sessionFiles} ensureFiles={(refs) => ensureFiles(refs.map((ref) => ({ ...ref, folder: "signatures" as const })))} onFilesAdded={(files) => { setSessionFiles((current) => ({ ...current, ...files })); void storeFiles("signatures", files); }} setNotice={setNotice} />}
         {view === "reports" && <ReportTemplatesPanel templates={templates} onTemplatesChange={setTemplates} employees={rows} setNotice={setNotice} app={app} actor={actor} partners={partnerStore} loadSignatureFile={loadSignatureFile} />}
         {view === "skills" && <SkillsClient embedded />}
+        {view === "monthlyReports" && <MonthlyReportsPage actor={actor} projectStore={projectStore.store} employees={employeeSource} setNotice={setNotice} />}
         {view === "tools" && <ToolsPage orgChart={{ store: projectStore.store, ready: projectStore.ready, actor, employees: employeeSource, setNotice }} />}
         {view === "audit" && <AuditLogView app={app} actor={actor} onOpenEmployee={(employeeId) => navigate("employees", employeeId)} />}
         {view === "projects" && <ProjectsPage store={projectStore.store} ready={projectStore.ready} actor={actor} employees={employeeSource} projectId={route.projectId ?? null} onOpen={openProject} setNotice={setNotice} />}

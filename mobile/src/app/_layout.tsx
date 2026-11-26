@@ -44,6 +44,8 @@ function RootStack() {
         <Stack.Screen name="notifications" options={{ animation: "slide_from_right" }} />
         <Stack.Screen name="explain" options={{ animation: "slide_from_bottom" }} />
         <Stack.Screen name="tool-check" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="inspection" options={{ animation: "slide_from_right" }} />
+        <Stack.Screen name="monthly" options={{ animation: "slide_from_right" }} />
       </Stack.Protected>
     </Stack>
   );
