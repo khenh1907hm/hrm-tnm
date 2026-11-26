@@ -39,7 +39,7 @@ export async function checkSession(client: SupabaseClient): Promise<SessionState
   if (claiming) await claiming;
   const key = await readKey();
   if (!key) { await claimSession(client); return "ok"; }
-  const { data, error } = await client.rpc("session_check", { p_key: key });
+  const { data, error } = await client.rpc("session_check", { p_key: key, p_v: 2 });
   if (error) return "ok";
   if (data === "none") { await claimSession(client); return "ok"; }
   return data === "replaced" || data === "expired" ? data : "ok";
@@ -50,3 +50,21 @@ export const kickMessage = (state: Exclude<SessionState, "ok">) => state === "re
   : "Phiên đăng nhập đã quá 24 giờ, vui lòng đăng nhập lại.";
 
 export const forgetSessionKey = () => writeKey(null);
+
+
+/**
+ * Bỏ phiên ở riêng máy này, KHÔNG gọi máy chủ. Gọi /logout bằng phiên đã bị thu hồi (do đăng nhập nơi khác)
+ * làm Supabase đăng xuất mọi phiên của tài khoản, kể cả phiên mới vừa đăng nhập ở máy kia.
+ */
+export async function dropLocalSession(client: SupabaseClient): Promise<void> {
+  const auth = client.auth as unknown as { _removeSession?: () => Promise<void> };
+  if (typeof auth._removeSession === "function") { await auth._removeSession().catch(() => undefined); return; }
+  await client.auth.signOut({ scope: "local" }).catch(() => undefined);
+}
+
+/** Đăng xuất do người dùng bấm: phiên còn sống thì thu hồi trên máy chủ; phiên đã bị thu hồi thì chỉ bỏ ở máy này. */
+export async function safeSignOut(client: SupabaseClient): Promise<void> {
+  const { error } = await client.auth.getUser();
+  if (error) { await dropLocalSession(client); return; }
+  await client.auth.signOut({ scope: "local" }).catch(() => dropLocalSession(client));
+}

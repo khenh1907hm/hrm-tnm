@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { clearAccountCache } from "./accountApi";
-import { checkSession, claimSession, forgetSessionKey, kickLocal } from "./singleSession";
+import { checkSession, claimSession, forgetSessionKey, kickLocal, safeSignOut } from "./singleSession";
 import type { Session } from "@supabase/supabase-js";
 import { createHrApp } from "../../app-core/createHrApp";
 import { fixedClock, systemClock } from "../../lib/clock";
@@ -178,7 +178,7 @@ export function useBackend(): Backend {
     setProfile(null);
     forgetSessionKey();
     clearAccountCache();
-    await client?.auth.signOut({ scope: "local" });
+    if (client) await safeSignOut(client);
   }, [client]);
 
   if (!client && demoEmployee) return { status: "employee", role: "employee", canUseTools: true, actor: { id: "demo-employee", role: "employee", access: ["tools"] }, mode: "demo", email: null, signOut: async () => undefined, exitPreview: () => setDemoEmployee(false) };

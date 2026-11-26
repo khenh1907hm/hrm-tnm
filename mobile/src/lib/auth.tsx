@@ -1,7 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { AppState } from "react-native";
-import { checkSession, claimSession, forgetSessionKey, kickMessage } from "./singleSession";
+import { checkSession, claimSession, dropLocalSession, forgetSessionKey, kickMessage, safeSignOut } from "./singleSession";
 import { supabase, supabaseConfigured } from "./supabase";
 import { loginCandidates } from "./workerLogin";
 
@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!active || state === "ok") return;
       setNotice(kickMessage(state));
       await forgetSessionKey();
-      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      await dropLocalSession(supabase);
     };
     void check();
     const timer = setInterval(() => void check(), 60_000);
@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await forgetSessionKey();
-    await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+    await safeSignOut(supabase);
   }, []);
 
   const value = useMemo<AuthValue>(() => {
