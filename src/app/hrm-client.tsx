@@ -356,34 +356,48 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
   const pageTitle = `${detail ? detail.name : VIEW_TITLES[view]} · Quản trị Online TNM`;
   useEffect(() => { document.title = pageTitle; }, [pageTitle]);
 
+  const editInitial = (selected: Employee, cccd: string): EmployeeFormInitial => ({
+    code: selected.code,
+    name: selected.name,
+    dob: selected.dob,
+    gender: selected.gender,
+    cccd,
+    phone: selected.phone,
+    home: selected.home,
+    address: selected.address,
+    currentAddress: selected.currentAddress ?? "",
+    position: selected.position,
+    group: selected.group,
+    startDate: selected.startDate,
+    companyStartDate: selected.companyStartDate ?? null,
+    emergencyContactId: selected.emergencyContactId,
+    status: selected.status,
+    endDate: selected.endDate,
+    photo: selected.photo ?? null,
+    signatureImage: selected.signatureImage ?? null,
+    mismatchOverrideReason: selected.cccdMismatchOverrideReason ?? "",
+  });
   const openEdit = async () => {
     if (!selected || !app) return;
     const revealed = await app.employees.revealCccd(actor, selected.id);
     if (!revealed.ok) { setNotice(issueText(revealed.errors[0]?.code ?? "FORBIDDEN")); return; }
-    setEmployeeForm({
-      editing: selected,
-      initial: {
-        code: selected.code,
-        name: selected.name,
-        dob: selected.dob,
-        gender: selected.gender,
-        cccd: revealed.value,
-        phone: selected.phone,
-        home: selected.home,
-        address: selected.address,
-        currentAddress: selected.currentAddress ?? "",
-        position: selected.position,
-        group: selected.group,
-        startDate: selected.startDate,
-        companyStartDate: selected.companyStartDate ?? null,
-        emergencyContactId: selected.emergencyContactId,
-        status: selected.status,
-        endDate: selected.endDate,
-        photo: selected.photo ?? null,
-        signatureImage: selected.signatureImage ?? null,
-        mismatchOverrideReason: selected.cccdMismatchOverrideReason ?? "",
-      },
-    });
+    setEmployeeForm({ editing: selected, initial: editInitial(selected, revealed.value) });
+  };
+  /** Cần gạt ở trang chi tiết: Đang làm việc ↔ Không hoạt động (không hoạt động thì không nhắc hạn chứng chỉ). */
+  const setActive = async (active: boolean) => {
+    if (!selected || !app) return;
+    const next = active ? "active" : "inactive";
+    if (selected.status === next) return;
+    // Ảnh kiểu cũ (data URL) cần chuyển kho qua form sửa hồ sơ
+    if (typeof selected.photo === "string") { setNotice("Hồ sơ còn ảnh kiểu cũ, hãy đổi trạng thái trong Sửa hồ sơ."); void openEdit(); return; }
+    const revealed = await app.employees.revealCccd(actor, selected.id);
+    if (!revealed.ok) { setNotice(issueText(revealed.errors[0]?.code ?? "FORBIDDEN")); return; }
+    const initial = editInitial(selected, revealed.value);
+    const result = await app.employees.update(actor, { ...initial, photo: selected.photo ?? null, status: next, id: selected.id, expectedVersion: selected.version });
+    if (!result.ok) { setNotice(issueText(result.errors[0]?.code ?? "FORBIDDEN"), "error"); return; }
+    setSelected(result.value);
+    setNotice(active ? "Đã chuyển hồ sơ sang Đang làm việc." : "Đã chuyển hồ sơ sang Không hoạt động: vẫn hiện trong danh sách, không nhắc hạn chứng chỉ.");
+    await refresh(app, actor);
   };
 
   const archiveCertificate = (certificate: Certificate) => setReasonDialog({ kind: "certificate", certificate });
@@ -493,6 +507,7 @@ function HrmWorkspace({ backend }: { backend: Extract<Backend, { status: "ready"
           setNotice={setNotice}
           onBack={() => navigate("employees")}
           onEdit={() => void openEdit()}
+          onSetActive={setActive}
           onArchive={archiveSelected}
           onRestore={() => void restoreSelected()}
           onExportCertificates={() => setCertFolderEmployees([detail])}

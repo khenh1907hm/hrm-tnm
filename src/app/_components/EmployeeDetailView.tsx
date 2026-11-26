@@ -23,6 +23,8 @@ export function EmployeeDetailView(props: {
   setNotice: SetNotice;
   onBack: () => void;
   onEdit: () => void;
+  /** Cần gạt Đang làm việc ↔ Không hoạt động. */
+  onSetActive: (active: boolean) => Promise<void>;
   onArchive: () => void;
   onRestore: () => void;
   onExportExcel: () => void;
@@ -41,7 +43,7 @@ export function EmployeeDetailView(props: {
   const photoUrl = usePhotoUrl(selected.photo, props.loadPhoto);
   return <>
     <button className="back-button" onClick={props.onBack}>← Quay lại danh sách</button>
-    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p></div><div className="button-row">{selected.archivedAt ? can(actor, "employeeArchive") && <button className="button" onClick={props.onRestore}>Khôi phục</button> : <>{can(actor, "employeeWrite") && <button className="button" onClick={props.onEdit}>Sửa hồ sơ</button>}{can(actor, "employeeArchive") && <button className="button danger" onClick={props.onArchive}>Lưu trữ</button>}</>}{!selected.archivedAt && can(actor, "export") && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
+    <div className="page-head"><div><h1>{selected.name}</h1><p>{selected.code} · {selected.position} · {selected.archivedAt ? "Đã lưu trữ" : STATUS_LABELS[selected.status]}</p>{!selected.archivedAt && can(actor, "employeeWrite") && <ActiveSwitch status={selected.status} onChange={props.onSetActive} />}</div><div className="button-row">{selected.archivedAt ? can(actor, "employeeArchive") && <button className="button" onClick={props.onRestore}>Khôi phục</button> : <>{can(actor, "employeeWrite") && <button className="button" onClick={props.onEdit}>Sửa hồ sơ</button>}{can(actor, "employeeArchive") && <button className="button danger" onClick={props.onArchive}>Lưu trữ</button>}</>}{!selected.archivedAt && can(actor, "export") && <><button className="button" onClick={props.onExportCertificates}>Tải thư mục chứng chỉ</button><button className="button" onClick={props.onExportExcel}>Xuất hồ sơ theo mẫu</button><button className="button primary" onClick={props.onExportPdf}>Xuất hồ sơ PDF</button></>}</div></div>
     <section className="panel detail-panel">
       <div style={{ display: "flex", gap: "20px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {selected.photo && (
@@ -96,4 +98,19 @@ export function EmployeeDetailView(props: {
       {showCertificateHistory && employeeCertificates.filter((item) => item.state !== "current").map((certificate) => <div className="certificate-row" key={certificate.id}><b>{certificateTypes.find((type) => type.key === certificate.type)?.name ?? "Chứng chỉ"}{certificate.title ? ` (${certificate.title})` : ""}</b><span>{certificate.number || "Không ghi số"} · {certificate.state === "replaced" ? "Đã thay thế" : "Đã ẩn"}</span>{can(actor, "certificateWrite") && certificate.state === "archived" && <button className="button" onClick={() => props.onRestoreCertificate(certificate)}>Khôi phục</button>}</div>)}
     </section>
   </>;
+}
+
+/** Cần gạt trạng thái hồ sơ: bật = Đang làm việc, tắt = Không hoạt động (vẫn hiện trong danh sách, không nhắc hạn chứng chỉ). */
+function ActiveSwitch({ status, onChange }: { status: Employee["status"]; onChange: (active: boolean) => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const on = status === "active";
+  const hint = status === "on_leave" || status === "resigned" ? ` (hiện: ${STATUS_LABELS[status]})` : "";
+  return (
+    <label className={`active-switch${on ? " on" : ""}${busy ? " busy" : ""}`}>
+      <input type="checkbox" role="switch" checked={on} disabled={busy} aria-checked={on}
+        onChange={(event) => { const next = event.target.checked; setBusy(true); void onChange(next).finally(() => setBusy(false)); }} />
+      <span className="active-switch-track" aria-hidden="true"><span className="active-switch-thumb" /></span>
+      <span className="active-switch-label">{on ? "Đang hoạt động" : `Không hoạt động${hint}`}</span>
+    </label>
+  );
 }
