@@ -23,7 +23,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const all = await repositories.certificates.list();
       const allTypes = await repositories.certificateTypes.list();
       const availableTypes = allTypes.filter((type) => !type.archived);
-      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup));
+      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup, all.filter((item) => item.employeeId === input.employeeId && item.type === input.type && item.state === "current").map((item) => item.title)));
       const sameTypeCurrent = all.some((item) => item.employeeId === input.employeeId && item.type === input.type && item.state === "current");
       if (hasCertificateNumberConflict(input.employeeId, input.type, input.number, all)) return err("CERT_DUPLICATE_NUMBER", "number");
       const candidate = { id: "", employeeId: input.employeeId, type: input.type, title, state: "current" as const };
@@ -81,7 +81,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const employee = await getEmployee(before.employeeId);
       if (!employee) return err("EMP_NOT_FOUND");
       const all = await repositories.certificates.list();
-      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup));
+      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup, all.filter((item) => item.id !== before.id && item.employeeId === before.employeeId && item.type === before.type && item.state === "current").map((item) => item.title)));
       const otherCurrentSameType = all.some((item) => item.id !== before.id && item.employeeId === before.employeeId && item.type === before.type && item.state === "current");
       if (otherCurrentSameType && !title) return err("CERT_TITLE_REQUIRED", "title");
       if (hasCertificateNumberConflict(before.employeeId, before.type, input.number, all, before.id)) return err("CERT_DUPLICATE_NUMBER", "number");
@@ -155,7 +155,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
         if (certificate.state !== "current") return [];
         const employee = employees.find((item) => item.id === certificate.employeeId);
         // Người đã nghỉ việc hoặc đã lưu trữ không cần nhắc hạn (khớp với phần gửi email nhắc hạn)
-        if (!employee || employee.archivedAt !== null || employee.status === "resigned") return [];
+        if (!employee || employee.archivedAt !== null || employee.status === "resigned" || employee.status === "inactive") return [];
         // Chứng chỉ không có thời hạn không bao giờ vào danh sách sắp hết hạn
         const expiryDate = certificate.expiryDate;
         if (expiryDate === null) return [];
@@ -183,7 +183,7 @@ export function createCertificateUseCases(ctx: HrAppContext) {
       const all = await repositories.certificates.list();
       const allTypes = await repositories.certificateTypes.list();
       const availableTypes = allTypes.filter((type) => !type.archived);
-      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup));
+      const title = displayCertificateTitle(certificateTitleFor(input.type, shape.data.title, shape.data.safetyGroup, all.filter((item) => item.id !== input.id && item.employeeId === input.employeeId && item.type === input.type && item.state === "current").map((item) => item.title)));
       const sameTypeCurrent = all.some((item) => item.id !== input.id && item.employeeId === input.employeeId && item.type === input.type && item.state === "current");
       if (hasCertificateNumberConflict(input.employeeId, input.type, input.number, all, input.id)) return err("CERT_DUPLICATE_NUMBER", "number");
       const candidate = { id: input.id ?? "", employeeId: input.employeeId, type: input.type, title, state: "current" as const };

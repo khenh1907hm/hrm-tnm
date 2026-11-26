@@ -1,7 +1,7 @@
 "use client";
 import { SkeletonTable } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ClipboardList, FilePlus2, Plus, Save, Send, ShoppingCart, Trash2, X } from "lucide-react";
+import { ClipboardList, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { CostCode } from "../../../modules/purchases/budget";
@@ -12,7 +12,7 @@ import {
 import { ApprovalChain } from "../purchases/ApprovalChain";
 import { FormExportButtons } from "../purchases/FormExport";
 import { getPurchaseStore } from "../purchases/usePurchaseStore";
-import { purchasePath } from "../routes";
+import { projectOrderPath } from "../routes";
 import type { TabProps } from "./ProjectDetail";
 import { errorMessage, moneyInput, parseMoney } from "./projectShared";
 
@@ -39,6 +39,8 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
   const [created, setCreated] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [importing, setImporting] = useState(false);
+  const [importNotes, setImportNotes] = useState<string[]>([]);
   const projectId = data.project.id;
   const load = useCallback(() => Promise.all([store.listMaterialRequests(projectId), store.costCodes(), store.departments().catch(() => [])]), [store, projectId]);
   useEffect(() => {
@@ -75,6 +77,27 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
     if (submit) await store.submitMaterialRequest(id);
     setEditing(null); setOpenId(id);
   }, submit ? "Đã gửi phiếu yêu cầu vật tư đi ký." : "Đã lưu nháp phiếu.");
+  /** Nhập phiếu từ file Excel theo mẫu P-COST-08: điền sẵn vào phiếu mới (hoặc thêm vào phiếu đang soạn) để kiểm tra rồi lưu. */
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    setImporting(true);
+    try {
+      const { readMaterialFile } = await import("./materialFile");
+      const result = await readMaterialFile(file);
+      const notes = [...result.warnings];
+      const norm = (code: string) => code.replace(/\s/g, "").toLowerCase();
+      if (result.projectCode && norm(result.projectCode) !== norm(data.project.code)) notes.unshift(`File ghi số dự án “${result.projectCode}”, khác dự án đang mở (${data.project.code}): kiểm tra lại trước khi lưu.`);
+      const imported = result.items.map((item) => ({ ...item, id: `tmp-${++tempSeq}` }));
+      setEditing((current) => current
+        ? { ...current, items: [...current.items.filter((item) => item.name.trim()), ...imported] }
+        : { projectId, requestedOn: result.requestedOn ?? todayVN(systemClock), note: "", items: imported.length ? imported : [blankItem()] });
+      setOpenId(null);
+      setImportNotes(notes);
+      setNotice(`Đã đọc ${imported.length} dòng vật tư từ ${file.name}. Kiểm tra rồi bấm Lưu nháp hoặc Lưu và gửi ký.`, "success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Không đọc được file.", "error");
+    } finally { setImporting(false); }
+  };
   const setItem = (index: number, patch: Partial<MaterialItem>) => editing && setEditing({ ...editing, items: editing.items.map((item, i) => i === index ? { ...item, ...patch } : item) });
   const project = { code: data.project.code, name: data.project.name, site: data.project.site };
 
@@ -83,37 +106,52 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
       <section className="panel pj-section">
         <div className="pj-section-head">
           <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Yêu cầu vật tư <small className="muted">(P-COST-08)</small></h2>
-          {!editing && <button type="button" className="button primary" onClick={() => { setEditing({ projectId, requestedOn: todayVN(systemClock), note: "", items: [blankItem()] }); setOpenId(null); }}><FilePlus2 className="ico" size={16} aria-hidden="true" /> Phiếu yêu cầu mới</button>}
+          {!editing && <div className="button-row">
+            <a className="button" href="/templates/quy-trinh/P-COST-08.xlsx" download="P-COST-08 Phieu yeu cau vat tu (mau).xlsx"><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> Tải file mẫu</a>
+            <label className="button"><Upload className="ico" size={16} aria-hidden="true" /> {importing ? "Đang đọc file…" : "Nhập từ file Excel"}
+              <input type="file" hidden accept=".xls,.xlsx" disabled={importing} onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
+            <button type="button" className="button primary" onClick={() => { setEditing({ projectId, requestedOn: todayVN(systemClock), note: "", items: [blankItem()] }); setOpenId(null); setImportNotes([]); }}><FilePlus2 className="ico" size={16} aria-hidden="true" /> Phiếu yêu cầu mới</button>
+          </div>}
         </div>
-        <p className="muted">Công trường ghi vật tư / dụng cụ cần dùng. Phiếu được Phòng Vật tư, P. Kỹ thuật, Lãnh đạo ký; sau đó hỏi giá nhà cung cấp, so sánh và lên đơn đặt hàng nháp ngay tại đây.</p>
+        <p className="muted">Công trường ghi vật tư / dụng cụ cần dùng (gõ trực tiếp hoặc nhập từ file Excel theo mẫu P-COST-08). Phiếu được Kho, Phòng Vật tư, P. Kỹ thuật, Lãnh đạo ký; sau đó hỏi giá nhà cung cấp, so sánh và lên đơn đặt hàng nháp ngay tại đây, đơn đi tiếp PO Draft → Purchase Order → Request for Payment.</p>
 
         {editing && (
-          <div className="mr-form">
-            <div className="bs-head">
-              <label className="field"><span>Ngày yêu cầu</span><input type="date" value={editing.requestedOn} onChange={(event) => setEditing({ ...editing, requestedOn: event.target.value || editing.requestedOn })} /></label>
-              <label className="field wide"><span>Ghi chú chung</span><input value={editing.note} placeholder="Ví dụ: cần gấp cho tầng 2" onChange={(event) => setEditing({ ...editing, note: event.target.value })} /></label>
+          <div className="mr-form mr-paper">
+            <h3 className="mr-paper-title">PHIẾU YÊU CẦU VẬT TƯ</h3>
+            <div className="mr-paper-head">
+              <span><b>Tên dự án:</b> {data.project.name}</span>
+              <label><b>Ngày yêu cầu:</b> <input type="date" value={editing.requestedOn} onChange={(event) => setEditing({ ...editing, requestedOn: event.target.value || editing.requestedOn })} /></label>
+              <span><b>Số dự án:</b> {data.project.code}</span>
+              <label className="mr-paper-note"><b>Ghi chú chung:</b> <input value={editing.note} placeholder="Ví dụ: cần gấp cho tầng 2" onChange={(event) => setEditing({ ...editing, note: event.target.value })} /></label>
             </div>
-            <div className="mr-items">
-              {editing.items.map((item, index) => (
-                <fieldset key={item.id} className="mr-item">
-                  <legend>Dòng {index + 1}</legend>
-                  <label className="field wide"><span>Tên vật tư *</span><input value={item.name} onChange={(event) => setItem(index, { name: event.target.value })} /></label>
-                  <label className="field"><span>Thông số kỹ thuật</span><input value={item.spec} onChange={(event) => setItem(index, { spec: event.target.value })} /></label>
-                  <label className="field"><span>Nhà sản xuất</span><input value={item.maker} onChange={(event) => setItem(index, { maker: event.target.value })} /></label>
-                  <label className="field"><span>Đơn vị *</span><input value={item.unit} placeholder="m, cái, bộ…" onChange={(event) => setItem(index, { unit: event.target.value })} /></label>
-                  <label className="field"><span>Số lượng *</span><input inputMode="decimal" value={String(item.quantity)} onChange={(event) => setItem(index, { quantity: Number(event.target.value.replace(",", ".")) || 0 })} /></label>
-                  <label className="field"><span>Ngày cần sử dụng</span><input type="date" value={item.neededOn ?? ""} onChange={(event) => setItem(index, { neededOn: event.target.value || null })} /></label>
-                  <label className="field"><span>Mã ngân sách (nếu biết)</span><select value={item.budgetCode ?? ""} onChange={(event) => setItem(index, { budgetCode: event.target.value || null })}><option value="">— P. Vật tư điền —</option>{codes.map((code) => <option key={code.code} value={code.code}>{code.code} {code.name}</option>)}</select></label>
-                  <label className="field wide"><span>Ghi chú</span><input value={item.note} onChange={(event) => setItem(index, { note: event.target.value })} /></label>
-                  {editing.items.length > 1 && <button type="button" className="button danger" onClick={() => setEditing({ ...editing, items: editing.items.filter((_, i) => i !== index) })}><X className="ico" size={15} aria-hidden="true" /> Bỏ dòng</button>}
-                </fieldset>
-              ))}
+            {importNotes.length > 0 && <ul className="list-notice is-warn mr-import-notes">{importNotes.map((note) => <li key={note}>{note}</li>)}</ul>}
+            <div className="table-scroll">
+              <table className="pj-table mr-grid">
+                <thead><tr><th>STT</th><th>Tên vật tư *</th><th>Thông số kỹ thuật</th><th>Nhà sản xuất</th><th>Đơn vị *</th><th className="pj-num">Số lượng *</th><th>Ngày cần sử dụng</th><th>Ghi chú</th><th>Mã NS</th><th /></tr></thead>
+                <tbody>{editing.items.map((item, index) => (
+                  <tr key={item.id}>
+                    <td className="mr-stt">{index + 1}</td>
+                    <td><input aria-label={`Tên vật tư dòng ${index + 1}`} value={item.name} onChange={(event) => setItem(index, { name: event.target.value })} /></td>
+                    <td><input aria-label={`Thông số dòng ${index + 1}`} value={item.spec} onChange={(event) => setItem(index, { spec: event.target.value })} /></td>
+                    <td><input aria-label={`Nhà sản xuất dòng ${index + 1}`} value={item.maker} onChange={(event) => setItem(index, { maker: event.target.value })} /></td>
+                    <td><input aria-label={`Đơn vị dòng ${index + 1}`} className="mr-unit" value={item.unit} placeholder="m, cái…" onChange={(event) => setItem(index, { unit: event.target.value })} /></td>
+                    <td><input aria-label={`Số lượng dòng ${index + 1}`} className="mr-qty" inputMode="decimal" value={String(item.quantity)} onChange={(event) => setItem(index, { quantity: Number(event.target.value.replace(",", ".")) || 0 })} /></td>
+                    <td><input aria-label={`Ngày cần dòng ${index + 1}`} type="date" value={item.neededOn ?? ""} onChange={(event) => setItem(index, { neededOn: event.target.value || null })} /></td>
+                    <td><input aria-label={`Ghi chú dòng ${index + 1}`} value={item.note} onChange={(event) => setItem(index, { note: event.target.value })} /></td>
+                    <td><select aria-label={`Mã ngân sách dòng ${index + 1}`} value={item.budgetCode ?? ""} onChange={(event) => setItem(index, { budgetCode: event.target.value || null })}><option value="">— P. Vật tư điền —</option>{codes.map((code) => <option key={code.code} value={code.code}>{code.code} {code.name}</option>)}</select></td>
+                    <td>{editing.items.length > 1 && <button type="button" className="icon-link" aria-label={`Bỏ dòng ${index + 1}`} onClick={() => setEditing({ ...editing, items: editing.items.filter((_, i) => i !== index) })}><X size={15} aria-hidden="true" /></button>}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
             </div>
+            <div className="mr-paper-signs" aria-hidden="true"><span>Lãnh Đạo</span><span>P. Kỹ Thuật</span><span>Phòng Vật Tư, Kho</span><span>Người Yêu Cầu</span></div>
             <div className="button-row">
               <button type="button" className="button" onClick={() => setEditing({ ...editing, items: [...editing.items, blankItem()] })}><Plus className="ico" size={16} aria-hidden="true" /> Thêm dòng</button>
+              <label className="button"><Upload className="ico" size={16} aria-hidden="true" /> {importing ? "Đang đọc file…" : "Thêm từ file Excel"}
+                <input type="file" hidden accept=".xls,.xlsx" disabled={importing} onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
               <button type="button" className="button" disabled={busy} onClick={() => void saveRequest(false)}><Save className="ico" size={16} aria-hidden="true" /> Lưu nháp</button>
               <button type="button" className="button primary" disabled={busy} onClick={() => void saveRequest(true)}><Send className="ico" size={16} aria-hidden="true" /> Lưu và gửi ký</button>
-              <button type="button" className="button" onClick={() => setEditing(null)}>Đóng</button>
+              <button type="button" className="button" onClick={() => { setEditing(null); setImportNotes([]); }}>Đóng</button>
             </div>
           </div>
         )}
@@ -146,9 +184,10 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
           <div className="pj-section-head">
             <h2 id="mr-open-title">{opened.number} <span className={`pill ${TONE[opened.status]}`}>{MATERIAL_STATUS_LABELS[opened.status]}</span></h2>
             <div className="button-row">
-              <FormExportButtons code="P-COST-08" fileBase={opened.number} setNotice={setNotice} build={async (forms) => forms.buildMaterialRequest({
-                request: opened, project, codes, quotes, steps: opened.status === "draft" ? [] : await store.listSteps("material", opened.id),
-              })} />
+              <FormExportButtons code="P-COST-08" fileBase={opened.number} setNotice={setNotice} build={async (forms, template) => {
+                const input = { request: opened, project, codes, quotes, steps: opened.status === "draft" ? [] : await store.listSteps("material", opened.id) };
+                return template ? forms.fillMaterialRequest(template, input) : forms.buildMaterialRequest(input);
+              }} />
               {canQuote && (opened.status === "approved" || opened.status === "ordered") && <button type="button" className="button" onClick={() => { const why = window.prompt("Lý do đóng phiếu (đã đủ vật tư, hủy…):"); if (why) void run(() => store.closeMaterialRequest(opened.id, why), "Đã đóng phiếu."); }}>Đóng phiếu</button>}
             </div>
           </div>
@@ -222,7 +261,7 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
             onEdit={(quote) => setQuoteDraft({ id: quote.id, requestId: quote.requestId, supplier: quote.supplier, supplierContact: quote.supplierContact, quoteRef: quote.quoteRef, quoteDate: quote.quoteDate, deliveryDays: quote.deliveryDays, paymentTerms: quote.paymentTerms, note: quote.note, prices: quote.prices })}
             onDelete={(quote) => { if (window.confirm(`Xóa báo giá của ${quote.supplier}?`)) void run(() => store.deleteQuote(quote.id), "Đã xóa báo giá."); }}
             onOrder={(quote) => { if (window.confirm(`Chọn ${quote.supplier} và lập đơn đặt hàng nháp (mỗi mã ngân sách một đơn)?`)) void run(async () => { setCreated(await store.ordersFromQuote(opened.id, quote.id)); }, "Đã lập đơn đặt hàng nháp. Mở đơn để kiểm tra rồi gửi duyệt."); }} />}
-          {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id, index) => <a key={id} className="link-button" href={purchasePath(id)}>Mở đơn {index + 1}</a>)}</p>}
+          {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id, index) => <a key={id} className="link-button" href={projectOrderPath(data.project.id, id, "don-nhap")}>Mở đơn {index + 1}</a>)}</p>}
         </section>
       )}
     </div>

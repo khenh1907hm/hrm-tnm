@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { Check, CircleX } from "lucide-react";
-import { orderPath, paymentTermsLabel, stageDepartmentLabel, type PathStep, type StageDepartments } from "../../../modules/purchases/flow";
+import { orderPath, paymentTermsLabel, stageDepartmentLabel, type PathKey, type PathStep, type StageDepartments } from "../../../modules/purchases/flow";
 import type { PurchaseOrder, PurchasePayment } from "../../../modules/purchases/types";
 
 const deptOf = (departments: StageDepartments | undefined, step: PathStep) => step.stage && departments?.[step.stage] ? stageDepartmentLabel(departments[step.stage]) : "";
@@ -10,7 +10,8 @@ const deptOf = (departments: StageDepartments | undefined, step: PathStep) => st
  * Tiến trình một đơn mua hàng: thẻ "Đang ở bước" ở trên (bước mấy / tổng, ai phụ trách, việc cần làm)
  * và dải mũi tên nối nhau bên dưới, mỗi giai đoạn một khối. Chỉ hiện các bước đơn này đi qua theo điều kiện thanh toán.
  */
-export function OrderProgress(props: { order: PurchaseOrder; payments: readonly PurchasePayment[]; departments?: StageDepartments | undefined; hint: string }) {
+export function OrderProgress(props: { order: PurchaseOrder; payments: readonly PurchasePayment[]; departments?: StageDepartments | undefined; hint: string;
+  /** Bước đang mở xem lịch sử / kết quả (bấm vào bước). */ selected?: PathKey | null; onSelect?: (key: PathKey) => void }) {
   const steps = orderPath(props.order, props.payments);
   const cancelled = props.order.status === "cancelled";
   const completed = props.order.status === "completed";
@@ -42,18 +43,25 @@ export function OrderProgress(props: { order: PurchaseOrder; payments: readonly 
         </div>
         <span className="op-terms">{paymentTermsLabel(props.order)}</span>
       </div>
-      <ol className="op-track" ref={track} aria-label="Các bước của đơn hàng">
+      <ol className={`op-track${props.onSelect ? " op-pickable" : ""}`} ref={track} aria-label="Các bước của đơn hàng (bấm một bước để xem lịch sử, kết quả)">
         {steps.map((step, index) => {
           const stepDept = deptOf(props.departments, step);
           return (
-            <li key={step.key} className={`op-step is-${cancelled && step.state !== "done" ? "todo" : step.state}`} aria-current={step.state === "current" && !cancelled ? "step" : undefined}
+            <li key={step.key} className={`op-step is-${cancelled && step.state !== "done" ? "todo" : step.state}${props.selected === step.key ? " is-picked" : ""}`} aria-current={step.state === "current" && !cancelled ? "step" : undefined}
               title={stepDept ? `${step.label} · ${stepDept}` : step.label}>
-              <span className="op-num" aria-hidden="true">{step.state === "done" ? <Check size={13} strokeWidth={3} /> : index + 1}</span>
-              <span className="op-text">
-                <span className="op-label">{step.label}</span>
-                {stepDept && <small className="op-dept">{stepDept}</small>}
-              </span>
-              <span className="sr-only">{step.state === "done" ? " (đã xong)" : step.state === "current" ? " (đang ở bước này)" : step.state === "skipped" ? " (không dùng)" : ""}</span>
+              {(() => {
+                const inner = <>
+                  <span className="op-num" aria-hidden="true">{step.state === "done" ? <Check size={13} strokeWidth={3} /> : index + 1}</span>
+                  <span className="op-text">
+                    <span className="op-label">{step.label}</span>
+                    {stepDept && <small className="op-dept">{stepDept}</small>}
+                  </span>
+                  <span className="sr-only">{step.state === "done" ? " (đã xong)" : step.state === "current" ? " (đang ở bước này)" : step.state === "skipped" ? " (không dùng)" : ""}</span>
+                </>;
+                return props.onSelect
+                  ? <button type="button" className="op-nav-btn" aria-pressed={props.selected === step.key} onClick={() => props.onSelect?.(step.key)} title={`Xem lịch sử, kết quả bước “${step.label}”`}>{inner}</button>
+                  : inner;
+              })()}
             </li>
           );
         })}

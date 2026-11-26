@@ -256,3 +256,23 @@
 .pj-subtabs { display: inline-flex; gap: 2px; padding: 3px; margin: 4px 0 12px; border-radius: 10px; background: var(--surface-2, #eef2f7); }
 .pj-subtabs button { border: 0; background: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; color: var(--muted); }
 .pj-subtabs button[aria-selected="true"] { background: var(--surface, #fff); color: var(--brand); box-shadow: 0 1px 3px rgb(15 23 42 / 0.12); }
+
+/* Phiếu yêu cầu vật tư dạng giấy, cùng khung mẫu P-COST-08 */
+.mr-paper { background: var(--surface, #fff); }
+.mr-paper-title { margin: 0; text-align: center; font-size: 18px; letter-spacing: .5px; }
+.mr-paper-head { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 24px; }
+.mr-paper-head label, .mr-paper-head span { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mr-paper-head input { flex: 1; min-width: 0; }
+.mr-grid { min-width: 980px; }
+.mr-grid th { white-space: nowrap; text-align: center; }
+.mr-grid td { padding: 2px 4px; vertical-align: middle; }
+.mr-grid td input, .mr-grid td select { width: 100%; min-width: 70px; border: 1px solid transparent; background: transparent; padding: 6px; border-radius: 6px; }
+.mr-grid td input:hover, .mr-grid td select:hover { border-color: var(--line, #e2e8f0); }
+.mr-grid td input:focus, .mr-grid td select:focus { border-color: var(--brand, #2563eb); background: var(--surface, #fff); outline: none; }
+.mr-grid td:nth-child(2) input { min-width: 180px; }
+.mr-grid .mr-stt { text-align: center; width: 40px; color: var(--muted, #64748b); }
+.mr-grid .mr-unit { min-width: 60px; max-width: 80px; }
+.mr-grid .mr-qty { text-align: right; min-width: 70px; max-width: 100px; }
+.mr-paper-signs { display: grid; grid-template-columns: repeat(4, 1fr); text-align: center; font-weight: 600; color: var(--muted, #64748b); padding: 6px 0 2px; border-top: 1px dashed var(--line, #e2e8f0); }
+.mr-import-notes { margin: 0; padding: 8px 12px 8px 28px; }
+@media (max-width: 700px) { .mr-paper-head { grid-template-columns: 1fr; } .mr-paper-signs { display: none; } }

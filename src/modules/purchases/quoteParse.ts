@@ -171,3 +171,18 @@ export function parseQuoteRows(rows: readonly (readonly string[])[]): QuoteParse
     paymentTerms: clean(payLine), advancePct, prepay, deliveryText, confident, problems,
   };
 }
+
+/**
+ * Giá cuối cùng của báo giá NCC (đơn hàng ghi giá chưa VAT): ưu tiên "Cộng tiền hàng / tổng trước thuế",
+ * không có thì lấy Tổng cộng trừ VAT (hoặc Tổng cộng khi báo giá chưa gồm VAT), cuối cùng mới cộng các dòng.
+ */
+export function finalQuotePrice(data: Pick<QuoteData, "subtotal" | "vat" | "total" | "vatIncluded" | "items">): { amount: number; from: "subtotal" | "total" | "items" } | null {
+  const positive = (value: number | null) => value !== null && Number.isFinite(value) && value > 0;
+  if (positive(data.subtotal)) return { amount: Math.round(data.subtotal!), from: "subtotal" };
+  if (positive(data.total)) {
+    if (positive(data.vat) && data.vat! < data.total! && data.vatIncluded !== false) return { amount: Math.round(data.total! - data.vat!), from: "total" };
+    return { amount: Math.round(data.total!), from: "total" };
+  }
+  const sum = data.items.reduce((acc, item) => acc + (Number.isFinite(item.amount) && item.amount > 0 ? item.amount : Math.round(item.quantity * item.unitPrice)), 0);
+  return sum > 0 ? { amount: sum, from: "items" } : null;
+}

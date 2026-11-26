@@ -18,7 +18,7 @@ import { errorText } from "@/lib/errors";
 import { MODAL_ORIENTATIONS } from "@/lib/layout";
 import { colors, fonts, radius, space, text } from "@/lib/theme";
 import {
-  canManageTypes, deleteType, emptyRow, fromTemplate, ITEM_KEYS, ITEM_LABEL, itemsOf, photoCountOf, loadCheck, loadPreviousCheck, loadTemplate, loadToolProjects, loadTypes, newKey, OPTIONAL_ITEMS, readDraft, shiftMonth,
+  canManageTypes, cloneRowsWithoutPhotos, deleteType, emptyRow, fromTemplate, ITEM_KEYS, ITEM_LABEL, itemsOf, photoCountOf, loadCheck, loadPreviousCheck, loadTemplate, loadToolProjects, loadTypes, newKey, OPTIONAL_ITEMS, readDraft, recentMonths, shiftMonth,
   saveCheck, saveTemplate, saveType, signedUrls, writeDraft, type ItemKey, type PhotoRef, type SavedCheck, type TemplateRow, type ToolProject, type ToolRow, type ToolType,
 } from "@/lib/toolCheck";
 
@@ -37,6 +37,8 @@ type Flow = { queue: Slot[]; index: number; phase: "intro" | "preview"; photo: P
 /** Nhà thầu (Sub con.) luôn là TNM. */
 const SUBCON = "TNM";
 /** "2026-11" → "11/2026". */
+/** Ghi chú dự án không còn thi công (vẫn nhập bù phiếu các tháng trước được). */
+const STATUS_NOTE: Record<string, string> = { done: "Đã xong", paused: "Tạm dừng" };
 const monthLabel = (month: string) => `${month.slice(5, 7)}/${month.slice(0, 4)}`;
 const toTemplate = (rows: readonly ToolRow[]): TemplateRow[] => rows.filter((r) => r.serial.trim()).map((r) => ({ serial: r.serial.trim(), subcon: SUBCON, typeId: r.typeId }));
 const rowName = (row: ToolRow, index: number) => row.serial.trim() || `Dụng cụ #${index + 1} (chưa có tên)`;
@@ -48,6 +50,7 @@ export default function ToolCheckScreen() {
   const [projects, setProjects] = useState<ToolProject[] | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [pickingMonth, setPickingMonth] = useState(false);
   const [types, setTypes] = useState<ToolType[]>([]);
   const [manager, setManager] = useState(false);
   const [month, setMonth] = useState(thisMonth);
@@ -64,6 +67,7 @@ export default function ToolCheckScreen() {
   const [typePickerFor, setTypePickerFor] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
   const [askTemplate, setAskTemplate] = useState(false);
+  const [askCopyPrev, setAskCopyPrev] = useState(false);
   const [askMissing, setAskMissing] = useState(false);
   const [showMissing, setShowMissing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -132,7 +136,8 @@ export default function ToolCheckScreen() {
   }, [rows, checkedBy, projectId, month]);
 
   const project = projects?.find((p) => p.projectId === projectId) ?? null;
-  const items: PickerItem[] = useMemo(() => (projects ?? []).map((p) => ({ id: p.projectId, title: p.name, subtitle: [p.code, isLink(p.site) ? "" : p.site].filter(Boolean).join(" · "), badge: p.code, icon: "shield", tone: "sky" })), [projects]);
+  const items: PickerItem[] = useMemo(() => (projects ?? []).map((p) => ({ id: p.projectId, title: p.name, subtitle: [p.code, isLink(p.site) ? "" : p.site, STATUS_NOTE[p.status] ?? ""].filter(Boolean).join(" · "), badge: p.code, icon: "shield", tone: p.status === "active" ? "sky" : "navy" })), [projects]);
+  const monthItems: PickerItem[] = useMemo(() => recentMonths(thisMonth).map((m) => ({ id: m, title: `Tháng ${monthLabel(m)}`, ...(m === thisMonth ? { subtitle: "Tháng này" } : {}), icon: "calendar", tone: "sky" })), [thisMonth]);
 
   const patchRow = (key: string, patch: Partial<ToolRow>) => setRows((list) => list.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   const setPhoto = (slot: Slot, photo: PhotoRef | null) => setRows((list) => list.map((r) => {
@@ -232,6 +237,31 @@ export default function ToolCheckScreen() {
     } catch (error) { toast(errorText(error), "err"); }
   };
 
+  const prevMonthLabel = previous ? monthLabel(previous.date.slice(0, 7)) : "";
+  const existingSerials = new Set(rows.map((r) => r.serial.trim().toLowerCase()).filter(Boolean));
+  const addableFromPrev = previous ? previous.rows.filter((r) => r.serial.trim() && !existingSerials.has(r.serial.trim().toLowerCase())) : [];
+  const hasEnteredData = rows.some((r) => r.serial.trim() || Object.values(r.photos).some(Boolean));
+  const applyPrevious = (mode: "replace" | "append") => {
+    if (!previous) return;
+    setAskCopyPrev(false);
+    setShowMissing(false);
+    if (mode === "replace") {
+      const next = cloneRowsWithoutPhotos(previous.rows, types, SUBCON);
+      setRows(next);
+      toast(`Đã lấy ${next.length} dụng cụ từ tháng ${prevMonthLabel} (Serial + Loại, không kèm ảnh).`, "ok");
+      return;
+    }
+    const extra = cloneRowsWithoutPhotos(addableFromPrev, types, SUBCON);
+    setRows((list) => [...list.filter((r) => r.serial.trim() || Object.values(r.photos).some(Boolean)), ...extra]);
+    toast(`Đã thêm ${extra.length} dụng cụ từ tháng ${prevMonthLabel} (không kèm ảnh).`, "ok");
+  };
+
+  const requestCopyPrevious = () => {
+    if (!previous) return;
+    if (!hasEnteredData) applyPrevious("replace");
+    else setAskCopyPrev(true);
+  };
+
   if (projects === null) {
     return <Screen title="Kiểm tra dụng cụ" onBack={() => router.back()}><View style={styles.loadingBox}><LogoLoader size={64} stroke={4} variant="light" /></View></Screen>;
   }
@@ -277,7 +307,7 @@ export default function ToolCheckScreen() {
       <Card style={styles.headCard}>
         <View style={styles.dateRow}>
           <Pressable onPress={() => setMonth(shiftMonth(month, -1))} style={styles.dateBtn} accessibilityLabel="Tháng trước"><Text style={styles.dateArrow}>‹</Text></Pressable>
-          <View style={styles.flexCenter}><Text style={styles.small}>Kiểm tra định kỳ</Text><Text style={styles.dateText}>Tháng {monthLabel(month)}</Text></View>
+          <Pressable style={styles.flexCenter} onPress={() => setPickingMonth(true)} accessibilityRole="button" accessibilityLabel="Chọn tháng để nhập phiếu"><Text style={styles.small}>Kiểm tra định kỳ · bấm để chọn tháng</Text><Text style={styles.dateText}>Tháng {monthLabel(month)} ▾</Text></Pressable>
           <Pressable onPress={() => month < thisMonth && setMonth(shiftMonth(month, 1))} style={[styles.dateBtn, month >= thisMonth && styles.dim]} accessibilityLabel="Tháng sau"><Text style={styles.dateArrow}>›</Text></Pressable>
         </View>
         <View style={styles.dayRow}>
@@ -316,6 +346,13 @@ export default function ToolCheckScreen() {
           {rows.length > 0 && (
             <>
               <SectionTitle right={<Text style={styles.muted}>{rows.length} dụng cụ{ngCount ? ` · ${ngCount} NG` : ""}</Text>}>Danh sách dụng cụ</SectionTitle>
+              {previous && (
+                <SecondaryButton
+                  label={`Lấy danh sách tháng ${prevMonthLabel} (${previous.rows.length} dụng cụ)`}
+                  icon={<Glyph name="copy" size={18} color={colors.skyDeep} fillOpacity={0.15} />}
+                  onPress={requestCopyPrevious}
+                />
+              )}
               <Text style={styles.hint}>Bấm <Text style={styles.bold}>máy ảnh cạnh tên</Text> để chụp lần lượt các mục của máy đó, bấm <Text style={styles.bold}>từng ô</Text> để chụp / chọn ảnh, bấm <Text style={styles.bold}>Result</Text> để đổi OK / NG. Vuốt ngang để xem hết bảng.</Text>
               {highlight && (
                 <View style={styles.missingBox} accessibilityRole="alert">
@@ -338,6 +375,9 @@ export default function ToolCheckScreen() {
 
       <PickerSheet visible={picking} title="Chọn dự án" placeholder="Tìm mã, tên dự án" items={items} selectedId={projectId} emptyText="Không có dự án"
         onSelect={(item) => { setPicking(false); setProjectId(item.id); void AsyncStorage.setItem(LAST_PROJECT, item.id).catch(() => undefined); }} onClose={() => setPicking(false)} />
+
+      <PickerSheet visible={pickingMonth} title="Chọn tháng nhập phiếu" placeholder="Tìm tháng, vd 05/2026" items={monthItems} selectedId={month} emptyText="Không có tháng nào"
+        onSelect={(item) => { setPickingMonth(false); setMonth(item.id); }} onClose={() => setPickingMonth(false)} />
 
       <PickerSheet visible={typeRow !== null} title="Loại dụng cụ" placeholder="Tìm loại" selectedId={typeRow?.typeId ?? null} emptyText="Chưa có loại nào. Người quản lý đặt ở nút ⚙ trên cùng."
         items={types.map((t) => ({ id: t.id, title: t.name, subtitle: `${photoCountOf(t)} ảnh: ${["Bên ngoài", ...t.items.map((k) => ITEM_LABEL[k].vi)].join(" · ")}`, number: photoCountOf(t) }))}
@@ -371,6 +411,13 @@ export default function ToolCheckScreen() {
         <Text style={styles.muted}>Lưu danh sách {rows.filter((r) => r.serial.trim()).length} dụng cụ (Serial/Code, loại) làm mẫu của dự án. Các tháng sau kiểm tra định kỳ chỉ cần dùng lại danh sách rồi chụp ảnh, tránh sót máy; có dụng cụ mới thì thêm vào. Ảnh và kết quả không lưu vào mẫu.</Text>
         <GradientButton label="Có, dùng làm mẫu" onPress={() => void makeTemplate()} />
         <SecondaryButton label="Không" onPress={() => setAskTemplate(false)} />
+      </Sheet>
+
+      <Sheet visible={askCopyPrev} onClose={() => setAskCopyPrev(false)} title={`Lấy danh sách tháng ${prevMonthLabel}?`}>
+        <Text style={styles.muted}>Phiếu đang có dữ liệu. Thêm những dụng cụ còn thiếu ({addableFromPrev.length}) từ tháng {prevMonthLabel}, hoặc thay toàn bộ bằng danh sách tháng đó (mất ảnh đã chụp). Chỉ lấy Serial/Code và Loại, không kèm ảnh.</Text>
+        {addableFromPrev.length > 0 && <GradientButton label={`Thêm ${addableFromPrev.length} dụng cụ còn thiếu`} onPress={() => applyPrevious("append")} />}
+        <SecondaryButton label="Thay toàn bộ danh sách" onPress={() => applyPrevious("replace")} />
+        <SecondaryButton label="Thôi" onPress={() => setAskCopyPrev(false)} />
       </Sheet>
 
       <TypeSetup visible={setupOpen} types={types} onClose={() => setSetupOpen(false)} onChanged={async () => setTypes(await loadTypes().catch(() => types))} />

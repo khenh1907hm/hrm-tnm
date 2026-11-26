@@ -134,6 +134,7 @@ function statusCell(value: PlainCell): EmploymentStatus | null {
   const text = normalizeText(cellText(value));
   if (!text || ["dang lam", "dang lam viec", "con lam", "active", "chinh thuc"].includes(text)) return "active";
   if (["tam nghi", "nghi phep", "nghi thai san", "on leave"].includes(text)) return "on_leave";
+  if (["khong hoat dong", "ngung hoat dong", "inactive"].includes(text)) return "inactive";
   if (["nghi viec", "da nghi", "da nghi viec", "thoi viec", "resigned"].includes(text)) return "resigned";
   return null;
 }

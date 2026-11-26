@@ -24,7 +24,7 @@ export const DEFAULT_EMPLOYEE_FILTERS: EmployeeFilters = { query: "", positions:
 export type EmployeePageInfo = { total: number; page: number; totalPages: number; facets: EmployeeFacets };
 export const EMPTY_PAGE_INFO: EmployeePageInfo = { total: 0, page: 1, totalPages: 1, facets: { positions: {}, statuses: {}, certificateHealth: { ok: 0, missing: 0, expiring: 0, expired: 0 }, certificateTypes: {} } };
 
-export const STATUS_LABELS: Record<EmploymentStatus, string> = { active: "Đang làm việc", on_leave: "Tạm nghỉ", resigned: "Đã nghỉ việc" };
+export const STATUS_LABELS: Record<EmploymentStatus, string> = { active: "Đang làm việc", on_leave: "Tạm nghỉ", inactive: "Không hoạt động", resigned: "Đã nghỉ việc" };
 const HEALTH_OPTIONS: { value: CertificateHealth; label: string; tone: "ok" | "warn" | "bad" }[] = [
   { value: "ok", label: "Đầy đủ, còn hạn", tone: "ok" },
   { value: "missing", label: "Thiếu chứng chỉ bắt buộc", tone: "bad" },
@@ -199,6 +199,25 @@ export function EmployeeListView(props: {
     </div>
 
     <section className="panel list-card">
+      {(() => {
+        const working: EmploymentStatus[] = ["active", "on_leave"];
+        const same = (list: readonly EmploymentStatus[]) => list.length === filters.statuses.length && list.every((item) => filters.statuses.includes(item));
+        const n = (keys: readonly EmploymentStatus[]) => keys.reduce((sum, key) => sum + (facets.statuses[key] ?? 0), 0);
+        const tabs: { key: string; label: string; statuses: EmploymentStatus[]; count: number }[] = [
+          { key: "all", label: "Tất cả", statuses: [], count: n(Object.keys(STATUS_LABELS) as EmploymentStatus[]) },
+          { key: "working", label: "Đang hoạt động", statuses: working, count: n(working) },
+          { key: "inactive", label: "Không hoạt động", statuses: ["inactive"], count: n(["inactive"]) },
+          { key: "resigned", label: "Đã nghỉ việc", statuses: ["resigned"], count: n(["resigned"]) },
+        ];
+        return (
+          <nav className="section-tabs employee-status-tabs" aria-label="Lọc theo tình trạng">
+            {tabs.map((tab) => (
+              <a key={tab.key} href="#" role="tab" aria-selected={same(tab.statuses)} className={same(tab.statuses) ? "is-active" : undefined}
+                onClick={(event) => { event.preventDefault(); update({ statuses: tab.statuses }); }}>{tab.label} <span className="pill">{tab.count}</span></a>
+            ))}
+          </nav>
+        );
+      })()}
       <div className="list-toolbar">
         <label className="search-box"><Search size={16} aria-hidden="true" /><input aria-label="Tìm nhân sự" placeholder="Tìm tên, mã, điện thoại, CCCD" value={queryDraft} onChange={(event) => setQueryDraft(event.target.value)} />{queryDraft && <button type="button" className="search-clear" aria-label="Xóa từ khóa" onClick={() => { setQueryDraft(""); update({ query: "" }); }}><X size={14} aria-hidden="true" /></button>}</label>
         <FilterDropdown label="Chức danh" selected={filters.positions} onToggle={(value) => toggleIn("positions", value)} onClear={() => update({ positions: [] })}

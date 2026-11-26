@@ -2,7 +2,8 @@ import type { Gender } from "../../lib/vietnam/cccd";
 import type { FileRef } from "../certificates/types";
 export const POSITIONS = ["Giám đốc", "Nhân sự", "Trưởng phòng kỹ thuật", "Nhân viên kỹ thuật", "Nhân viên hiện trường"] as const;
 export type Position = (typeof POSITIONS)[number];
-export type EmploymentStatus = "active" | "on_leave" | "resigned";
+/** inactive = Không hoạt động: vẫn hiện trong danh sách nhưng không nhắc hạn chứng chỉ. */
+export type EmploymentStatus = "active" | "on_leave" | "inactive" | "resigned";
 export type EmployeeInput = {
   code: string; name: string; dob: string; gender: Gender; cccd: string; phone: string;
   home: string; address: string; currentAddress?: string; position: Position; group: number | null;

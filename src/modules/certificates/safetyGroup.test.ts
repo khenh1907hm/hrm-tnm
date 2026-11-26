@@ -91,15 +91,19 @@ describe("several safety groups per employee", () => {
     expect(formatSafetyGroups([])).toBe("");
   });
 
-  it("lets one employee hold group 1 and group 3 but not the same group twice", async () => {
+  it("lets one employee hold group 1 and several group 3 certificates (each certificate has its own group)", async () => {
     const { app, employee } = await setup();
     const group1 = await app.certificates.add(admin, { employeeId: employee.id, type: "atld", number: "ATLD-N1-01", issueDate: "2025-11-01", expiryDate: "2027-11-01", document: pdf, safetyGroup: 1 });
     const group3 = await app.certificates.add(admin, { employeeId: employee.id, type: "atld", number: "ATLD-N3-01", issueDate: "2025-11-01", expiryDate: "2027-11-01", document: pdf, safetyGroup: 3 });
     expect(group1.ok && group1.value.title).toBe("Nhóm 1");
     expect(group3.ok && group3.value.title).toBe("Nhóm 3");
     const duplicate = await app.certificates.add(admin, { employeeId: employee.id, type: "atld", number: "ATLD-N3-02", issueDate: "2025-11-01", expiryDate: "2027-11-01", document: pdf, safetyGroup: 3 });
-    expect(!duplicate.ok && duplicate.errors.map((item) => item.code)).toContain("CERT_ALREADY_EXISTS");
+    // Thẻ Nhóm 3 thứ hai (công việc nghiêm ngặt khác) được thêm, tên tự thành "Nhóm 3 - 2"
+    expect(duplicate.ok && duplicate.value.title).toBe("Nhóm 3 - 2");
+    expect(duplicate.ok && duplicate.value.safetyGroup).toBe(3);
+    const sameNumber = await app.certificates.add(admin, { employeeId: employee.id, type: "atld", number: "ATLD-N3-02", issueDate: "2025-11-01", expiryDate: "2027-11-01", document: pdf, safetyGroup: 3 });
+    expect(!sameNumber.ok && sameNumber.errors.map((item) => item.code)).toContain("CERT_DUPLICATE_NUMBER");
     const checklist = await app.certificates.checklist(admin, employee.id);
-    expect(checklist.ok && checklist.value.rows.filter((row) => row.type === "atld").map((row) => row.displayName)).toEqual(["An toàn lao động (Nhóm 1)", "An toàn lao động (Nhóm 3)"]);
+    expect(checklist.ok && checklist.value.rows.filter((row) => row.type === "atld").map((row) => row.displayName)).toEqual(["An toàn lao động (Nhóm 1)", "An toàn lao động (Nhóm 3)", "An toàn lao động (Nhóm 3 - 2)"]);
   });
 });

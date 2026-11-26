@@ -4,7 +4,7 @@ import type { Actor } from "../../modules/auth/permissions";
 import type { FileRef } from "../../modules/certificates/types";
 import { isLegacyPhoto, MAX_PHOTO_SIZE, PHOTO_MIMES } from "../../modules/employees/photo";
 import { employeeInputSchema } from "../../modules/employees/schema";
-import type { Employee, EmployeeInput } from "../../modules/employees/types";
+import type { Employee, EmployeeInput, EmploymentStatus } from "../../modules/employees/types";
 import { applyOcrToForm, type OcrFormField, type OcrRejectedValue } from "../../modules/ocr/applyOcrToForm";
 import { checkIdImages } from "../../modules/ocr/imageFiles";
 import { mergeParsed, parseIdText } from "../../modules/ocr/parseIdText";
@@ -411,6 +411,17 @@ export function EmployeeFormModal(props: { app: App; actor: Actor; editing: Empl
               </select>
               {errors.position && <small>{errors.position}</small>}
             </label>
+            <label className="field">
+              <span>Tình trạng</span>
+              <select value={form.status} onChange={(event) => { const status = event.target.value as EmploymentStatus; setForm({ ...form, status, endDate: status === "resigned" ? form.endDate : null }); }}>
+                <option value="active">Đang làm việc</option>
+                <option value="on_leave">Tạm nghỉ</option>
+                <option value="inactive">Không hoạt động (vẫn hiện, không nhắc hạn chứng chỉ)</option>
+                <option value="resigned">Đã nghỉ việc</option>
+              </select>
+              {errors.status && <small>{errors.status}</small>}
+            </label>
+            {form.status === "resigned" && <Field label="Ngày nghỉ việc" name="endDate" type="date" value={form.endDate ?? ""} error={errors.endDate} onChange={(value) => setForm({ ...form, endDate: value || null })} />}
             <Field label="Ngày làm nghề" name="startDate" type="date" value={form.startDate} error={errors.startDate} onChange={(value) => setForm({ ...form, startDate: value })} />
             <Field label="Ngày vào TNM" name="companyStartDate" type="date" value={form.companyStartDate ?? ""} error={errors.companyStartDate} onChange={(value) => setForm({ ...form, companyStartDate: value })} />
             <div className="field employee-signature-field">

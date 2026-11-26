@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { ScanText, X } from "lucide-react";
 import type { Actor } from "../../modules/auth/permissions";
-import { isSafetyCertificateType, SAFETY_GROUPS, safetyGroupTitle } from "../../modules/certificates/safetyGroup";
+import { isSafetyCertificateType, isSafetyGroupTitle, SAFETY_GROUPS, safetyGroupTitle } from "../../modules/certificates/safetyGroup";
 import { systemClock, todayVN } from "../../lib/clock";
 import { parseCertificateText } from "../../modules/ocr/parseCertificateText";
 import { readDocumentText } from "../../modules/ocr/readDocumentText";
@@ -14,7 +14,7 @@ import { issueText, type App, type SetNotice } from "./shared";
 /** Thêm mới khi cả `editing` lẫn `renewing` đều null. */
 export type CertificateFormMode = { type: string; editing: Certificate | null; renewing: Certificate | null; safetyGroup?: number };
 
-const isGroupTitle = (title: string) => /^Nhóm [1-6]$/.test(title.trim());
+const isGroupTitle = isSafetyGroupTitle;
 
 /** Trạng thái đọc tự động từ tệp chính: đang đọc (kèm %), đã điền, hoặc lỗi. */
 type OcrState = { status: "idle" } | { status: "reading"; percent: number } | { status: "done"; filled: string[]; missing: string[]; otherType: string | null } | { status: "error" };
@@ -32,10 +32,13 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
   const [ownNoExpiry, setOwnNoExpiry] = useState(() => !typeNoExpiry && editingCertificate?.expiryDate === null);
   const noExpiry = typeNoExpiry || ownNoExpiry;
   const isSafety = isSafetyCertificateType(type);
-  // Nhóm đang có ở chứng chỉ ATLĐ hiện hành khác → không cho chọn trùng
-  const takenGroups = new Set(props.existingCertificates.filter((item) => item.state === "current" && isSafetyCertificateType(item.type) && item.id !== base?.id && item.safetyGroup).map((item) => item.safetyGroup as number));
+  // Mỗi chứng chỉ ATLĐ một nhóm riêng; đã có chứng chỉ cùng nhóm vẫn thêm được (tên tự thành "Nhóm 3 - 2")
+  const groupCount = new Map<number, number>();
+  for (const item of props.existingCertificates) {
+    if (item.state === "current" && isSafetyCertificateType(item.type) && item.id !== base?.id && item.safetyGroup) groupCount.set(item.safetyGroup, (groupCount.get(item.safetyGroup) ?? 0) + 1);
+  }
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [safetyGroup, setSafetyGroup] = useState<string>(() => String(base?.safetyGroup ?? props.mode.safetyGroup ?? (selected.group && !takenGroups.has(selected.group) ? selected.group : "")));
+  const [safetyGroup, setSafetyGroup] = useState<string>(() => String(base?.safetyGroup ?? props.mode.safetyGroup ?? (selected.group ?? "")));
   const [files, setFiles] = useState<CertificateFileItem[]>(() => initialFileItems(base?.document, base?.supplementaryFiles));
   const customTitle = base && !(isSafety && isGroupTitle(base.title)) ? base.title : "";
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -71,7 +74,7 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
       fill("issueDate", parsed.issueDate);
       if (!noExpiry) fill("expiryDate", parsed.expiryDate);
       // ATLĐ: chọn nhóm nếu chưa chọn và nhóm đó chưa có chứng chỉ khác
-      if (isSafety && parsed.safetyGroup && !takenGroups.has(parsed.safetyGroup) && !renewingCertificate && (!safetyGroup || !base)) {
+      if (isSafety && parsed.safetyGroup && !renewingCertificate && (!safetyGroup || !base)) {
         setSafetyGroup(String(parsed.safetyGroup));
         filled.push("safetyGroup");
       }
@@ -159,13 +162,13 @@ export function CertificateFormModal(props: { app: App; actor: Actor; employee: 
               <legend>Nhóm huấn luyện ATVSLĐ <abbr title="Bắt buộc">*</abbr></legend>
               <div className="safety-group-options">
                 {SAFETY_GROUPS.map((item) => {
-                  const taken = takenGroups.has(item.group);
+                  const already = groupCount.get(item.group) ?? 0;
                   const locked = Boolean(renewingCertificate) && String(item.group) !== safetyGroup;
                   return (
-                    <label key={item.group} className={`safety-option${String(item.group) === safetyGroup ? " is-selected" : ""}${taken || locked ? " is-disabled" : ""}`}>
-                      <input type="radio" name="safetyGroup" value={item.group} checked={String(item.group) === safetyGroup} disabled={taken || locked} onChange={() => setSafetyGroup(String(item.group))} />
+                    <label key={item.group} className={`safety-option${String(item.group) === safetyGroup ? " is-selected" : ""}${locked ? " is-disabled" : ""}`}>
+                      <input type="radio" name="safetyGroup" value={item.group} checked={String(item.group) === safetyGroup} disabled={locked} onChange={() => setSafetyGroup(String(item.group))} />
                       <b>{item.label}</b>
-                      <small>{taken ? "Đã có chứng chỉ nhóm này" : item.description}</small>
+                      <small>{item.description}{already ? ` · đã có ${already} chứng chỉ nhóm này, thêm tiếp được` : ""}</small>
                     </label>
                   );
                 })}

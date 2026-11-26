@@ -57,7 +57,7 @@ const HIDDEN_FIELDS = new Set(["id", "version", "expectedVersion", "excludeId", 
 const comparable = (value: unknown): string => JSON.stringify(value === undefined || value === "" ? null : value);
 const VALUE_LABELS: Readonly<Record<string, string>> = {
   ...Object.fromEntries(ACCESS_ITEMS.map((item) => [item.key, item.label])),
-  active: "Đang làm việc", on_leave: "Tạm nghỉ", resigned: "Đã nghỉ việc", current: "Hiện hành", replaced: "Đã thay thế", archived: "Đã ẩn",
+  active: "Đang làm việc", on_leave: "Tạm nghỉ", inactive: "Không hoạt động", resigned: "Đã nghỉ việc", current: "Hiện hành", replaced: "Đã thay thế", archived: "Đã ẩn",
 };
 
 export type AuditChange = { field: string; label: string; before: string; after: string };

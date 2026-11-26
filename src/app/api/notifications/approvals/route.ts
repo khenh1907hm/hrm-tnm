@@ -57,7 +57,7 @@ async function run(request: Request) {
         subject: `[TNM] ${title}`,
         text: `Chào ${profile?.full_name ?? ""},\n\n${title}\n${body}\n\nMở phiếu: ${link}\n\n— Quản trị Online TNM`,
         html: `<p>Chào ${escapeHtml(String(profile?.full_name ?? ""))},</p><p><b>${escapeHtml(title)}</b><br>${escapeHtml(body)}</p>`
-          + `<p><a href="${escapeHtml(link)}" style="background:#0f766e;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none">Mở phiếu để duyệt</a></p>`
+          + `<p><a href="${escapeHtml(link)}" style="background:#0f766e;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none">${String(row.link ?? "").includes("don=") || String(row.link ?? "").startsWith("/dat-hang/") ? "Mở đơn hàng" : "Mở phiếu để duyệt"}</a></p>`
           + `<p style="color:#64748b;font-size:12px">Đổi email nhận thông báo: bấm biểu tượng hồ sơ ở góc phải trên Quản trị Online TNM.</p>`,
       });
       sent += 1;

@@ -12,7 +12,7 @@ export type RosterData = {
   exportedBy: string;
 };
 
-const STATUS: Record<EmploymentStatus, string> = { active: "Đang làm việc", on_leave: "Tạm nghỉ", resigned: "Đã nghỉ việc" };
+const STATUS: Record<EmploymentStatus, string> = { active: "Đang làm việc", on_leave: "Tạm nghỉ", inactive: "Không hoạt động", resigned: "Đã nghỉ việc" };
 const HEADER_FILL = "FF1E3A8A";
 const TONE = { ok: { fill: "FFDCFCE7", font: "FF166534" }, warn: { fill: "FFFFEDD5", font: "FF9A3412" }, bad: { fill: "FFFEE2E2", font: "FF991B1B" } } as const;
 type Tone = keyof typeof TONE;

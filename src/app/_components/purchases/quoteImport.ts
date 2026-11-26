@@ -1,6 +1,6 @@
 "use client";
 import { getSupabaseClient } from "../../../lib/supabase/client";
-import { parseQuoteRows, type QuoteData } from "../../../modules/purchases/quoteParse";
+import { finalQuotePrice, parseQuoteRows, type QuoteData } from "../../../modules/purchases/quoteParse";
 
 /**
  * Đọc báo giá NCC: (1) PDF có chữ → dò ngay trên máy, không tốn gì; (2) không chắc / bản scan / ảnh → nhờ Gemini ở máy chủ.
@@ -137,7 +137,9 @@ export async function readQuote(file: File): Promise<QuoteReadResult> {
   if (!isPdf) return { data: await askAi({ images: [await imageData(file)] }), source: "ai", problems: [] };
   const { rows, images } = await pdfRows(file);
   const parsed = parseQuoteRows(rows);
-  if (parsed.confident) return { data: parsed, source: "text", problems: [] };
+  // Chỉ cần giá cuối cùng: dò được tên NCC và tổng cộng / tổng trước thuế là đủ, không cần đọc từng dòng
+  const final = finalQuotePrice(parsed);
+  if (parsed.confident || (parsed.supplier && final && final.from !== "items")) return { data: parsed, source: "text", problems: [] };
   try {
     const textPayload = rows.map((cells) => cells.join(" | ")).join("\n");
     const data = await askAi(textPayload.trim().length > 200 ? { text: textPayload, ...(images.length ? { images } : {}) } : { images });

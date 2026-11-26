@@ -8,9 +8,8 @@ import { purchaseFiles } from "./purchaseFiles";
 
 export type FormsModule = typeof import("../../../modules/procurement-forms/forms");
 
-/** Tải file mẫu Excel của công ty (public/templates/quy-trinh). P-COST-08 không có mẫu (dựng trong code). */
+/** Tải file mẫu Excel của công ty (public/templates/quy-trinh). */
 async function loadTemplate(code: FormCode): Promise<ArrayBuffer | null> {
-  if (code === "P-COST-08") return null;
   const response = await fetch(`/templates/quy-trinh/${code}.xlsx`, { cache: "no-cache" });
   if (!response.ok) throw new Error("FORM_TEMPLATE_MISSING");
   return response.arrayBuffer();

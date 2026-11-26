@@ -39,9 +39,25 @@ export const safetyGroupTitle = (group: number) => `Nhóm ${group}`;
  * Một người có thể có nhiều nhóm ATLĐ cùng lúc (vd Nhóm 1 và Nhóm 3) → mỗi nhóm là một chứng chỉ riêng.
  * Không nhập tên phân biệt thì tên mặc định là "Nhóm N" để phân biệt các chứng chỉ ATLĐ với nhau.
  */
-export function certificateTitleFor(type: string, title: string | undefined, group: number | null | undefined): string {
+export function certificateTitleFor(type: string, title: string | undefined, group: number | null | undefined, takenTitles: readonly string[] = []): string {
   const trimmed = (title ?? "").trim();
-  return !trimmed && isSafetyCertificateType(type) && isValidSafetyGroup(group) ? safetyGroupTitle(group) : title ?? "";
+  if (trimmed || !isSafetyCertificateType(type) || !isValidSafetyGroup(group)) return title ?? "";
+  return freeSafetyGroupTitle(group, takenTitles);
+}
+
+/** Tên chuẩn của chứng chỉ ATLĐ dạng "Nhóm 3" hoặc "Nhóm 3 - 2". */
+export const isSafetyGroupTitle = (title: string) => /^Nhóm [1-6](?: - \d+)?$/.test(title.trim().replace(/\s+/g, " "));
+
+/**
+ * Mỗi chứng chỉ ATLĐ có nhóm riêng: một người có thể có nhiều thẻ cùng Nhóm 3 (mỗi công việc nghiêm ngặt một thẻ).
+ * Tên mặc định "Nhóm 3"; nếu đã có thì "Nhóm 3 - 2", "Nhóm 3 - 3"…
+ */
+export function freeSafetyGroupTitle(group: number, takenTitles: readonly string[]): string {
+  const taken = new Set(takenTitles.map((item) => item.trim().replace(/\s+/g, " ").toLocaleLowerCase("vi")));
+  const base = safetyGroupTitle(group);
+  if (!taken.has(base.toLocaleLowerCase("vi"))) return base;
+  for (let n = 2; n < 100; n += 1) { const next = `${base} - ${n}`; if (!taken.has(next.toLocaleLowerCase("vi"))) return next; }
+  return base;
 }
 
 /** Các nhóm ATLĐ còn hiệu lực tại một ngày (mặc định: mọi chứng chỉ hiện hành), tăng dần; không có thì dùng nhóm trên hồ sơ. */

@@ -106,6 +106,9 @@ export function parseRoute(pathname: string): AppRoute | null {
 export const projectPath = (projectId: string) => `${VIEW_PATHS.projects}/${encodeURIComponent(projectId)}`;
 
 /** URL của một đơn hàng. */
+/** Chi tiết đơn hàng của dự án mở ngay trong dự án (gắn id dự án), không sang trang Đặt hàng văn phòng. */
+export const projectOrderPath = (projectId: string, orderId: string, slug = "dat-hang") => `${projectPath(projectId)}?muc=${slug}&don=${encodeURIComponent(orderId)}`;
+export const orderIdFromUrl = () => (typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("don"));
 export const purchasePath = (orderId: string) => `${VIEW_PATHS.purchases}/${encodeURIComponent(orderId)}`;
 
 /** URL của một màn hình; có employeeId thì mở thẳng hồ sơ nhân sự đó. */

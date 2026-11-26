@@ -5,11 +5,10 @@ import { formatVnd } from "../../../modules/projects/cost";
 import { PAYMENT_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, type PurchaseOrder, type PurchasePayment } from "../../../modules/purchases/types";
 import type { TabProps } from "../projects/ProjectDetail";
 import { errorMessage } from "../projects/projectShared";
-import { purchasePath } from "../routes";
+import { ProjectOrderDetail, useProjectOrder } from "./ProjectOrderDetail";
 import { getPurchaseStore } from "./usePurchaseStore";
 import "./purchases.css";
 
-const open = (orderId: string) => window.history.pushState(null, "", purchasePath(orderId));
 const dmy = (iso: string | null) => iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—";
 const TONE: Record<PurchasePayment["status"], string> = { requested: "warn", approved: "warn", paid: "ok", rejected: "bad" };
 
@@ -17,8 +16,10 @@ const TONE: Record<PurchasePayment["status"], string> = { requested: "warn", app
  * Tab Request for Payment (P-CF-03): mọi đề nghị thanh toán cho NCC của dự án (tạm ứng, trả trước, còn lại).
  * Lập đề nghị mới ở đơn Purchase Order tương ứng (bấm vào dòng để mở đơn, ký duyệt, kế toán chi, xuất form).
  */
-export function ProjectPaymentsTab({ store, data, setNotice }: TabProps) {
+export function ProjectPaymentsTab(props: TabProps) {
+  const { store, data, setNotice } = props;
   const purchases = getPurchaseStore(store.mode);
+  const { orderId, open, close } = useProjectOrder(data.project.id, "de-nghi-thanh-toan");
   const [rows, setRows] = useState<{ payment: PurchasePayment; order: PurchaseOrder }[] | null>(null);
   useEffect(() => {
     let active = true;
@@ -29,6 +30,7 @@ export function ProjectPaymentsTab({ store, data, setNotice }: TabProps) {
     })().then((list) => { if (active) setRows(list); }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setRows([]); } });
     return () => { active = false; };
   }, [purchases, data.project.id, setNotice]);
+  if (orderId) return <ProjectOrderDetail {...props} orderId={orderId} onBack={close} />;
   const sum = (status: PurchasePayment["status"]) => (rows ?? []).filter((row) => row.payment.status === status).reduce((total, row) => total + row.payment.amount + row.payment.vatAmount, 0);
   return (
     <section className="panel pj-section" aria-labelledby="pj-rfp-title">

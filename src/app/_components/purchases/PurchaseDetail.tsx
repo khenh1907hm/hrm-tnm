@@ -3,9 +3,11 @@ import { SkeletonPage } from "../Skeleton";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Check, FolderCheck, PackageCheck, Pencil, Send, Truck, Warehouse, X } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
+import { systemClock, todayVN } from "../../../lib/clock";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type StageDepartments } from "../../../modules/purchases/flow";
+import { allowedActions, EVENT_LABELS, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
 import { OrderProgress } from "./OrderProgress";
+import { StepDetail } from "./StepDetail";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
   PAYMENT_KIND_LABELS, PURCHASE_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, PURCHASE_STATUS_LABELS, type PaymentKind, type PaymentRequestInput, type PurchaseEvent, type ReceiptRecord, type PurchaseOrder, type PurchasePayment, type PurchaseRoles,
@@ -36,6 +38,8 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
   const [chainKey, setChainKey] = useState(0);
   const [departments, setDepartments] = useState<StageDepartments | undefined>(undefined);
   const [stages, setStages] = useState<ReadonlySet<EnforcedStage>>(new Set());
+  const [picked, setPicked] = useState<PathKey | null>(null);
+  const [today] = useState(() => todayVN(systemClock));
 
   const fetchAll = useCallback(() => Promise.all([store.getOrder(props.orderId), store.listPayments(props.orderId), store.listEvents(props.orderId), store.stagePermissions(props.orderId).catch(() => [] as EnforcedStage[])]), [store, props.orderId]);
   const apply = useCallback(([next, pays, logs, mine]: Awaited<ReturnType<typeof fetchAll>>) => { setOrder(next); setPayments(pays); setEvents(logs); setStages(new Set(mine)); }, []);
@@ -74,6 +78,27 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
       steps: order.usesChain && order.status !== "draft" ? await store.listSteps("purchase", order.id) : [],
     };
   };
+  // Bước đang xem lịch sử / kết quả: mặc định bước hiện tại
+  const steps = orderPath(order, payments);
+  const shownStep = steps.find((step) => step.key === picked) ?? steps.find((step) => step.state === "current") ?? steps[0]!;
+  const paymentForm = (payment: PurchasePayment) => (
+    <FormExportButtons key={payment.id} compact code="P-CF-03" fileBase={`${payment.rfpNo || order.code} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => {
+      const base = await orderFormInput();
+      const history = payments.filter((item) => item.id !== payment.id && item.status === "paid" && (item.paidAt ?? "") <= (payment.paidAt ?? "9999")).sort((a, b) => (a.paidAt ?? "").localeCompare(b.paidAt ?? ""));
+      return forms.fillPaymentRequest(template!, { payment, order, project: base.project, budgetNumber: base.budgetNumber, history, steps: payment.usesChain ? await store.listSteps("payment", payment.id) : [] });
+    }} />
+  );
+  const PAY_KIND: Partial<Record<PathKey, PaymentKind>> = { advance: "advance", advance_pay: "advance", prepayment: "prepayment", prepayment_pay: "prepayment", final: "final", final_pay: "final" };
+  const stepForms = (key: PathKey) => {
+    if (key === "draft" || key === "submitted" || key === "approved") return <span className="po-form-item">Đơn nháp <FormExportButtons code="P-CC-07" fileBase={`${order.code} ${order.title}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseDraft(template!, await orderFormInput())} /></span>;
+    if (key === "po" && order.poNo) return <span className="po-form-item">PO <FormExportButtons code="P-CC-08" fileBase={`${order.poNo} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseOrder(template!, await orderFormInput())} /></span>;
+    const kind = PAY_KIND[key];
+    const list = kind ? payments.filter((payment) => payment.kind === kind && payment.status !== "rejected") : [];
+    return list.length ? <span className="po-form-item">Đề nghị thanh toán {list.map(paymentForm)}</span> : null;
+  };
+  // Nhắc ngày giao: còn ≤ 3 ngày hoặc quá hẹn, đơn đang chờ giao → người lập nhắc NCC
+  const due = (order.status === "approved" || order.status === "ordered") ? (order.expectedDelivery ?? order.neededBy) : null;
+  const dueDays = due ? Math.round((Date.parse(`${due}T00:00:00+07:00`) - Date.parse(`${today}T00:00:00+07:00`)) / 86_400_000) : null;
   const requestKinds = ([["advance", "requestAdvance"], ["prepayment", "requestPrepayment"], ["final", "requestFinal"]] as const).filter(([, action]) => actions.has(action)).map(([kind]) => kind);
 
   return (
@@ -91,7 +116,14 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
       </div>
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
-        <OrderProgress order={order} payments={payments} departments={departments} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} />
+        <OrderProgress order={order} payments={payments} departments={departments} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} selected={shownStep.key} onSelect={(key) => setPicked(key)} />
+        {dueDays !== null && dueDays <= 3 && (
+          <div className={`po-due${dueDays < 0 ? " is-over" : ""}`} role="status">
+            <b>{dueDays > 0 ? `Còn ${dueDays} ngày tới hạn giao (${dmy(due)})` : dueDays === 0 ? `Hôm nay là hạn giao (${dmy(due)})` : `Quá hạn giao ${-dueDays} ngày (hạn ${dmy(due)})`}</b>
+            <span>{order.requesterId === props.userId ? "Nhắc nhà cung cấp giao đúng hẹn, rồi ghi lại." : `Người lập ${order.requesterName || ""} cần nhắc nhà cung cấp.`}</span>
+            {actions.has("track") && <button type="button" className="button" onClick={() => { const note = window.prompt("Đã nhắc NCC. Ghi chú (NCC hẹn giao ngày nào, người liên hệ…):", ""); if (note !== null) void act(() => store.track(order.id, `Đã nhắc NCC giao hàng${note.trim() ? `: ${note.trim()}` : ""}`, null), "Đã ghi lại việc nhắc NCC."); }}>Đã nhắc NCC</button>}
+          </div>
+        )}
         {order.status === "rejected" && <p className="warn-text">{order.usesChain ? "Bị trả về" : "Sếp từ chối"}: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
         {order.status === "cancelled" && <p className="warn-text">Đơn đã hủy: {order.decisionNote}</p>}
         <div className="po-actions">
@@ -123,6 +155,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
           {order.docsCollectedAt ? <> · <span className="pill ok">Đủ chứng từ {dateTime(order.docsCollectedAt)}</span>{order.docsNote ? ` · ${order.docsNote}` : ""}</> : <> · <span className="pill warn">Chưa đủ chứng từ</span></>}</p>}
         {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
         {order.poNo && <p className="po-terms-line">PO chính thức: <b>{order.poNo}</b> · phát hành {order.poIssuedAt ? dateTime(order.poIssuedAt) : "—"} · {order.supplierAcceptedAt ? <span className="pill ok">NCC đã ký nhận {dateTime(order.supplierAcceptedAt)}</span> : <span className="pill warn">Chờ NCC ký nhận</span>}{order.supplierAcceptNote ? ` · ${order.supplierAcceptNote}` : ""}{order.receiptRecordNo ? ` · Biên bản giao nhận ${order.receiptRecordNo}` : ""}</p>}
+        <StepDetail step={shownStep} order={order} payments={payments} events={events} forms={stepForms(shownStep.key)} live={store.mode === "live"} editable={order.status !== "cancelled"} setNotice={setNotice} />
         <div className="po-forms">
           <span className="muted">Biểu mẫu:</span>
           <span className="po-form-item">Đơn nháp <FormExportButtons code="P-CC-07" fileBase={`${order.code} ${order.title}`} setNotice={setNotice} build={async (forms, template) => forms.fillPurchaseDraft(template!, await orderFormInput())} /></span>
@@ -190,11 +223,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
                       <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối khoản chi:"); if (why) void act(() => store.decidePayment(payment.id, false, why), "Đã từ chối khoản chi."); }}>Từ chối</button>
                     </>}
                     {payment.status === "approved" && props.roles.isPayer && <button type="button" className="button primary" onClick={() => { const method = window.prompt("Hình thức chi (vd: Chuyển khoản Vietcombank, Tiền mặt):", "Chuyển khoản"); if (method !== null) void act(() => store.pay(payment.id, method, ""), "Đã thực hiện chi."); }}>Thực hiện chi</button>}
-                    {payment.status !== "rejected" && <FormExportButtons compact code="P-CF-03" fileBase={`${payment.rfpNo || order.code} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => {
-                      const base = await orderFormInput();
-                      const history = payments.filter((item) => item.id !== payment.id && item.status === "paid" && (item.paidAt ?? "") <= (payment.paidAt ?? "9999")).sort((a, b) => (a.paidAt ?? "").localeCompare(b.paidAt ?? ""));
-                      return forms.fillPaymentRequest(template!, { payment, order, project: base.project, budgetNumber: base.budgetNumber, history, steps: payment.usesChain ? await store.listSteps("payment", payment.id) : [] });
-                    }} />}
+                    {payment.status !== "rejected" && paymentForm(payment)}
                   </td>
                 </tr>
               ))}</tbody>

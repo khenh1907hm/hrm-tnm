@@ -1,7 +1,9 @@
 "use client";
 import { SkeletonLines } from "../Skeleton";
 import { useEffect, useState } from "react";
-import { Paperclip, Trash2, Upload } from "lucide-react";
+import { Download, Paperclip, Trash2, Upload } from "lucide-react";
+import { AttachmentViewer, canPreview } from "./AttachmentViewer";
+import { downloadBytes } from "./FormExport";
 import type { Notify } from "../Toast";
 import { ATTACHMENT_KINDS, LEGACY_ATTACHMENT_LABELS, formatSize, purchaseFiles, type Attachment, type AttachmentApi, type AttachmentKindInfo } from "./purchaseFiles";
 
@@ -16,10 +18,12 @@ export function AttachmentsField(props: {
   existing: readonly Attachment[]; pending?: readonly PendingFile[]; onPendingChange?: (next: PendingFile[]) => void;
   parentId?: string; api?: AttachmentApi; kinds?: readonly AttachmentKindInfo[];
   editable: boolean; requireSigned: boolean; onChanged?: () => void; setNotice: Notify;
+  /** Chỉ hiện các loại trong kinds (không kèm loại khác đã đính kèm). */ onlyKinds?: boolean;
 }) {
   const api = props.api ?? purchaseFiles;
   const kinds = props.kinds ?? ATTACHMENT_KINDS;
   const [busy, setBusy] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<Attachment | null>(null);
   const add = async (kind: string, list: FileList | null) => {
     const files = Array.from(list ?? []);
     if (!files.length) return;
@@ -38,7 +42,7 @@ export function AttachmentsField(props: {
   };
   return (
     <div className="po-files">
-      {[...kinds, ...[...new Set(props.existing.map((item) => item.kind))].filter((kind) => !kinds.some((info) => info.kind === kind))
+      {[...kinds, ...[...new Set(props.existing.map((item) => item.kind))].filter((kind) => !props.onlyKinds && !kinds.some((info) => info.kind === kind))
         .map((kind) => ({ kind, label: LEGACY_ATTACHMENT_LABELS[kind] ?? kind, required: false, legacy: true }))].map(({ kind, label, required, ...rest }) => {
         const legacy = "legacy" in rest;
         const saved = props.existing.filter((item) => item.kind === kind);
@@ -50,8 +54,9 @@ export function AttachmentsField(props: {
             <ul className="po-file-list">
               {saved.map((item) => (
                 <li key={item.id}>
-                  <button type="button" className="link-button" onClick={() => void api.open(item).catch((error: unknown) => props.setNotice(error instanceof Error ? error.message : "Không mở được tệp.", "error"))}>{item.fileName}</button>
-                  <small className="muted"> {formatSize(item.sizeBytes)}</small>
+                  <button type="button" className="link-button" title={canPreview(item.fileName) ? "Xem (PDF tách từng trang)" : "Mở tệp"} onClick={() => canPreview(item.fileName) ? setViewing(item) : void api.open(item).catch((error: unknown) => props.setNotice(error instanceof Error ? error.message : "Không mở được tệp.", "error"))}>{item.fileName}</button>
+                  <small className="muted"> {formatSize(item.sizeBytes)}{item.uploadedByName ? ` · ${item.uploadedByName}` : ""}{item.createdAt ? ` · ${new Date(item.createdAt).toLocaleDateString("vi-VN")}` : ""}</small>
+                  <button type="button" className="icon-link" aria-label={`Tải ${item.fileName}`} title="Tải về" onClick={() => void api.download(item).then((bytes) => downloadBytes(bytes, item.fileName, "application/octet-stream")).catch((error: unknown) => props.setNotice(error instanceof Error ? error.message : "Không tải được tệp.", "error"))}><Download size={13} aria-hidden="true" /></button>
                   {props.editable && <button type="button" className="icon-link" aria-label={`Xóa ${item.fileName}`} onClick={() => void drop(item)}><Trash2 size={13} aria-hidden="true" /></button>}
                 </li>
               ))}
@@ -66,18 +71,19 @@ export function AttachmentsField(props: {
             {props.editable && !legacy && (
               <label className="button po-file-add">
                 <Upload size={14} aria-hidden="true" /> {busy === kind ? "Đang tải…" : "Chọn tệp"}
-                <input type="file" multiple hidden disabled={busy !== null} accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx,.dwg,.dxf,.zip,.msg,.eml" onChange={(event) => { void add(kind, event.target.files); event.target.value = ""; }} />
+                <input type="file" multiple hidden disabled={busy !== null} accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xlsx,.xls,.doc,.docx,.dwg,.dxf,.zip,.msg,.eml,image/*" onChange={(event) => { void add(kind, event.target.files); event.target.value = ""; }} />
               </label>
             )}
           </div>
         );
       })}
+      {viewing && <AttachmentViewer item={viewing} api={api} onClose={() => setViewing(null)} />}
     </div>
   );
 }
 
 /** Mục tệp đính kèm của một phiếu đã có: tải danh sách, thêm, xóa. */
-export function SavedAttachments(props: { parentId: string; api: AttachmentApi; kinds: readonly AttachmentKindInfo[]; editable: boolean; requireSigned: boolean; setNotice: Notify; onChanged?: (items: Attachment[], parentId: string) => void }) {
+export function SavedAttachments(props: { parentId: string; api: AttachmentApi; kinds: readonly AttachmentKindInfo[]; editable: boolean; requireSigned: boolean; setNotice: Notify; onChanged?: (items: Attachment[], parentId: string) => void; onlyKinds?: boolean }) {
   const [items, setItems] = useState<Attachment[] | null>(null);
   const [attempt, setAttempt] = useState(0);
   const { parentId, api, onChanged } = props;
@@ -87,7 +93,7 @@ export function SavedAttachments(props: { parentId: string; api: AttachmentApi; 
     return () => { active = false; };
   }, [parentId, api, attempt, onChanged]);
   if (!items) return <SkeletonLines label="Đang tải tệp…" />;
-  return <AttachmentsField existing={items} parentId={parentId} api={api} kinds={props.kinds} editable={props.editable} requireSigned={props.requireSigned} onChanged={() => setAttempt((value) => value + 1)} setNotice={props.setNotice} />;
+  return <AttachmentsField existing={items} parentId={parentId} api={api} kinds={props.kinds} editable={props.editable} requireSigned={props.requireSigned} onChanged={() => setAttempt((value) => value + 1)} setNotice={props.setNotice} onlyKinds={props.onlyKinds === true} />;
 }
 
 /** Mục tệp đính kèm trong chi tiết đơn hàng. */

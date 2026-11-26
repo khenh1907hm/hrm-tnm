@@ -5,14 +5,13 @@ import { formatVnd } from "../../../modules/projects/cost";
 import type { PurchaseOrder, PurchasePayment, PurchaseStatus } from "../../../modules/purchases/types";
 import type { TabProps } from "../projects/ProjectDetail";
 import { errorMessage } from "../projects/projectShared";
-import { purchasePath } from "../routes";
+import { ProjectOrderDetail, useProjectOrder } from "./ProjectOrderDetail";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { PurchaseList } from "./PurchasesPage";
 import { getPurchaseStore } from "./usePurchaseStore";
 import { SkeletonTable } from "../Skeleton";
 import "./purchases.css";
 
-const open = (orderId: string) => window.history.pushState(null, "", purchasePath(orderId));
 /** PO Draft (P-CC-07): đơn đang lập / chờ ký / bị trả về. Purchase Order (P-CC-08): đơn đã duyệt trở đi. */
 const DRAFT_STATUSES: readonly PurchaseStatus[] = ["draft", "submitted", "rejected"];
 
@@ -20,8 +19,11 @@ const DRAFT_STATUSES: readonly PurchaseStatus[] = ["draft", "submitted", "reject
  * Tab PO Draft và Purchase Order của dự án (cùng một đơn, tách theo giai đoạn):
  * PO Draft lập đơn mới, gửi ký; đơn được duyệt chuyển sang Purchase Order (phát hành PO, nhận hàng, thanh toán).
  */
-export function ProjectPurchasesTab({ store, data, setNotice, view }: TabProps & { view: "draft" | "po" }) {
+export function ProjectPurchasesTab(props: TabProps & { view: "draft" | "po" }) {
+  const { store, data, setNotice, view } = props;
   const purchases = getPurchaseStore(store.mode);
+  const { orderId, open, close } = useProjectOrder(data.project.id, view === "draft" ? "don-nhap" : "dat-hang");
+  const [refresh, setRefresh] = useState(0);
   const [orders, setOrders] = useState<PurchaseOrder[] | null>(null);
   const [pending, setPending] = useState<PurchasePayment[]>([]);
   const [creating, setCreating] = useState(false);
@@ -29,7 +31,8 @@ export function ProjectPurchasesTab({ store, data, setNotice, view }: TabProps &
     let active = true;
     void Promise.all([purchases.listOrders(), purchases.listPendingPayments()]).then(([list, pays]) => { if (active) { setOrders(list.filter((order) => order.projectId === data.project.id)); setPending(pays); } }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setOrders([]); } });
     return () => { active = false; };
-  }, [purchases, data.project.id, setNotice]);
+  }, [purchases, data.project.id, setNotice, refresh]);
+  if (orderId) return <ProjectOrderDetail {...props} orderId={orderId} onBack={() => { close(); setRefresh((value) => value + 1); }} onChanged={() => setRefresh((value) => value + 1)} />;
   const shown = (orders ?? []).filter((order) => DRAFT_STATUSES.includes(order.status) === (view === "draft"));
   const active = shown.filter((order) => order.status !== "completed" && order.status !== "cancelled");
   return (

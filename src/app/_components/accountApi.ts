@@ -10,7 +10,7 @@ import { mergeStageDepartments, type StageDepartments } from "../../modules/purc
  * Chế độ demo (không có Supabase) trả về rỗng.
  */
 export type MyAccount = { fullName: string; role: string; isDirector: boolean; employeeId: string | null; loginEmail: string; notifyEmail: string; notifyEnabled: boolean };
-export type AppNotification = { id: string; kind: "approval_pending" | "approval_returned" | "approval_approved"; title: string; body: string; link: string; createdAt: string; readAt: string | null };
+export type AppNotification = { id: string; kind: "approval_pending" | "approval_returned" | "approval_approved" | "delivery_due" | "bug_report"; title: string; body: string; link: string; createdAt: string; readAt: string | null };
 export type ProjectApprover = { role: ApprovalRole; employeeId: string; code: string; name: string };
 
 type Row = Record<string, unknown>;
@@ -24,18 +24,26 @@ async function rpc(name: string, args: Record<string, unknown> = {}): Promise<un
   return data as unknown;
 }
 
-let accountCache: Promise<MyAccount | null> | null = null;
-export function myAccount(refresh = false): Promise<MyAccount | null> {
-  if (!accountCache || refresh) {
-    accountCache = rpc("my_account").then((data) => {
+// Bộ đệm hồ sơ gắn với id tài khoản đang đăng nhập: đổi tài khoản (đăng xuất rồi vào tài khoản khác) là tải lại.
+let accountCache: { userId: string; value: Promise<MyAccount | null> } | null = null;
+export function clearAccountCache() { accountCache = null; }
+export async function myAccount(refresh = false): Promise<MyAccount | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+  const { data: auth } = await client.auth.getSession();
+  const userId = auth.session?.user.id ?? "";
+  if (!userId) { accountCache = null; return null; }
+  if (!accountCache || refresh || accountCache.userId !== userId) {
+    const value = rpc("my_account").then((data) => {
       const row = (data as Row[] | null)?.[0];
       return row ? {
         fullName: str(row.full_name), role: str(row.role), isDirector: Boolean(row.is_director) || str(row.role) === "admin", employeeId: row.employee_id ? str(row.employee_id) : null,
         loginEmail: str(row.login_email), notifyEmail: str(row.notify_email), notifyEnabled: row.notify_enabled !== false,
       } : null;
     }, () => null);
+    accountCache = { userId, value };
   }
-  return accountCache;
+  return accountCache.value;
 }
 
 export async function saveNotifySettings(email: string, enabled: boolean) {

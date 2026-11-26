@@ -7,7 +7,7 @@ import { getSupabaseClient } from "../../lib/supabase/client";
 import { DOC_TYPE_LABELS, type ApprovalDocType, type ApprovalRole } from "../../modules/purchases/approval";
 import { DOC_PROJECT_TAB } from "../../modules/purchases/store";
 import { markNotificationsRead, myAccount, myNotifications, openAppLink, saveNotifySettings, type AppNotification, type MyAccount } from "./accountApi";
-import { projectPath, purchasePath } from "./routes";
+import { projectOrderPath, projectPath, purchasePath } from "./routes";
 import "./topbar.css";
 
 type Pending = { stepId: string; docType: ApprovalDocType; title: string; projectCode: string; role: ApprovalRole; targetDate: string; link: string };
@@ -25,8 +25,8 @@ async function loadPending(): Promise<Pending[]> {
     const docType = String(row.doc_type) as ApprovalDocType;
     const docId = String(row.doc_id);
     const projectId = row.project_id ? String(row.project_id) : "";
-    const link = docType === "purchase" ? purchasePath(docId)
-      : docType === "payment" ? purchasePath(String(row.order_id ?? docId))
+    const link = docType === "purchase" ? (projectId ? projectOrderPath(projectId, docId, "don-nhap") : purchasePath(docId))
+      : docType === "payment" ? (projectId ? projectOrderPath(projectId, String(row.order_id ?? docId), "de-nghi-thanh-toan") : purchasePath(String(row.order_id ?? docId)))
       : projectId ? `${projectPath(projectId)}?muc=${DOC_PROJECT_TAB[docType] ?? ""}` : "";
     return { stepId: String(row.step_id), docType, title: String(row.title ?? ""), projectCode: String(row.project_code ?? ""), role: String(row.role) as ApprovalRole, targetDate: String(row.target_date ?? ""), link };
   });
@@ -54,13 +54,14 @@ export function TopBarActions(props: { compact?: boolean; email?: string | null;
   useEffect(() => {
     if (!live) return;
     let active = true;
-    void myAccount().then((value) => { if (active) setAccount(value); });
+    // Tải lại hồ sơ theo tài khoản đang đăng nhập mỗi khi đổi tài khoản (email phiên thay đổi)
+    void myAccount(true).then((value) => { if (active) setAccount(value); });
     const tick = () => { if (active && document.visibilityState === "visible") void refresh(); };
     tick();
     const timer = window.setInterval(tick, 60_000);
     window.addEventListener("focus", tick);
     return () => { active = false; window.clearInterval(timer); window.removeEventListener("focus", tick); };
-  }, [live, refresh]);
+  }, [live, refresh, props.email]);
 
   useEffect(() => {
     if (!open) return;

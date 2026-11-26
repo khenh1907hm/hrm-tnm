@@ -12,6 +12,7 @@ import { BudgetCheckBox } from "./BudgetCheckBox";
 import { AttachmentsField, type PendingFile } from "./AttachmentsField";
 import { filesAvailable, listAttachments, uploadAttachment, type PurchaseAttachment } from "./purchaseFiles";
 import { readQuote } from "./quoteImport";
+import { finalQuotePrice } from "../../../modules/purchases/quoteParse";
 import { DELIVERY_LABELS, deliveryAddressFor, deliveryKindOf, type DeliveryKind } from "../../../modules/purchases/delivery";
 
 type ItemDraft = PurchaseDraft["items"][number];
@@ -62,18 +63,19 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
         if (data.prepay) { next.prepayRequired = true; fields.add("terms"); }
         return next;
       });
-      if (data.items.length) {
+      // Chỉ lấy giá cuối cùng của báo giá: một dòng "Theo báo giá số …", chi tiết xem ở tệp báo giá đính kèm
+      const final = finalQuotePrice(data);
+      if (final) {
         const blank = items.every((item) => !item.name.trim() && item.unitPrice === 0);
-        if (blank || window.confirm(`Thay ${items.length} dòng hàng đang có bằng ${data.items.length} dòng trong báo giá?`)) {
-          setItems(data.items.map((item) => ({ id: "", name: item.name, spec: item.spec, unit: item.unit, quantity: item.quantity, unitPrice: Math.round(item.unitPrice) })));
+        if (blank || window.confirm(`Thay ${items.length} dòng hàng đang có bằng giá cuối cùng của báo giá (${formatVnd(final.amount)})?`)) {
+          const name = `Theo báo giá${data.quoteNo ? ` số ${data.quoteNo}` : ""}${data.supplier ? ` của ${data.supplier}` : ""}`;
+          const spec = data.items.length ? `Chi tiết ${data.items.length} hạng mục theo báo giá đính kèm` : "Chi tiết theo báo giá đính kèm";
+          setItems([{ id: "", name, spec, unit: "Gói", quantity: 1, unitPrice: final.amount }]);
           fields.add("items");
         }
-        const sum = data.items.reduce((acc, item) => acc + Math.round(item.quantity * item.unitPrice), 0);
-        if (data.total !== null && Math.abs(sum - data.total) > Math.max(2, data.total * 0.01) && !(data.vat !== null && Math.abs(sum + data.vat - data.total) <= Math.max(2, data.total * 0.01))) {
-          warnings.push(`Cộng các dòng ${formatVnd(sum)} khác tổng trên báo giá ${formatVnd(data.total)}: kiểm tra lại số lượng, đơn giá.`);
-        }
-      } else warnings.push("Không đọc được dòng hàng: nhập tay bảng hàng.");
-      if (data.vatIncluded === false && data.vat) warnings.push(`Báo giá chưa gồm VAT (thuế ${formatVnd(data.vat)}): đơn giá điền là giá trước thuế.`);
+        if (final.from === "items") warnings.push("Báo giá không ghi rõ tổng cộng: giá cuối lấy bằng cộng các dòng, kiểm tra lại.");
+      } else warnings.push("Không đọc được giá cuối cùng của báo giá: nhập tay giá.");
+      if (data.vat) warnings.push(`Giá điền là giá chưa VAT (thuế trên báo giá ${formatVnd(data.vat)}).`);
       // Báo giá NCC chính là tệp "Báo giá có ký xác nhận hoặc PO/Hợp đồng"
       if (live) setPending((current) => [...current, { key: `signed_quote-${file.name}-${file.size}-${Date.now()}`, kind: "signed_quote", file }]);
       setImported({ source, fields, warnings });

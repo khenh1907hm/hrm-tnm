@@ -3,7 +3,7 @@ import type { CertificateHealth, EmployeeSort } from "../../app-core/createHrApp
 import type { EmploymentStatus } from "../../modules/employees/types";
 import { DEFAULT_EMPLOYEE_FILTERS, type EmployeeFilters } from "./EmployeeListView";
 
-const STATUSES: readonly EmploymentStatus[] = ["active", "on_leave", "resigned"];
+const STATUSES: readonly EmploymentStatus[] = ["active", "on_leave", "inactive", "resigned"];
 const HEALTH: readonly CertificateHealth[] = ["ok", "missing", "expiring", "expired"];
 const SORTS: readonly EmployeeSort[] = ["code", "name", "startDate"];
 

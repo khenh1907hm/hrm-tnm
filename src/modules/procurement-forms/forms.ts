@@ -1,7 +1,7 @@
 /**
  * Xuất biểu mẫu mua hàng dự án ra Excel bằng chính file mẫu của công ty (public/templates/quy-trinh/*.xlsx):
  * mở mẫu, điền số liệu đúng ô, giữ nguyên bố cục, logo, công thức; ô ký điền tên người ký và ngày ký trên web.
- * P-COST-08 dựng mẫu mới (file .xls gốc có virus macro, không dùng lại).
+ * P-COST-08 dùng khung P-COST-08.xlsx dựng lại từ file .xls gốc (chỉ chữ, định dạng, logo; file .xls gốc có macro lạ nên không dùng trực tiếp).
  */
 import ExcelJS from "exceljs";
 import { signerLabel, type ApprovalRole, type ApprovalStep } from "../purchases/approval";
@@ -18,7 +18,7 @@ export const FORM_TITLES: Record<FormCode, string> = {
   "P-CC-07": "Đơn đặt hàng nháp", "P-CC-08": "Đơn đặt hàng", "P-CF-03": "Yêu cầu thanh toán",
 };
 /** Mẫu Excel của công ty nằm trong thư mục public (P-COST-08 dựng trong code). */
-export const templatePath = (code: Exclude<FormCode, "P-COST-08">) => `/templates/quy-trinh/${code}.xlsx`;
+export const templatePath = (code: FormCode) => `/templates/quy-trinh/${code}.xlsx`;
 
 export type ProjectInfo = { code: string; name: string; site?: string; plannedStart?: string | null; plannedEnd?: string | null };
 export type SignStep = Pick<ApprovalStep, "role" | "result" | "signerName" | "actedAt" | "targetDate">;
@@ -454,6 +454,68 @@ export type MaterialFormInput = { request: MaterialRequest; project: ProjectInfo
 
 const thin: Partial<ExcelJS.Borders> = { top: { style: "thin" }, left: { style: "thin" }, bottom: { style: "thin" }, right: { style: "thin" } };
 
+/**
+ * P-COST-08 điền vào khung mẫu của công ty (public/templates/quy-trinh/P-COST-08.xlsx, dựng lại từ file .xls gốc,
+ * chỉ giữ chữ, định dạng, logo; không mang macro): Tên / Số dự án C10, C11; Ngày, Người yêu cầu H10, H11;
+ * bảng vật tư từ dòng 14 (21 dòng sẵn, nhiều hơn thì chèn thêm); ô ký dưới dòng 36.
+ */
+export async function fillMaterialRequest(template: ArrayBuffer | Uint8Array, input: MaterialFormInput): Promise<Uint8Array> {
+  const { request, project } = input;
+  const { workbook, sheet: ws } = await open(template);
+  put(ws, "C10", project.name);
+  put(ws, "C11", project.code);
+  put(ws, "H10", dmy(request.requestedOn));
+  put(ws, "H11", request.requesterName);
+  const first = 14, slots = 21;
+  const extra = Math.max(0, request.items.length - slots);
+  // Chèn thêm dòng (chép định dạng dòng giữa bảng) để dòng cuối có viền đôi vẫn nằm cuối
+  if (extra) {
+    ws.duplicateRow(first + slots - 2, extra, true);
+    for (let index = 0; index < extra; index += 1) merge(ws, `B${first + slots - 1 + index}:C${first + slots - 1 + index}`);
+  }
+  request.items.forEach((item, index) => {
+    const rowNo = first + index;
+    put(ws, `A${rowNo}`, index + 1);
+    put(ws, `B${rowNo}`, item.name);
+    put(ws, `D${rowNo}`, item.spec);
+    put(ws, `E${rowNo}`, item.maker);
+    put(ws, `F${rowNo}`, item.unit);
+    put(ws, `G${rowNo}`, item.quantity);
+    ws.getCell(`G${rowNo}`).numFmt = "#,##0.###";
+    putDate(ws, `H${rowNo}`, item.neededOn);
+    put(ws, `I${rowNo}`, [item.note, item.budgetCode ? `Mã NS ${item.budgetCode}` : ""].filter(Boolean).join(" · "));
+    for (const col of ["B", "D", "E", "I"]) ws.getCell(`${col}${rowNo}`).alignment = { ...ws.getCell(`${col}${rowNo}`).alignment, wrapText: true, vertical: "middle" };
+    for (const col of ["A", "F", "G", "H"]) ws.getCell(`${col}${rowNo}`).alignment = { ...ws.getCell(`${col}${rowNo}`).alignment, horizontal: "center", vertical: "middle" };
+  });
+  const labelRow = 36 + extra;
+  // Dòng trống giữa bảng và ô ký: ghi chú chung của phiếu
+  if (request.note) {
+    merge(ws, `A${labelRow - 1}:I${labelRow - 1}`);
+    put(ws, `A${labelRow - 1}`, `Ghi chú: ${request.note}`);
+    ws.getCell(`A${labelRow - 1}`).alignment = { wrapText: true, vertical: "middle" };
+    ws.getRow(labelRow - 1).height = 30;
+  }
+  const kho = stepOf(input.steps, "warehouse");
+  const vt = stepOf(input.steps, "material");
+  const vtKho = kho?.result === "signed" && vt?.result === "signed" ? { ...vt, signerName: [kho.signerName, vt.signerName].filter(Boolean).join(", ") }
+    : vt?.result === "signed" ? vt : kho?.result === "signed" ? kho : vt ?? kho;
+  const boxes: [string, SignStep | undefined | "requester"][] = [["B{r}:C{e}", stepOf(input.steps, "leader")], ["D{r}:E{e}", stepOf(input.steps, "technical")], ["F{r}:H{e}", vtKho], ["I{r}:I{e}", "requester"]];
+  for (let row = labelRow + 1; row <= labelRow + 4; row += 1) ws.getRow(row).height = 16;
+  for (const [range, step] of boxes) {
+    const address = range.replace("{r}", String(labelRow + 1)).replace("{e}", String(labelRow + 4));
+    merge(ws, address);
+    const cell = ws.getCell(address.split(":")[0]!);
+    cell.value = step === "requester" ? `${request.requesterName}
+${dmy(request.requestedOn)}` : step?.result === "signed" ? signText(step) : null;
+    cell.alignment = { horizontal: "center", vertical: "bottom", wrapText: true };
+    cell.font = { name: "Times New Roman", size: 9 };
+  }
+  ws.pageSetup.printArea = `A1:I${labelRow + 4}`;
+  if (input.quotes?.length) addComparisonSheet(workbook, request, project, input.quotes);
+  return finish(workbook);
+}
+
+/** Bản dựng trong code (dự phòng khi không tải được khung mẫu). */
 export async function buildMaterialRequest(input: MaterialFormInput): Promise<Uint8Array> {
   const { request, project } = input;
   const workbook = new ExcelJS.Workbook();

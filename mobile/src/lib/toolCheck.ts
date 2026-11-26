@@ -20,7 +20,8 @@ export const OPTIONAL_ITEMS: ItemKey[] = ["earthing", "resistance", "function"];
 const BUCKET = "tool-check-photos";
 
 export type ToolType = { id: string; name: string; items: ItemKey[] };
-export type ToolProject = { projectId: string; code: string; name: string; site: string; hasTemplate: boolean };
+/** status: active (đang thi công), paused, done — dự án đã xong vẫn chọn được để nhập bù các tháng trước. */
+export type ToolProject = { projectId: string; code: string; name: string; site: string; hasTemplate: boolean; status: string };
 /** Ảnh của một ô: đã tải lên (path) hoặc mới chụp trên máy (uri), chưa tải. */
 export type PhotoRef = { path?: string; uri?: string; width?: number; height?: number };
 export type ToolRow = {
@@ -28,6 +29,7 @@ export type ToolRow = {
   serial: string;
   subcon: string;
   typeId: string | null;
+  typeName?: string;
   result: "OK" | "NG";
   note: string;
   photos: Partial<Record<ItemKey, PhotoRef>>;
@@ -51,7 +53,7 @@ export function itemsOf(row: Pick<ToolRow, "typeId">, types: readonly ToolType[]
 export async function loadToolProjects(): Promise<ToolProject[]> {
   const { data, error } = await supabase.rpc("my_tool_check_projects");
   if (error) throw new Error(error.message);
-  return ((data ?? []) as Row[]).map((row) => ({ projectId: str(row.project_id), code: str(row.code), name: str(row.name), site: str(row.site), hasTemplate: Boolean(row.has_template) }));
+  return ((data ?? []) as Row[]).map((row) => ({ projectId: str(row.project_id), code: str(row.code), name: str(row.name), site: str(row.site), hasTemplate: Boolean(row.has_template), status: str(row.status) || "active" }));
 }
 
 export async function canManageTypes(): Promise<boolean> {
@@ -99,8 +101,35 @@ const parseRows = (rows: unknown): ToolRow[] => (Array.isArray(rows) ? (rows as 
   const photos: Partial<Record<ItemKey, PhotoRef>> = {};
   const raw = (r.photos ?? {}) as Row;
   for (const key of ITEM_KEYS) if (raw[key]) photos[key] = { path: str(raw[key]) };
-  return { key: newKey(), serial: str(r.serial), subcon: str(r.subcon), typeId: r.typeId ? str(r.typeId) : null, result: r.result === "NG" ? "NG" : "OK", note: str(r.note), photos };
+  const typeName = str(r.typeName).trim();
+  return { key: newKey(), serial: str(r.serial), subcon: str(r.subcon), typeId: r.typeId ? str(r.typeId) : null, ...(typeName ? { typeName } : {}), result: r.result === "NG" ? "NG" : "OK", note: str(r.note), photos };
 });
+
+/** Tạo danh sách mới từ phiếu trước: giữ Serial/Code và Loại (1–4), bỏ toàn bộ ảnh và đưa kết quả về OK. */
+export function cloneRowsWithoutPhotos(source: readonly ToolRow[], types: readonly ToolType[] = [], subcon = "TNM"): ToolRow[] {
+  return source
+    .filter((r) => r.serial.trim())
+    .map((r) => {
+      const matchedById = r.typeId && types.some((t) => t.id === r.typeId) ? r.typeId : null;
+      const matchedByName = !matchedById && r.typeName
+        ? types.find((t) => t.name.trim().toLowerCase() === r.typeName!.trim().toLowerCase())?.id ?? null
+        : null;
+      return {
+        key: newKey(),
+        serial: r.serial.trim(),
+        subcon,
+        typeId: matchedById ?? matchedByName ?? r.typeId ?? null,
+        result: "OK",
+        note: "",
+        photos: {},
+      };
+    });
+}
+
+/** Các tháng để chọn nhập phiếu: tháng này lùi về 36 tháng (mới nhất trước). */
+export function recentMonths(thisMonth: string, count = 36): string[] {
+  return Array.from({ length: count }, (_, index) => shiftMonth(thisMonth, -index));
+}
 
 /** Tháng kế tiếp của "YYYY-MM". */
 export function shiftMonth(month: string, delta: number): string {
@@ -117,14 +146,25 @@ export async function loadCheck(projectId: string, month: string): Promise<Saved
   return data ? { id: str(data.id), date: str(data.check_date), checkedBy: str(data.checked_by), rows: parseRows(data.rows) } : null;
 }
 
-/** Phiếu gần nhất trước tháng này: dùng lại danh sách dụng cụ (không ảnh, kết quả về OK) cho lần kiểm tra định kỳ mới. */
+/** Phiếu gần nhất trước tháng này (ưu tiên phiếu đã lưu có dụng cụ; nếu tháng liền trước mới lưu nháp trên máy thì lấy bản nháp): chỉ lấy Serial + Loại, bỏ ảnh. */
 export async function loadPreviousCheck(projectId: string, month: string): Promise<SavedCheck | null> {
-  const { data, error } = await supabase.from("tool_checks").select("id, check_date, checked_by, rows").eq("project_id", projectId)
-    .lt("check_date", `${month}-01`).order("check_date", { ascending: false }).limit(1).maybeSingle();
+  const prevMonth = shiftMonth(month, -1);
+  const [{ data, error }, prevDraft] = await Promise.all([
+    supabase.from("tool_checks").select("id, check_date, checked_by, rows").eq("project_id", projectId)
+      .lt("check_date", `${month}-01`).order("check_date", { ascending: false }).limit(12),
+    readDraft(projectId, prevMonth),
+  ]);
   if (error) throw new Error(error.message);
-  if (!data) return null;
-  const rows = parseRows(data.rows).map((r) => ({ ...r, photos: {}, result: "OK" as const, note: "" }));
-  return { id: str(data.id), date: str(data.check_date), checkedBy: str(data.checked_by), rows };
+  let savedPrev: SavedCheck | null = null;
+  for (const row of data ?? []) {
+    const rows = cloneRowsWithoutPhotos(parseRows(row.rows));
+    if (rows.length) { savedPrev = { id: str(row.id), date: str(row.check_date), checkedBy: str(row.checked_by), rows }; break; }
+  }
+  const draftRows = prevDraft ? cloneRowsWithoutPhotos(prevDraft.rows) : [];
+  if (draftRows.length && (!savedPrev || savedPrev.date.slice(0, 7) < prevMonth)) {
+    return { id: "", date: `${prevMonth}-01`, checkedBy: prevDraft!.checkedBy, rows: draftRows };
+  }
+  return savedPrev;
 }
 
 /** Link xem tạm (1 giờ) cho các ảnh đã tải lên. */

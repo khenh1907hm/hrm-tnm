@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { clearAccountCache } from "./accountApi";
 import { checkSession, claimSession, forgetSessionKey, kickLocal } from "./singleSession";
 import type { Session } from "@supabase/supabase-js";
 import { createHrApp } from "../../app-core/createHrApp";
@@ -176,6 +177,7 @@ export function useBackend(): Backend {
     setLive(null);
     setProfile(null);
     forgetSessionKey();
+    clearAccountCache();
     await client?.auth.signOut({ scope: "local" });
   }, [client]);
 

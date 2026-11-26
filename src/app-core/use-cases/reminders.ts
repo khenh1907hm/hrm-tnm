@@ -56,7 +56,7 @@ export function createReminderUseCases(ctx: HrAppContext) {
       const settings = await repositories.settings.get();
       if (!settings.reminderEmails.length) return err("NO_RECIPIENT");
       if (!deps.mailer) return err("REMINDER_NOT_CONFIGURED");
-      const employees = new Map((await repositories.employees.list()).filter((item) => !item.archivedAt && item.status !== "resigned").map((item) => [item.id, item]));
+      const employees = new Map((await repositories.employees.list()).filter((item) => !item.archivedAt && item.status !== "resigned" && item.status !== "inactive").map((item) => [item.id, item]));
       const types = await repositories.certificateTypes.list();
       const withExpiry = (await repositories.certificates.list())
         .filter((item) => item.state === "current" && item.expiryDate !== null && employees.has(item.employeeId))

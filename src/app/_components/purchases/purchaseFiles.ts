@@ -12,7 +12,7 @@ export type AttachmentApi = {
   upload(parentId: string, kind: string, file: File): Promise<void>;
   remove(item: Attachment): Promise<void>;
   open(item: Attachment): Promise<void>;
-  /** Nội dung tệp (để gộp PDF). */
+  /** Nội dung tệp (để gộp PDF, xem từng trang). */
   download(item: Attachment): Promise<Uint8Array>;
 };
 
@@ -79,13 +79,32 @@ export function attachmentApi(bucket: string, table: string, parentColumn: strin
 }
 
 /** Đơn hàng: báo giá NCC có ký (bắt buộc) và file so sánh giá. Loại cũ (báo giá TNM, tiến độ, bản vẽ) chỉ còn để xem tệp đã đính kèm trước đây. */
-export type AttachmentKind = "signed_quote" | "price_comparison" | "tnm_quote" | "master_schedule" | "drawing";
+export type AttachmentKind = "signed_quote" | "price_comparison" | "tnm_quote" | "master_schedule" | "drawing"
+  | "po_signed" | "tracking" | "delivery" | "stock" | "docs" | "payment_proof" | "other";
 export const ATTACHMENT_KINDS: readonly AttachmentKindInfo[] = [
   { kind: "signed_quote", label: "Báo giá có ký xác nhận hoặc PO/Hợp đồng", required: true },
   { kind: "price_comparison", label: "File so sánh giá", required: false },
 ];
+/**
+ * Tệp lưu theo từng bước của đơn (ảnh chụp, PDF, bản scan): bấm vào bước trên thanh tiến trình để xem / thêm.
+ * Khóa là bước của thanh tiến trình (PathKey trong modules/purchases/flow).
+ */
+export const STEP_FILE_KINDS: Readonly<Record<string, readonly AttachmentKindInfo[]>> = {
+  draft: ATTACHMENT_KINDS, submitted: ATTACHMENT_KINDS, approved: ATTACHMENT_KINDS,
+  po: [{ kind: "po_signed", label: "PO có chữ ký NCC (bản scan / ảnh)", required: false }],
+  ordered: [{ kind: "tracking", label: "Ảnh đơn hàng, xác nhận giao hàng của NCC", required: false }],
+  received: [{ kind: "delivery", label: "Biên bản giao nhận, ảnh hàng nhận, kiểm đếm", required: false }],
+  stocked: [{ kind: "stock", label: "Phiếu nhập kho, ảnh hàng trong kho", required: false }],
+  docs: [{ kind: "docs", label: "Hóa đơn GTGT, CO/CQ, chứng từ giao hàng", required: false }],
+  advance_pay: [{ kind: "payment_proof", label: "Chứng từ chi (UNC, phiếu chi)", required: false }],
+  prepayment_pay: [{ kind: "payment_proof", label: "Chứng từ chi (UNC, phiếu chi)", required: false }],
+  final_pay: [{ kind: "payment_proof", label: "Chứng từ chi (UNC, phiếu chi)", required: false }],
+  completed: [{ kind: "other", label: "Tài liệu khác", required: false }],
+};
+export const STEP_FILE_LABELS: Record<string, string> = { po_signed: "PO có NCC ký", tracking: "Theo dõi đơn hàng", delivery: "Nhận hàng, kiểm đếm", stock: "Nhập kho", docs: "Hóa đơn, chứng từ", payment_proof: "Chứng từ chi", other: "Tài liệu khác" };
+
 /** Tên các loại tệp đã bỏ, để vẫn hiện (chỉ xem) tệp đính kèm trước đây. */
-export const LEGACY_ATTACHMENT_LABELS: Record<string, string> = { tnm_quote: "Báo giá TNM gửi có ký đóng dấu", master_schedule: "Tiến độ tổng", drawing: "Bản vẽ" };
+export const LEGACY_ATTACHMENT_LABELS: Record<string, string> = { tnm_quote: "Báo giá TNM gửi có ký đóng dấu", master_schedule: "Tiến độ tổng", drawing: "Bản vẽ", signed_quote: "Báo giá có ký xác nhận hoặc PO/Hợp đồng", price_comparison: "File so sánh giá", ...STEP_FILE_LABELS };
 export const purchaseFiles = attachmentApi("purchase-files", "purchase_attachments", "order_id");
 export type PurchaseAttachment = Attachment;
 export const listAttachments = (orderId: string) => purchaseFiles.list(orderId);

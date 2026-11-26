@@ -216,7 +216,7 @@ export function paymentSummary(order: Pick<PurchaseOrder, "totalEstimate" | "tot
 
 export const EVENT_LABELS: Record<string, string> = {
   create: "Lập đơn từ phiếu yêu cầu vật tư", submit: "Lập đơn, gửi duyệt", approve: "Duyệt đơn", reject: "Trả về / từ chối đơn",
-  issue_po: "Phát hành PO", supplier_accept: "NCC ký xác nhận PO",
+  issue_po: "Phát hành PO", supplier_accept: "NCC ký xác nhận PO", remind_supplier: "Đã nhắc NCC giao hàng",
   "payment_sign:pic": "Phụ trách ký đề nghị thanh toán", "payment_sign:technical": "P. Kỹ thuật ký đề nghị thanh toán", "payment_sign:material": "P. Vật tư ký đề nghị thanh toán",
   "sign:pic": "Phụ trách ký", "sign:technical": "P. Kỹ thuật ký", "sign:material": "P. Vật tư ký", "sign:accounting": "Kế toán ký", "sign:leader": "Lãnh đạo ký", "sign:admin_office": "Hành chánh ký nhận", order: "Đặt hàng", track: "Cập nhật theo dõi",
   receive: "Nhận hàng, kiểm đếm", stock_in: "Nhập kho", collect_docs: "Đã thu đủ chứng từ", complete: "Hoàn tất đơn (thành công)", cancel: "Hủy đơn (thất bại)",
@@ -327,4 +327,33 @@ export function orderPath(order: StepOrder & Partial<Pick<PurchaseOrder, "advanc
     if (next) next.state = "current";
   }
   return steps;
+}
+
+/**
+ * Bước trên thanh tiến trình mà một hoạt động trong nhật ký đơn thuộc về (để bấm vào bước xem lịch sử của bước đó).
+ * Ký đề nghị thanh toán (payment_sign:*) không ghi loại khoản: gán theo đề nghị gần nhất trước thời điểm ký.
+ */
+export function eventStep(event: { action: string; at: string }, payments: readonly Pick<PurchasePayment, "kind" | "requestedAt">[] = []): PathKey {
+  const [verb, detail] = event.action.split(":");
+  const kind = (detail === "advance" || detail === "prepayment" || detail === "final") ? detail as PaymentKind : null;
+  const requestStep: Record<PaymentKind, PathKey> = { advance: "advance", prepayment: "prepayment", final: "final" };
+  const payStep: Record<PaymentKind, PathKey> = { advance: "advance_pay", prepayment: "prepayment_pay", final: "final_pay" };
+  switch (verb) {
+    case "create": return "draft";
+    case "submit": case "sign": return "submitted";
+    case "approve": case "reject": return "approved";
+    case "issue_po": case "supplier_accept": return "po";
+    case "order": case "track": case "remind_supplier": return "ordered";
+    case "receive": return "received";
+    case "stock_in": return "stocked";
+    case "collect_docs": return "docs";
+    case "complete": case "cancel": return "completed";
+    case "payment_request": case "payment_approve": case "payment_reject": return kind ? requestStep[kind] : "final";
+    case "paid": return kind ? payStep[kind] : "final_pay";
+    case "payment_sign": {
+      const before = [...payments].filter((payment) => payment.requestedAt <= event.at).sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))[0];
+      return before ? requestStep[before.kind] : "final";
+    }
+    default: return "ordered";
+  }
 }

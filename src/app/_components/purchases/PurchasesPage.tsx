@@ -16,7 +16,7 @@ import { OrderMiniPath } from "./OrderProgress";
 import { PurchaseFormModal } from "./PurchaseFormModal";
 import { MyApprovals } from "./ApprovalChain";
 import { DEPARTMENTS, emptyDepartments, ROLE_LABELS, type Department, type DepartmentMembers } from "../../../modules/purchases/approval";
-import { projectPath, routePath } from "../routes";
+import { projectOrderPath, projectPath, routePath } from "../routes";
 import "../projects/projects.css";
 import "./purchases.css";
 import { StageDepartmentsEditor } from "./StageDepartmentsEditor";
@@ -24,6 +24,19 @@ import { SkeletonLines, SkeletonPage } from "../Skeleton";
 import { mergeStageDepartments, type StageDepartments } from "../../../modules/purchases/flow";
 
 type Tab = "todo" | "mine" | "all";
+/** Giai đoạn giống tab Purchasing của dự án (dự án có thêm Material Request ở đầu, nằm trong từng dự án). */
+type Stage = "*" | "podraft" | "purchases" | "payments";
+const DRAFT_STATUSES = new Set<PurchaseStatus>(["draft", "submitted", "rejected"]);
+const inStage = (order: PurchaseOrder, stage: Stage, pending: readonly PurchasePayment[]) =>
+  stage === "*" ? true
+    : stage === "podraft" ? DRAFT_STATUSES.has(order.status)
+      : stage === "purchases" ? !DRAFT_STATUSES.has(order.status) && order.status !== "cancelled"
+        : pending.some((payment) => payment.orderId === order.id) || order.status === "received";
+const STAGE_TABS: readonly { key: Exclude<Stage, "*">; label: string; form: string }[] = [
+  { key: "podraft", label: "PO Draft", form: "P-CC-07" },
+  { key: "purchases", label: "Purchase Order", form: "P-CC-08" },
+  { key: "payments", label: "Request for Payment", form: "P-CF-03" },
+];
 type Context = { roles: PurchaseRoles; userId: string; projects: Project[]; leadProjectIds: Set<string>; approvers: PurchaseApprover[]; stageDepartments: StageDepartments };
 
 async function loadContext(store: PurchaseStore, projectStore: ProjectStore, actor: Actor): Promise<Context> {
@@ -82,6 +95,7 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
   const [tabChoice, setTab] = useState<Tab | null>(null);
   const kind = props.scope;
   const [status, setStatus] = useState<PurchaseStatus | "*">("*");
+  const [stage, setStage] = useState<Stage>("*");
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -104,11 +118,17 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
     const tokens = normalizeText(query).split(/\s+/).filter(Boolean);
     const tab = tabChoice ?? (context.roles.seesAll ? "all" : "mine");
     return orders.filter((order) => (tab === "all" || (tab === "mine" ? order.requesterId === context.userId : needsMe(order, context, pending)))
-      && order.kind === kind && (status === "*" || order.status === status)
+      && order.kind === kind && (status === "*" || order.status === status) && inStage(order, stage, pending)
       && tokens.every((token) => normalizeText(`${order.code} ${order.title} ${order.supplier} ${order.requesterName}`).includes(token)));
-  }, [orders, context, pending, tabChoice, kind, status, query]);
+  }, [orders, context, pending, tabChoice, kind, status, query, stage]);
 
-  if (!orders || !context) return props.orderId ? <SkeletonPage kind="detail" label="Đang tải đơn hàng…" /> : <SkeletonPage label="Đang tải đơn hàng…" />;
+  // Đơn dự án mở qua /dat-hang/<id> (thông báo, Việc của tôi): chuyển vào đúng dự án của đơn
+  const projectOrder = props.orderId && orders ? orders.find((order) => order.id === props.orderId && order.kind === "project" && order.projectId) : undefined;
+  useEffect(() => {
+    if (projectOrder?.projectId) window.history.replaceState(null, "", projectOrderPath(projectOrder.projectId, projectOrder.id, ["draft", "submitted", "rejected"].includes(projectOrder.status) ? "don-nhap" : "dat-hang"));
+  }, [projectOrder]);
+
+  if (!orders || !context || projectOrder) return props.orderId ? <SkeletonPage kind="detail" label="Đang tải đơn hàng…" /> : <SkeletonPage label="Đang tải đơn hàng…" />;
   // Đơn dự án mở từ /dat-hang/<id>: quay lại trang Đặt hàng dự án
   const backFromDetail = () => {
     const opened = orders.find((order) => order.id === props.orderId);
@@ -138,6 +158,23 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
       {deptSettings && <StageDepartmentsEditor canEdit load={loadStages} save={async (value) => { await store.setStageDepartments(value); void reload(); }} setNotice={setNotice} />}
       <MyApprovals store={store} refreshKey={refreshKey} onOpenOrder={(id) => props.onOpen(id)} projectHref={(projectId) => projectPath(projectId)} />
       {settings && <ApproverSettings store={store} approvers={context.approvers} employees={props.employees} onSaved={() => { setSettings(false); void reload(); }} setNotice={setNotice} />}
+      <nav aria-label="Giai đoạn mua hàng">
+        <ol className="op-track op-nav">
+          {STAGE_TABS.map((item, index) => {
+            const mine = orders.filter((order) => order.kind === kind && inStage(order, item.key, pending));
+            const open = mine.filter((order) => order.status !== "completed" && order.status !== "cancelled").length;
+            const selected = stage === item.key;
+            return (
+              <li key={item.key} className={`op-step ${selected ? "is-current" : "is-todo"}`}>
+                <button type="button" className="op-nav-btn" aria-current={selected ? "page" : undefined} onClick={() => setStage(selected ? "*" : item.key)} title={selected ? "Bấm lần nữa để xem tất cả" : undefined}>
+                  <span className="op-num" aria-hidden="true">{index + 1}</span>
+                  <span className="op-text"><span className="op-label">{item.label}</span><small className="op-dept">{item.form}{open ? ` · ${open} mở` : ""}</small></span>
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
       <div className="pj-section-head">
       <div className="pj-tabs" role="tablist" aria-label="Lọc đơn">
         <button type="button" role="tab" aria-selected={tab === "todo"} onClick={() => setTab("todo")}>Cần tôi xử lý ({todoCount})</button>
