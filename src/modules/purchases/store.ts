@@ -76,7 +76,11 @@ export interface PurchaseStore {
   deleteExplanatory(id: string): Promise<void>;
 
   /* Yêu cầu vật tư P-COST-08, hỏi giá, bảng so sánh, lên đơn nháp. */
-  listMaterialRequests(projectId: string): Promise<MaterialRequest[]>;
+  /** projectId null: YCVT của Văn phòng. */
+  listMaterialRequests(projectId: string | null): Promise<MaterialRequest[]>;
+  /** Quỹ Văn phòng của một năm (không chia hạng mục); null khi chưa đặt. */
+  officeFund(year: number): Promise<{ amount: number; note: string } | null>;
+  setOfficeFund(year: number, amount: number, note: string): Promise<void>;
   saveMaterialRequest(draft: MaterialRequestDraft): Promise<string>;
   submitMaterialRequest(id: string): Promise<void>;
   deleteMaterialRequest(id: string): Promise<void>;

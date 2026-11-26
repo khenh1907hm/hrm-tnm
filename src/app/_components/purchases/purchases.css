@@ -290,3 +290,8 @@
 .op-flow .op-step { flex: 1 0 128px; }
 .op-flow .op-label { font-size: 12.5px; }
 .op-step a.op-nav-btn { color: var(--op-ink); text-decoration: none; }
+
+/* Quỹ văn phòng theo năm */
+.of-bar { height: 8px; border-radius: 999px; background: var(--soft); overflow: hidden; margin-top: 10px; }
+.of-bar span { display: block; height: 100%; background: var(--success); border-radius: inherit; transition: width .4s ease; }
+.of-bar.is-over span { background: var(--bad); }

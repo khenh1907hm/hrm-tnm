@@ -14,6 +14,8 @@ import { FormExportButtons } from "../purchases/FormExport";
 import { getPurchaseStore } from "../purchases/usePurchaseStore";
 import { projectOrderPath } from "../routes";
 import type { TabProps } from "./ProjectDetail";
+import type { PurchaseStore } from "../../../modules/purchases/store";
+import type { Notify } from "../Toast";
 import { errorMessage, moneyInput, parseMoney } from "./projectShared";
 
 const TONE: Record<MaterialRequest["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", ordered: "ok", closed: "" };
@@ -28,6 +30,20 @@ const blankQuote = (requestId: string): MaterialQuoteDraft => ({ requestId, supp
  */
 export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: TabProps) {
   const store = useMemo(() => getPurchaseStore(projectStore.mode), [projectStore.mode]);
+  return <MaterialRequestsPanel store={store} scope={{ projectId: data.project.id, code: data.project.code, name: data.project.name, site: data.project.site }}
+    myEmployeeId={data.myEmployeeId} isAdmin={viewer.isAdmin} isLead={viewer.isLead} canSeeMoney={viewer.canSeeMoney}
+    orderHref={(id) => projectOrderPath(data.project.id, id, "don-nhap")} setNotice={setNotice} />;
+}
+
+/** Phạm vi phiếu: một dự án, hoặc Văn phòng (projectId null: không chia mã ngân sách, báo giá chọn xong gộp một đơn). */
+export type MaterialScope = { projectId: string | null; code: string; name: string; site: string };
+
+/** Danh sách + soạn + ký + hỏi giá YCVT, dùng chung cho tab dự án và trang Văn phòng. */
+export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isLead, canSeeMoney, orderHref, setNotice }: {
+  store: PurchaseStore; scope: MaterialScope; myEmployeeId: string | null; isAdmin: boolean; isLead: boolean; canSeeMoney: boolean;
+  orderHref: (orderId: string) => string; setNotice: Notify;
+}) {
+  const office = scope.projectId === null;
   const [list, setList] = useState<MaterialRequest[] | null>(null);
   const [codes, setCodes] = useState<CostCode[]>([]);
   const [loadedQuotes, setQuotes] = useState<MaterialQuote[]>([]);
@@ -41,20 +57,20 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
   const [attempt, setAttempt] = useState(0);
   const [importing, setImporting] = useState(false);
   const [importNotes, setImportNotes] = useState<string[]>([]);
-  const projectId = data.project.id;
+  const projectId = scope.projectId;
   const load = useCallback(() => Promise.all([store.listMaterialRequests(projectId), store.costCodes(), store.departments().catch(() => [])]), [store, projectId]);
   useEffect(() => {
     let active = true;
     void load().then(([items, catalog, members]) => {
       if (!active) return;
       setList(items); setCodes(catalog);
-      const me = data.myEmployeeId;
-      setCanQuote(viewer.isAdmin || viewer.isLead || (store.mode === "demo") || members.some((member) => member.employeeId === me && (member.department === "material" || member.department === "technical")));
+      const me = myEmployeeId;
+      setCanQuote(isAdmin || isLead || (store.mode === "demo") || members.some((member) => member.employeeId === me && (member.department === "material" || member.department === "technical")));
     }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setList([]); } });
     return () => { active = false; };
-  }, [load, setNotice, attempt, data.myEmployeeId, viewer.isAdmin, viewer.isLead, store.mode]);
+  }, [load, setNotice, attempt, myEmployeeId, isAdmin, isLead, store.mode]);
   const opened = list?.find((item) => item.id === openId) ?? null;
-  const showQuotes = Boolean(opened && (opened.status === "approved" || opened.status === "ordered" || opened.status === "closed") && (viewer.canSeeMoney || canQuote));
+  const showQuotes = Boolean(opened && (opened.status === "approved" || opened.status === "ordered" || opened.status === "closed") && (canSeeMoney || canQuote));
   const openedId = opened?.id ?? null;
   useEffect(() => {
     let active = true;
@@ -86,7 +102,7 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
       const result = await readMaterialFile(file);
       const notes = [...result.warnings];
       const norm = (code: string) => code.replace(/\s/g, "").toLowerCase();
-      if (result.projectCode && norm(result.projectCode) !== norm(data.project.code)) notes.unshift(`File ghi số dự án “${result.projectCode}”, khác dự án đang mở (${data.project.code}): kiểm tra lại trước khi lưu.`);
+      if (result.projectCode && !office && norm(result.projectCode) !== norm(scope.code)) notes.unshift(`File ghi số dự án “${result.projectCode}”, khác dự án đang mở (${scope.code}): kiểm tra lại trước khi lưu.`);
       const imported = result.items.map((item) => ({ ...item, id: `tmp-${++tempSeq}` }));
       setEditing((current) => current
         ? { ...current, items: [...current.items.filter((item) => item.name.trim()), ...imported] }
@@ -99,7 +115,7 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
     } finally { setImporting(false); }
   };
   const setItem = (index: number, patch: Partial<MaterialItem>) => editing && setEditing({ ...editing, items: editing.items.map((item, i) => i === index ? { ...item, ...patch } : item) });
-  const project = { code: data.project.code, name: data.project.name, site: data.project.site };
+  const project = { code: scope.code, name: scope.name, site: scope.site };
 
   return (
     <div className="pj-page">
@@ -119,15 +135,15 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
           <div className="mr-form mr-paper">
             <h3 className="mr-paper-title">PHIẾU YÊU CẦU VẬT TƯ</h3>
             <div className="mr-paper-head">
-              <span><b>Tên dự án:</b> {data.project.name}</span>
+              <span><b>{office ? "Bộ phận:" : "Tên dự án:"}</b> {scope.name}</span>
               <label><b>Ngày yêu cầu:</b> <input type="date" value={editing.requestedOn} onChange={(event) => setEditing({ ...editing, requestedOn: event.target.value || editing.requestedOn })} /></label>
-              <span><b>Số dự án:</b> {data.project.code}</span>
+              <span><b>{office ? "Mã:" : "Số dự án:"}</b> {scope.code}</span>
               <label className="mr-paper-note"><b>Ghi chú chung:</b> <input value={editing.note} placeholder="Ví dụ: cần gấp cho tầng 2" onChange={(event) => setEditing({ ...editing, note: event.target.value })} /></label>
             </div>
             {importNotes.length > 0 && <ul className="list-notice is-warn mr-import-notes">{importNotes.map((note) => <li key={note}>{note}</li>)}</ul>}
             <div className="table-scroll">
               <table className="pj-table mr-grid">
-                <thead><tr><th>STT</th><th>Tên vật tư *</th><th>Thông số kỹ thuật</th><th>Nhà sản xuất</th><th>Đơn vị *</th><th className="pj-num">Số lượng *</th><th>Ngày cần sử dụng</th><th>Ghi chú</th><th>Mã NS</th><th /></tr></thead>
+                <thead><tr><th>STT</th><th>Tên vật tư *</th><th>Thông số kỹ thuật</th><th>Nhà sản xuất</th><th>Đơn vị *</th><th className="pj-num">Số lượng *</th><th>Ngày cần sử dụng</th><th>Ghi chú</th>{!office && <th>Mã NS</th>}<th /></tr></thead>
                 <tbody>{editing.items.map((item, index) => (
                   <tr key={item.id}>
                     <td className="mr-stt">{index + 1}</td>
@@ -138,7 +154,7 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
                     <td><input aria-label={`Số lượng dòng ${index + 1}`} className="mr-qty" inputMode="decimal" value={String(item.quantity)} onChange={(event) => setItem(index, { quantity: Number(event.target.value.replace(",", ".")) || 0 })} /></td>
                     <td><input aria-label={`Ngày cần dòng ${index + 1}`} type="date" value={item.neededOn ?? ""} onChange={(event) => setItem(index, { neededOn: event.target.value || null })} /></td>
                     <td><input aria-label={`Ghi chú dòng ${index + 1}`} value={item.note} onChange={(event) => setItem(index, { note: event.target.value })} /></td>
-                    <td><select aria-label={`Mã ngân sách dòng ${index + 1}`} value={item.budgetCode ?? ""} onChange={(event) => setItem(index, { budgetCode: event.target.value || null })}><option value="">— P. Vật tư điền —</option>{codes.map((code) => <option key={code.code} value={code.code}>{code.code} {code.name}</option>)}</select></td>
+                    {!office && <td><select aria-label={`Mã ngân sách dòng ${index + 1}`} value={item.budgetCode ?? ""} onChange={(event) => setItem(index, { budgetCode: event.target.value || null })}><option value="">— P. Vật tư điền —</option>{codes.map((code) => <option key={code.code} value={code.code}>{code.code} {code.name}</option>)}</select></td>}
                     <td>{editing.items.length > 1 && <button type="button" className="icon-link" aria-label={`Bỏ dòng ${index + 1}`} onClick={() => setEditing({ ...editing, items: editing.items.filter((_, i) => i !== index) })}><X size={15} aria-hidden="true" /></button>}</td>
                   </tr>
                 ))}</tbody>
@@ -194,20 +210,20 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
           <p className="muted">Người yêu cầu {opened.requesterName || "—"} · ngày {dmy(opened.requestedOn)}{opened.note ? ` · ${opened.note}` : ""}</p>
           <div className="table-scroll">
             <table className="pj-table">
-              <thead><tr><th>STT</th><th>Tên vật tư</th><th>Thông số</th><th>NSX</th><th>ĐVT</th><th className="pj-num">SL</th><th>Cần ngày</th><th>Mã NS</th><th>Ghi chú</th></tr></thead>
+              <thead><tr><th>STT</th><th>Tên vật tư</th><th>Thông số</th><th>NSX</th><th>ĐVT</th><th className="pj-num">SL</th><th>Cần ngày</th>{!office && <th>Mã NS</th>}<th>Ghi chú</th></tr></thead>
               <tbody>{opened.items.map((item, index) => (
                 <tr key={item.id}>
                   <td>{index + 1}</td><td>{item.name}</td><td>{item.spec}</td><td>{item.maker}</td><td>{item.unit}</td>
                   <td className="pj-num">{item.quantity.toLocaleString("vi-VN")}</td><td>{dmy(item.neededOn)}</td>
-                  <td>{codeDraft && canQuote
+                  {!office && <td>{codeDraft && canQuote
                     ? <select aria-label={`Mã ngân sách dòng ${index + 1}`} value={codeDraft[item.id] ?? item.budgetCode ?? ""} onChange={(event) => setCodeDraft({ ...codeDraft, [item.id]: event.target.value || null })}><option value="">—</option>{codes.map((code) => <option key={code.code} value={code.code}>{code.code} {code.name}</option>)}</select>
-                    : item.budgetCode ?? <span className="warn-text">chưa có</span>}</td>
+                    : item.budgetCode ?? <span className="warn-text">chưa có</span>}</td>}
                   <td>{item.note}</td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
-          {canQuote && opened.status !== "submitted" && opened.status !== "closed" && (
+          {!office && canQuote && opened.status !== "submitted" && opened.status !== "closed" && (
             <div className="button-row">
               {!codeDraft ? <button type="button" className="button" onClick={() => setCodeDraft({})}>Điền mã ngân sách</button> : <>
                 <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => { await store.setMaterialCodes(opened.id, codeDraft); setCodeDraft(null); }, "Đã lưu mã ngân sách.")}>Lưu mã</button>
@@ -260,8 +276,8 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
           {!quotes.length ? <p className="muted">Chưa có báo giá nào.</p> : <QuoteCompare request={opened} quotes={quotes} canQuote={canQuote && opened.status !== "closed"} busy={busy}
             onEdit={(quote) => setQuoteDraft({ id: quote.id, requestId: quote.requestId, supplier: quote.supplier, supplierContact: quote.supplierContact, quoteRef: quote.quoteRef, quoteDate: quote.quoteDate, deliveryDays: quote.deliveryDays, paymentTerms: quote.paymentTerms, note: quote.note, prices: quote.prices })}
             onDelete={(quote) => { if (window.confirm(`Xóa báo giá của ${quote.supplier}?`)) void run(() => store.deleteQuote(quote.id), "Đã xóa báo giá."); }}
-            onOrder={(quote) => { if (window.confirm(`Chọn ${quote.supplier} và lập đơn đặt hàng nháp (mỗi mã ngân sách một đơn)?`)) void run(async () => { setCreated(await store.ordersFromQuote(opened.id, quote.id)); }, "Đã lập đơn đặt hàng nháp. Mở đơn để kiểm tra rồi gửi duyệt."); }} />}
-          {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id, index) => <a key={id} className="link-button" href={projectOrderPath(data.project.id, id, "don-nhap")}>Mở đơn {index + 1}</a>)}</p>}
+            onOrder={(quote) => { if (window.confirm(`Chọn ${quote.supplier} và lập đơn đặt hàng nháp${office ? "" : " (mỗi mã ngân sách một đơn)"}?`)) void run(async () => { setCreated(await store.ordersFromQuote(opened.id, quote.id)); }, "Đã lập đơn đặt hàng nháp. Mở đơn để kiểm tra rồi gửi duyệt."); }} />}
+          {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id, index) => <a key={id} className="link-button" href={orderHref(id)}>Mở đơn {index + 1}</a>)}</p>}
         </section>
       )}
     </div>

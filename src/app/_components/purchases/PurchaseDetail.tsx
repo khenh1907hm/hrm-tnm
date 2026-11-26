@@ -9,7 +9,7 @@ import { systemClock, todayVN } from "../../../lib/clock";
 import type { Project } from "../../../modules/projects/types";
 import { allowedActions, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
 import { OrderProgress } from "./OrderProgress";
-import { projectPath } from "../routes";
+import { projectPath, routePath } from "../routes";
 import { StepDetail } from "./StepDetail";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
@@ -182,7 +182,7 @@ export function PurchaseDetail(props: { store: PurchaseStore; orderId: string; p
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
         <OrderProgress order={order} payments={payments} departments={departments} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} selected={shownStep.key} onSelect={(key) => setPicked(key)}
-          material={order.materialRequest && order.projectId ? { number: order.materialRequest.number, href: `${projectPath(order.projectId)}?muc=yeu-cau-vat-tu` } : null} />
+          material={order.materialRequest ? { number: order.materialRequest.number, href: order.projectId ? `${projectPath(order.projectId)}?muc=yeu-cau-vat-tu` : `${routePath("purchases")}?muc=yeu-cau-vat-tu` } : null} />
         {dueDays !== null && dueDays <= 3 && (
           <div className={`po-due${dueDays < 0 ? " is-over" : ""}`} role="status">
             <b>{dueDays > 0 ? `Còn ${dueDays} ngày tới hạn giao (${dmy(due)})` : dueDays === 0 ? `Hôm nay là hạn giao (${dmy(due)})` : `Quá hạn giao ${-dueDays} ngày (hạn ${dmy(due)})`}</b>

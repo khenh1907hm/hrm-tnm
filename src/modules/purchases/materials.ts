@@ -25,7 +25,8 @@ export type MaterialItem = {
 
 export type MaterialRequest = {
   id: string;
-  projectId: string;
+  /** null: phiếu của Văn phòng (YCVT-VP-…), không chia mã ngân sách. */
+  projectId: string | null;
   /** Số phiếu: YCVT-<số dự án>-<3 số>. */
   number: string;
   requesterName: string;

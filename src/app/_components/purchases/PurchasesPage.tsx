@@ -20,18 +20,26 @@ import { projectOrderPath, projectPath, routePath } from "../routes";
 import "../projects/projects.css";
 import "./purchases.css";
 import { StageDepartmentsEditor } from "./StageDepartmentsEditor";
+import { OfficeFundCard } from "./OfficeFund";
+import { MaterialRequestsPanel, type MaterialScope } from "../projects/MaterialsTab";
+import { systemClock, todayVN } from "../../../lib/clock";
 import { SkeletonLines, SkeletonPage } from "../Skeleton";
 import { mergeStageDepartments, type StageDepartments } from "../../../modules/purchases/flow";
 
 type Tab = "todo" | "mine" | "all";
 /** Giai đoạn giống tab Purchasing của dự án (dự án có thêm Material Request ở đầu, nằm trong từng dự án). */
-type Stage = "*" | "podraft" | "purchases" | "payments";
+type Stage = "*" | "materials" | "podraft" | "purchases" | "payments";
 const DRAFT_STATUSES = new Set<PurchaseStatus>(["draft", "submitted", "rejected"]);
 const inStage = (order: PurchaseOrder, stage: Stage, pending: readonly PurchasePayment[]) =>
   stage === "*" ? true
+    : stage === "materials" ? false
     : stage === "podraft" ? DRAFT_STATUSES.has(order.status)
       : stage === "purchases" ? !DRAFT_STATUSES.has(order.status) && order.status !== "cancelled"
         : pending.some((payment) => payment.orderId === order.id) || order.status === "received";
+/** Văn phòng có thêm YCVT ở đầu (như dự án), chung một quỹ năm không chia hạng mục. */
+const OFFICE_MATERIAL_TAB = { key: "materials", label: "Yêu cầu vật tư", form: "P-COST-08" } as const;
+const OFFICE_SCOPE: MaterialScope = { projectId: null, code: "VP", name: "Văn phòng", site: "" };
+const stageFromUrl = (): Stage => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("muc") === "yeu-cau-vat-tu" ? "materials" : "*";
 const STAGE_TABS: readonly { key: Exclude<Stage, "*">; label: string; form: string }[] = [
   { key: "podraft", label: "PO Draft", form: "P-CC-07" },
   { key: "purchases", label: "Purchase Order", form: "P-CC-08" },
@@ -95,7 +103,7 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
   const [tabChoice, setTab] = useState<Tab | null>(null);
   const kind = props.scope;
   const [status, setStatus] = useState<PurchaseStatus | "*">("*");
-  const [stage, setStage] = useState<Stage>("*");
+  const [stage, setStage] = useState<Stage>(stageFromUrl);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -156,13 +164,14 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
       {!isProject && context.approvers.some((item) => !item.hasAccount) && <p className="list-notice is-warn">{context.approvers.filter((item) => !item.hasAccount).map((item) => item.name).join(", ")} chưa có tài khoản liên kết hồ sơ nên chưa duyệt được. Admin vào Tài khoản & phân quyền để cấp và liên kết.</p>}
       {deptSettings && <DepartmentSettings store={store} employees={props.employees} onSaved={() => { setDeptSettings(false); void reload(); }} setNotice={setNotice} />}
       {deptSettings && <StageDepartmentsEditor canEdit load={loadStages} save={async (value) => { await store.setStageDepartments(value); void reload(); }} setNotice={setNotice} />}
+      {!isProject && <OfficeFundCard store={store} orders={orders} year={Number(todayVN(systemClock).slice(0, 4))} isAdmin={props.actor.role === "admin"} setNotice={setNotice} />}
       <MyApprovals store={store} refreshKey={refreshKey} onOpenOrder={(id) => props.onOpen(id)} projectHref={(projectId) => projectPath(projectId)} />
       {settings && <ApproverSettings store={store} approvers={context.approvers} employees={props.employees} onSaved={() => { setSettings(false); void reload(); }} setNotice={setNotice} />}
       <nav aria-label="Giai đoạn mua hàng">
         <ol className="op-track op-nav">
-          {STAGE_TABS.map((item, index) => {
+          {(isProject ? STAGE_TABS : [OFFICE_MATERIAL_TAB, ...STAGE_TABS]).map((item, index) => {
             const mine = orders.filter((order) => order.kind === kind && inStage(order, item.key, pending));
-            const open = mine.filter((order) => order.status !== "completed" && order.status !== "cancelled").length;
+            const open = item.key === "materials" ? 0 : mine.filter((order) => order.status !== "completed" && order.status !== "cancelled").length;
             const selected = stage === item.key;
             return (
               <li key={item.key} className={`op-step ${selected ? "is-current" : "is-todo"}`}>
@@ -175,6 +184,8 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
           })}
         </ol>
       </nav>
+      {stage === "materials" ? <MaterialRequestsPanel store={store} scope={OFFICE_SCOPE} myEmployeeId={null} isAdmin={props.actor.role === "admin"} isLead={false}
+        canSeeMoney={context.roles.seesAll || context.roles.isApprover} orderHref={(id) => `${routePath("purchases")}/${encodeURIComponent(id)}`} setNotice={setNotice} /> : <>
       <div className="pj-section-head">
       <div className="pj-tabs" role="tablist" aria-label="Lọc đơn">
         <button type="button" role="tab" aria-selected={tab === "todo"} onClick={() => setTab("todo")}>Cần tôi xử lý ({todoCount})</button>
@@ -189,6 +200,7 @@ export function PurchasesPage(props: { /** "project": Đặt hàng dự án (m�
       </div>
       {/* Bảng tình trạng đơn hàng đã chuyển sang trang Việc của tôi */}
       <section className="panel pj-section"><PurchaseList orders={shown} projects={context.projects} pending={pending} onOpen={(id) => props.onOpen(id)} hideProject={!isProject} /></section>
+      </>}
       {creating && <PurchaseFormModal store={store} projects={context.projects} initial={null} fixedKind={props.scope} onClose={() => setCreating(false)} onSaved={(order, submitted) => { setCreating(false); setNotice(submitted ? `Đã lập đơn ${order.code}, gửi ${order.kind === "project" ? "ký duyệt" : "sếp duyệt"}.` : `Đã lưu nháp ${order.code}.`, "success"); void reload(); props.onOpen(order.id); }} />}
     </section>
   );

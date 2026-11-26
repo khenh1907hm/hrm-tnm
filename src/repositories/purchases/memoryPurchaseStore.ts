@@ -409,6 +409,12 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       data.explanatory = data.explanatory.filter((item) => item.id !== id); data.steps = data.steps.filter((step) => !(step.docType === "explanatory" && step.docId === id)); return done();
     },
 
+    async officeFund(year) { const fund = (data as { officeFunds?: Record<number, { amount: number; note: string }> }).officeFunds?.[year]; return fund ? { ...fund } : null; },
+    async setOfficeFund(year, amount, note) {
+      if (!(amount >= 0)) fail("BUDGET_BAD_AMOUNT");
+      const holder = data as { officeFunds?: Record<number, { amount: number; note: string }> };
+      holder.officeFunds = { ...holder.officeFunds, [year]: { amount: Math.round(amount), note: note.trim() } }; persist();
+    },
     async listMaterialRequests(projectId) { return clone(data.materials.filter((item) => item.projectId === projectId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
     async saveMaterialRequest(draft) {
       const issue = materialIssue(draft, false); if (issue) fail(issue);
@@ -419,7 +425,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       }
       const seq = data.materials.filter((item) => item.projectId === draft.projectId).length + 1;
       const request: MaterialRequest = {
-        id: newId(), projectId: draft.projectId, number: materialNumber(await projectCode(draft.projectId), seq), requesterName: "Admin demo", requestedOn: draft.requestedOn,
+        id: newId(), projectId: draft.projectId, number: materialNumber(draft.projectId ? await projectCode(draft.projectId) : "VP", seq), requesterName: "Admin demo", requestedOn: draft.requestedOn,
         status: "draft", note: draft.note.trim(), items, createdAt: now(), submittedAt: null, approvedAt: null, orderIds: [],
       };
       data.materials.push(request); persist(); return request.id;

@@ -56,7 +56,7 @@ const reportFromRow = (row: Row): ExplanatoryReport => {
   };
 };
 const requestFromRow = (row: Row): MaterialRequest => ({
-  id: str(row.id), projectId: str(row.project_id), number: str(row.number), requesterName: str(row.requester_name), requestedOn: str(row.requested_on), status: row.status as MaterialRequest["status"], note: str(row.note),
+  id: str(row.id), projectId: strOrNull(row.project_id), number: str(row.number), requesterName: str(row.requester_name), requestedOn: str(row.requested_on), status: row.status as MaterialRequest["status"], note: str(row.note),
   createdAt: str(row.created_at), submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at),
   items: ((row.material_request_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map((item) => ({
     id: str(item.id), name: str(item.name), spec: str(item.spec), maker: str(item.maker), unit: str(item.unit), quantity: num(item.quantity), neededOn: strOrNull(item.needed_on), note: str(item.note), budgetCode: strOrNull(item.budget_code),
@@ -216,7 +216,8 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     async deleteExplanatory(id) { await rpc("explanatory_delete", { p_id: id }); },
 
     async listMaterialRequests(projectId) {
-      const { data, error } = await client.from("material_requests").select("*, material_request_items(*), purchase_orders(id)").eq("project_id", projectId).order("created_at", { ascending: false });
+      const base = client.from("material_requests").select("*, material_request_items(*), purchase_orders(id)");
+      const { data, error } = await (projectId === null ? base.is("project_id", null) : base.eq("project_id", projectId)).order("created_at", { ascending: false });
       if (error) raise(error);
       return ((data ?? []) as Row[]).map(requestFromRow);
     },
@@ -226,6 +227,12 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
         items: draft.items.map((item) => ({ id: /^[0-9a-f-]{36}$/i.test(item.id) ? item.id : "", name: item.name, spec: item.spec, maker: item.maker, unit: item.unit, quantity: item.quantity, neededOn: item.neededOn ?? "", note: item.note, budgetCode: item.budgetCode ?? "" })),
       } }));
     },
+    async officeFund(year) {
+      const { data, error } = await client.from("office_funds").select("amount, note").eq("year", year).maybeSingle();
+      if (error) throw error;
+      return data ? { amount: num((data as Row).amount), note: str((data as Row).note) } : null;
+    },
+    async setOfficeFund(year, amount, note) { await rpc("office_fund_set", { p_year: year, p_amount: Math.round(amount), p_note: note }); },
     async submitMaterialRequest(id) { await rpc("material_request_submit", { p_id: id }); },
     async deleteMaterialRequest(id) { await rpc("material_request_delete", { p_id: id }); },
     async closeMaterialRequest(id, note) { await rpc("material_request_close", { p_id: id, p_note: note }); },
