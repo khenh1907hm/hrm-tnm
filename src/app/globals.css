@@ -689,3 +689,4 @@ details.ai-setup>[role=status]{padding:8px 14px 0}
 .active-switch.off { color: #b91c1c; }
 .active-switch.off .active-switch-track { background: #ef4444; }
 .ctype-modal{max-width:720px;margin-top:10vh}.ctype-modal .type-edit-form{padding:16px 20px}
+.ctype-modal .type-edit-form{border-top:0;margin-top:0}.ctype-modal .type-edit-form>.check-field{grid-column:1/-1}.ctype-modal .type-edit-form>.button{min-height:40px}
