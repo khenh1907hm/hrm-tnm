@@ -27,6 +27,7 @@ const orderFromRow = (row: Row): PurchaseOrder => ({
   note: str(row.note), status: row.status as PurchaseOrder["status"], totalEstimate: num(row.total_estimate), totalActual: row.total_actual === null ? null : num(row.total_actual), decisionNote: str(row.decision_note),
   submittedAt: strOrNull(row.submitted_at), approvedAt: strOrNull(row.approved_at), orderedAt: strOrNull(row.ordered_at), receivedAt: strOrNull(row.received_at), completedAt: strOrNull(row.completed_at), createdAt: str(row.created_at),
   items: ((row.purchase_items ?? []) as Row[]).sort((a, b) => num(a.sort) - num(b.sort)).map(itemFromRow),
+  materialRequest: row.material_requests && typeof row.material_requests === "object" ? { id: str((row.material_requests as Row).id), number: str((row.material_requests as Row).number) } : null,
   budgetCode: strOrNull(row.budget_code), budgetA: row.budget_a === null || row.budget_a === undefined ? null : num(row.budget_a),
   budgetB: row.budget_b === null || row.budget_b === undefined ? null : num(row.budget_b), usesChain: Boolean(row.uses_chain),
   poNo: str(row.po_no), poIssuedAt: strOrNull(row.po_issued_at), supplierAcceptedAt: strOrNull(row.supplier_accepted_at), supplierAcceptNote: str(row.supplier_accept_note), receiptRecordNo: str(row.receipt_record_no),
@@ -43,7 +44,7 @@ const sheetFromRow = (row: Row): BudgetSheet => ({
 });
 const paymentFromRow = (row: Row): PurchasePayment => ({ id: str(row.id), orderId: str(row.order_id), kind: row.kind as PurchasePayment["kind"], amount: num(row.amount), payee: str(row.payee), note: str(row.note), status: row.status as PurchasePayment["status"], requestedAt: str(row.requested_at), approvedAt: strOrNull(row.approved_at), paidAt: strOrNull(row.paid_at), paidMethod: str(row.paid_method), decisionNote: str(row.decision_note),
   rfpNo: str(row.rfp_no), invoiceNo: str(row.invoice_no), invoiceDate: strOrNull(row.invoice_date), vatAmount: num(row.vat_amount), usesChain: Boolean(row.uses_chain) });
-const ORDER_COLUMNS = "*, purchase_items(*)";
+const ORDER_COLUMNS = "*, purchase_items(*), material_requests(id, number)";
 const bool = (value: unknown) => value === true || value === "true";
 const reportFromRow = (row: Row): ExplanatoryReport => {
   const attachments = (row.attachments ?? {}) as Record<string, unknown>;

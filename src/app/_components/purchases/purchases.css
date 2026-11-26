@@ -285,3 +285,8 @@
 .ap-chain-compact .ap-actions { grid-column: 1 / -1; justify-content: flex-end; }
 .ap-remind { color: #b45309; border-color: #fcd34d; background: #fffbeb; }
 .ap-remind:hover { background: #fef3c7; }
+
+/* Thanh quy trình đầy đủ của tab Purchasing (13 khối) */
+.op-flow .op-step { flex: 1 0 128px; }
+.op-flow .op-label { font-size: 12.5px; }
+.op-step a.op-nav-btn { color: var(--op-ink); text-decoration: none; }

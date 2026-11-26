@@ -357,3 +357,26 @@ export function eventStep(event: { action: string; at: string }, payments: reado
     default: return "ordered";
   }
 }
+
+/**
+ * Thanh quy trình mua hàng của dự án (thay 4 khối cũ): YCVT rồi các bước của đơn, mỗi cặp "đề nghị → chi" gộp một khối.
+ * Mỗi đơn nằm ở khối chứa bước hiện tại của nó; đơn đã hoàn tất / đã hủy nằm ở "Hoàn tất".
+ */
+export type FlowGroup = "material" | "draft" | "submitted" | "approved" | "po" | "advance" | "ordered" | "prepayment" | "received" | "stocked" | "docs" | "final" | "completed";
+export const FLOW_GROUPS: readonly { key: FlowGroup; label: string; form?: string }[] = [
+  { key: "material", label: "Yêu cầu vật tư", form: "P-COST-08" }, { key: "draft", label: "Đơn nháp", form: "P-CC-07" }, { key: "submitted", label: "Gửi ký duyệt" },
+  { key: "approved", label: "Duyệt" }, { key: "po", label: "PO, NCC ký nhận", form: "P-CC-08" }, { key: "advance", label: "Tạm ứng", form: "P-CF-03" },
+  { key: "ordered", label: "Theo dõi đơn hàng" }, { key: "prepayment", label: "TT trước giao", form: "P-CF-03" }, { key: "received", label: "Nhận hàng, kiểm đếm" },
+  { key: "stocked", label: "Nhập kho" }, { key: "docs", label: "Hóa đơn, chứng từ" }, { key: "final", label: "Thanh toán", form: "P-CF-03" }, { key: "completed", label: "Hoàn tất" },
+];
+export function groupOfStep(key: PathKey): FlowGroup {
+  if (key === "advance_pay") return "advance";
+  if (key === "prepayment_pay") return "prepayment";
+  if (key === "final_pay") return "final";
+  return key;
+}
+export function orderGroup(order: Parameters<typeof orderPath>[0], payments: Parameters<typeof orderPath>[1]): FlowGroup {
+  if (order.status === "completed" || order.status === "cancelled") return "completed";
+  const current = orderPath(order, payments).find((step) => step.state === "current");
+  return current ? groupOfStep(current.key) : "draft";
+}

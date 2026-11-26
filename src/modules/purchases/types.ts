@@ -60,6 +60,8 @@ export type PurchaseOrder = {
   items: PurchaseItem[];
   /** Mã ngân sách (mã chi phí P-COST-03), bắt buộc với đơn dự án khi gửi duyệt. */
   budgetCode: string | null;
+  /** Phiếu yêu cầu vật tư (YCVT) đã sinh ra đơn này, nếu có. */
+  materialRequest?: { id: string; number: string } | null;
   /** Ảnh chụp lúc gửi / duyệt: A = ngân sách của mã, B = đã đặt trước đơn này. */
   budgetA: number | null;
   budgetB: number | null;

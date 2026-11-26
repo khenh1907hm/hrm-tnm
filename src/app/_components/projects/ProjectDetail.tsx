@@ -14,14 +14,12 @@ import {
 } from "../../../modules/projects/types";
 import type { Notify } from "../Toast";
 import { ChecksTab } from "./ChecksTab";
-import { ProjectPurchasesTab } from "../purchases/ProjectPurchasesTab";
 import { OrgChartTab } from "./OrgChartTab";
 import { ApprovalTreePanel } from "./ApprovalTreePanel";
 import { AsideSlotContext } from "./asideSlot";
 import { CONTRACT_STATE_UI, myAccount, projectApprovers, projectContractStates, type ContractState } from "../accountApi";
 import { BudgetSheetTab } from "./BudgetSheetTab";
 import { ContractTab } from "./ContractTab";
-import { MaterialsTab } from "./MaterialsTab";
 import { DailyReportTab } from "./DailyReportTab";
 import { OverviewTab } from "./OverviewTab";
 import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from "./projectShared";
@@ -30,9 +28,7 @@ import { ReportsTab } from "./ReportsTab";
 import { TimesheetsTab } from "./TimesheetsTab";
 import { ToolChecksTab } from "./ToolChecksTab";
 import { ExplanatoryTab } from "./ExplanatoryTab";
-import { ProjectPaymentsTab } from "../purchases/ProjectPaymentsTab";
-import { ProcurementNav, type ProcurementStage } from "../purchases/ProcurementNav";
-import { getPurchaseStore } from "../purchases/usePurchaseStore";
+import { ProjectProcurement, type ProcurementStage } from "../purchases/ProjectProcurement";
 
 /** Toàn bộ dữ liệu một dự án (tải một lần, tải lại sau mỗi thao tác). Các mục tiền là [] khi người xem không được xem tiền. */
 export type ProjectData = {
@@ -103,7 +99,6 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   const [tab, setTab] = useState<Tab>(tabFromUrl);
   // Ô đầu khung bên phải: đơn hàng đang mở đưa chuỗi ký vào đây
   const [asideSlot, setAsideSlot] = useState<HTMLDivElement | null>(null);
-  const purchaseStore = useMemo(() => getPurchaseStore(store.mode), [store.mode]);
 
   const reload = useCallback(async () => {
     try { setData(await fetchProjectData(store, project)); } catch (error) { setNotice(errorMessage(error), "error"); }
@@ -190,15 +185,8 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "explanatory") return withApprovers(<ExplanatoryTab {...tabProps} />, "explanatory");
         if (PROCUREMENT.has(tab)) {
           const stage = tab as ProcurementStage;
-          return (
-            <>
-              <ProcurementNav store={purchaseStore} projectId={project.id} current={stage} onSelect={setTab} />
-              {stage === "materials" ? withApprovers(<MaterialsTab {...tabProps} />, "material")
-                : stage === "podraft" ? withApprovers(<ProjectPurchasesTab {...tabProps} view="draft" />, "purchase")
-                  : stage === "purchases" ? withApprovers(<ProjectPurchasesTab {...tabProps} view="po" />, "purchase")
-                    : withApprovers(<ProjectPaymentsTab {...tabProps} />, "payment")}
-            </>
-          );
+          // Thanh quy trình đầy đủ; khung Người duyệt theo loại phiếu của khối đang chọn
+          return withApprovers(<ProjectProcurement {...tabProps} stage={stage} onStage={setTab} />, stage === "materials" ? "material" : stage === "payments" ? "payment" : "purchase");
         }
         return (
           <>
