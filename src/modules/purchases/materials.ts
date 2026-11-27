@@ -125,8 +125,8 @@ export function ordersFromQuote(request: Pick<MaterialRequest, "projectId" | "nu
  */
 export function orderFromGroup(request: Pick<MaterialRequest, "projectId" | "number" | "items">, code: string | null, projectAddress = ""): PurchaseDraft | { error: string } {
   const office = request.projectId === null;
-  if (!office && !code) return { error: "MR_ITEM_CODE_REQUIRED" };
-  const items = request.items.filter((item) => office || item.budgetCode === code);
+  // Dòng chưa có mã ngân sách gộp một PO chưa có mã (chọn mã trong PO trước khi gửi duyệt)
+  const items = request.items.filter((item) => office || (item.budgetCode ?? null) === (code ?? null));
   if (!items.length) return { error: "MR_GROUP_EMPTY" };
   return {
     kind: office ? "office" : "project", projectId: request.projectId, budgetCode: office ? null : code,
@@ -138,37 +138,40 @@ export function orderFromGroup(request: Pick<MaterialRequest, "projectId" | "num
   };
 }
 
-/** Mọi hạng mục (đã có mã) của phiếu đều đã có PO chưa hủy → phiếu "Đã lên đơn". */
+/** Mọi hạng mục (kể cả nhóm chưa có mã) của phiếu đều đã có PO chưa hủy → phiếu "Đã lên đơn". */
 export function allGroupsOrdered(request: Pick<MaterialRequest, "projectId" | "items">, orders: readonly { budgetCode: string | null; status: string }[]): boolean {
   const live = orders.filter((order) => order.status !== "cancelled");
   if (request.projectId === null) return live.length > 0;
-  return request.items.filter((item) => item.budgetCode).every((item) => live.some((order) => order.budgetCode === item.budgetCode));
+  return request.items.every((item) => live.some((order) => (order.budgetCode ?? null) === (item.budgetCode ?? null)));
 }
 
 /**
- * Tiến độ một phiếu YCVT (hiện ở danh sách và trang chi tiết):
- * Lập phiếu → Ký duyệt → Hỏi giá (nhiều báo giá) → Chọn NCC, lên đơn → Đơn hàng (mua, nhận, thanh toán) → Hoàn tất.
+ * Tiến độ một phiếu YCVT (hiện ở danh sách và trang chi tiết). Không còn ký duyệt / hỏi giá ở phiếu:
+ * Lập phiếu → PO nháp (mỗi hạng mục một PO, lập ngay khi gửi phiếu) → Mua, nhận hàng, thanh toán (theo các PO) → Hoàn tất.
  */
-export type MaterialStageKey = "draft" | "signing" | "quoting" | "ordering" | "orders" | "done";
+export type MaterialStageKey = "draft" | "po" | "orders" | "done";
 export type MaterialStage = { key: MaterialStageKey; label: string; state: "done" | "current" | "todo" | "bad" | "skipped"; note: string };
-export function materialProgress(request: Pick<MaterialRequest, "status">, quoteCount: number, orders: readonly { status: string }[]): MaterialStage[] {
+export function materialProgress(request: Pick<MaterialRequest, "status">, _quoteCount: number, orders: readonly { status: string }[]): MaterialStage[] {
   const { status } = request;
-  const signed = status === "approved" || status === "ordered" || status === "closed";
-  const finished = orders.filter((order) => order.status === "completed" || order.status === "cancelled").length;
-  const allOrdersDone = orders.length > 0 && finished === orders.length;
+  const live = orders.filter((order) => order.status !== "cancelled");
+  const drafts = live.filter((order) => order.status === "draft" || order.status === "rejected").length;
+  const finished = live.filter((order) => order.status === "completed").length;
+  const allOrdersDone = live.length > 0 && finished === live.length;
   const closed = status === "closed";
-  const stages: MaterialStage[] = [
+  const sent = status !== "draft" && status !== "rejected";
+  return [
     { key: "draft", label: "Lập phiếu", state: status === "draft" ? "current" : status === "rejected" ? "bad" : "done", note: status === "rejected" ? "Bị trả về: sửa và gửi lại" : status === "draft" ? "Đang soạn" : "" },
-    { key: "signing", label: "Ký duyệt", state: status === "submitted" ? "current" : signed ? "done" : "todo", note: status === "submitted" ? "Đang chờ ký" : "" },
-    { key: "quoting", label: "Hỏi giá", state: status === "approved" && quoteCount === 0 ? "current" : quoteCount > 0 && signed ? "done" : closed ? "skipped" : "todo", note: quoteCount ? `${quoteCount} báo giá` : "" },
-    { key: "ordering", label: "Chọn NCC, lên đơn", state: status === "ordered" || orders.length > 0 ? "done" : status === "approved" && quoteCount > 0 ? "current" : closed ? "skipped" : "todo", note: orders.length ? `${orders.length} đơn` : "" },
-    { key: "orders", label: "Mua, nhận hàng, thanh toán", state: allOrdersDone ? "done" : orders.length > 0 ? "current" : closed ? "skipped" : "todo", note: orders.length ? `${finished}/${orders.length} đơn xong` : "" },
+    { key: "po", label: "PO nháp (POD)", state: !sent ? "todo" : !live.length ? (closed ? "skipped" : "current") : drafts ? "current" : "done", note: !sent ? "" : !live.length ? (closed ? "" : "Chờ lập PO nháp") : drafts ? `${drafts}/${live.length} PO nháp chưa gửi duyệt` : `${live.length} PO` },
+    { key: "orders", label: "Mua, nhận hàng, thanh toán", state: allOrdersDone ? "done" : live.length > drafts ? "current" : closed ? "skipped" : "todo", note: live.length > drafts && !allOrdersDone ? `${finished}/${live.length} PO xong` : "" },
     { key: "done", label: "Hoàn tất", state: closed || allOrdersDone ? "done" : "todo", note: closed ? "Đã đóng phiếu" : "" },
   ];
-  return stages;
 }
 export const materialCurrentLabel = (stages: readonly MaterialStage[]) => {
   const current = stages.find((stage) => stage.state === "current" || stage.state === "bad");
   if (current) return current.note || current.label;
   return stages[stages.length - 1]!.state === "done" ? "Hoàn tất" : "";
 };
+
+/** Các nhóm (hạng mục) của phiếu theo thứ tự mã; nhóm chưa có mã (null) đứng cuối. Văn phòng: một nhóm. */
+export const materialGroupCodes = (request: Pick<MaterialRequest, "projectId" | "items">): (string | null)[] =>
+  request.projectId === null ? [null] : [...new Set(request.items.map((item) => item.budgetCode ?? null))].sort((a, b) => a === null ? 1 : b === null ? -1 : a.localeCompare(b, "vi", { numeric: true }));

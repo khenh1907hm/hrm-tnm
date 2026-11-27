@@ -8,7 +8,8 @@ import type { PageView } from "./shared";
 export function SectionTabs(props: { actor: Actor; view: PageView; onNavigate: (view: PageView) => void }) {
   const section = sectionOf(props.view);
   const views = section ? openViews(props.actor, section) : [];
-  if (views.length < 2) return null;
+  // Phần Dự án không hiện thanh tab (Danh sách dự án / Đặt hàng dự án): đặt hàng nằm trong từng dự án
+  if (views.length < 2 || section?.key === "projects") return null;
   return (
     <nav className="section-tabs" aria-label={section!.label}>
       {views.map((view) => (

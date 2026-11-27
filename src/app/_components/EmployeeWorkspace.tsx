@@ -128,13 +128,6 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
   // Đặt hàng dự án là tab trong Dự án: chỉ hiện riêng trên thanh bên khi người này không vào được trang Dự án
   const links = nav.filter((key) => key !== "projectPurchases" || !nav.includes("projects")).map((key) => [key, ...NAV_META[key]!] as const);
   const isActive = (key: PageView) => view === key || (key === "projects" && view === "projectPurchases" && nav.includes("projects"));
-  const projectTabs = (view === "projects" || view === "projectPurchases") && nav.includes("projects") && nav.includes("projectPurchases") && !route?.projectId && !route?.purchaseId ? (
-    <nav className="section-tabs" aria-label="Dự án">
-      {(["projects", "projectPurchases"] as const).map((key) => (
-        <a key={key} href={routePath(key)} className={view === key ? "is-active" : undefined} aria-current={view === key ? "page" : undefined} onClick={(event) => go(event, key)}>{key === "projects" ? "Danh sách dự án" : "Đặt hàng dự án"}</a>
-      ))}
-    </nav>
-  ) : null;
   const initials = (props.email ?? "?").replace(/@.*/, "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
   // Tài khoản chấm công hiện mã nhân viên (TNM001) thay cho email nội bộ
   const login = props.email ? (isWorkerEmail(props.email) ? props.email.split("@")[0]!.toUpperCase() : props.email) : "";
@@ -184,7 +177,6 @@ export function EmployeeWorkspace(props: { role?: Exclude<ActorRole, "admin">; c
       {changingPassword && props.email && <ChangePasswordModal email={props.email} onClose={() => setChangingPassword(false)} />}
       <main className="main-content emp-main" onClick={() => setMenuOpen(false)}>
         {props.mode === "live" && <div className="emp-desktop-only"><TopBarActions email={props.email} onSignOut={props.onSignOut} onNotice={(message) => setNotice(message, "success")} /></div>}
-        {projectTabs}
         {view === "skills" && <SkillsClient embedded />}
         {view === "approvals" && <><ApprovalBoardPage live={props.mode === "live"} setNotice={setNotice} />
           {projects.buys && <MyOrdersBoard store={getPurchaseStore(props.mode)} projectStore={projectStore.ready ? projectStore.store : null} onOpenOrder={(orderId) => window.history.pushState(null, "", purchasePath(orderId))} />}</>}

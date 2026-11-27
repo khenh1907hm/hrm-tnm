@@ -1,4 +1,5 @@
 "use client";
+import { SettingsTab } from "./SettingsTab";
 import { SkeletonDetail } from "../Skeleton";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ArrowLeft, MapPin, Pencil } from "lucide-react";
@@ -73,19 +74,19 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "podraft" | "purchases" | "payments" | "members" | "daily" | "timesheets" | "checks" | "tools" | "reports";
+type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "podraft" | "purchases" | "payments" | "members" | "daily" | "timesheets" | "checks" | "tools" | "reports" | "settings";
 /** Theo thứ tự quy trình vận hành: Confirmed Contract → Budget → Material Request → PO Draft → PO → Request for Payment → thi công. */
 const TABS: readonly [Tab, string, string?][] = [
   ["overview", "Overview"], ["contract", "Confirmed Contract", "P-COST-01"], ["budget", "Budget Sheet", "P-COST-03"], ["explanatory", "Explanatory Report", "P-COST-05"],
   ["materials", "Purchasing", "Material Request → PO Draft → Purchase Order → Request for Payment"],
-  ["members", "Org Chart & Members"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["tools", "Tool Check"], ["reports", "Reports"],
+  ["members", "Org Chart & Members"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["tools", "Tool Check"], ["reports", "Reports"], ["settings", "Settings"],
 ];
 /** Giai đoạn mua hàng: một tab "Purchasing", bên trong là sub-nav 4 bước. */
 const PROCUREMENT = new Set<string>(["materials", "podraft", "purchases", "payments"]);
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
   overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", explanatory: "bao-cao-giai-thich", materials: "yeu-cau-vat-tu", podraft: "don-nhap", purchases: "dat-hang", payments: "de-nghi-thanh-toan", members: "so-do", daily: "bao-cao-ngay",
-  timesheets: "cham-cong", checks: "cham-cong-gps", tools: "kiem-tra-dung-cu", reports: "bao-cao",
+  timesheets: "cham-cong", checks: "cham-cong-gps", tools: "kiem-tra-dung-cu", reports: "bao-cao", settings: "cai-dat",
 };
 const tabFromUrl = (): Tab => {
   if (typeof window === "undefined") return "overview";
@@ -182,6 +183,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
         if (tab === "tools") return <ToolChecksTab {...tabProps} />;
+        if (tab === "settings") return <SettingsTab {...tabProps} onEditInfo={props.onEdit} />;
         if (tab === "explanatory") return withApprovers(<ExplanatoryTab {...tabProps} />, "explanatory");
         if (PROCUREMENT.has(tab)) {
           const stage = tab as ProcurementStage;

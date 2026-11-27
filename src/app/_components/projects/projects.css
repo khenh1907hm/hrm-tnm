@@ -286,3 +286,16 @@
 .pj-aside-col .tb-head { flex-wrap: wrap; }
 .pj-aside-col .tb-name { width: 100%; }
 @media (max-width: 1100px) { .pj-aside-col { position: static; max-height: none; overflow: visible; order: -1; } }
+
+/* Tab Settings của dự án */
+.ps-roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.ps-role { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 10px; background: var(--surface); }
+.ps-role-head { display: flex; gap: 10px; align-items: flex-start; }
+.ps-role-head > div { display: grid; gap: 2px; }
+.ps-role-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); flex: none; }
+.ps-role-value { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.ps-role-edit { display: grid; gap: 8px; }
+.ps-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0 20px; margin: 0; }
+.ps-info div { display: grid; grid-template-columns: 150px 1fr; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ps-info dt { color: var(--muted); }
+.ps-info dd { margin: 0; word-break: break-word; }
