@@ -108,3 +108,28 @@
   .dr-history-top small { margin-left: 0; width: 100%; }
   .dr-history .button { justify-self: stretch; min-height: 40px; }
 }
+
+/* Bảng ngang: nhân lực một hàng, công việc dạng bảng có tiêu đề cột */
+@media (min-width: 761px) {
+  .dr-head { grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 2px; background: var(--soft); }
+}
+.dr-table-wrap { border: 1px solid var(--line); border-radius: 8px; }
+.dr-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+.dr-table th { background: var(--soft); font-size: 13px; font-weight: 600; color: var(--muted); text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.dr-table td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.dr-table tbody tr:last-child td { border-bottom: 0; }
+.dr-table tbody tr { cursor: default; }
+.dr-table tbody tr:hover { background: transparent; }
+.dr-table .dr-task-name { min-width: 200px; }
+.dr-col-no { width: 44px; text-align: center !important; font-weight: 700; color: var(--muted); }
+.dr-col-leader { width: 190px; }
+.dr-col-count { width: 48px; text-align: center !important; font-variant-numeric: tabular-nums; color: var(--muted); }
+.dr-col-del { width: 44px; text-align: center; }
+
+/* Ảnh công trường: một nút ở thanh dưới cùng + dải ảnh nhỏ */
+.dr-photo-btn { margin-right: auto; cursor: pointer; }
+.dr-photo-btn.is-disabled { opacity: .5; cursor: not-allowed; }
+.dr-photo-strip { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 8px; }
+.dr-photo-strip figure { position: relative; margin: 0; flex: none; width: 64px; height: 48px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+.dr-photo-strip img { width: 100%; height: 100%; object-fit: cover; }
+.dr-photo-strip .dr-remove { top: 2px; right: 2px; width: 18px; height: 18px; }
