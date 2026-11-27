@@ -60,6 +60,7 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
   const { store, setNotice } = props;
   const [contexts, setContexts] = useState<AttendanceContext[] | null>(null);
   const [step, setStep] = useState<Step | null>(null);
+  const [cheer, setCheer] = useState<{ kind: "in" | "out"; place: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [problem, setProblem] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -158,10 +159,11 @@ export function SelfCheckIn(props: { store: ProjectStore; holidays: Holiday[]; s
         );
       })}
       <AttendanceMonthView store={store} holidays={props.holidays} today={today} projects={contexts.map((context) => ({ id: context.projectId, label: `${context.code} · ${context.name}` }))} setNotice={setNotice} refreshKey={refreshKey} />
+      {cheer && <MascotAlert kind={cheer.kind} place={cheer.place} onClose={() => setCheer(null)} />}
       {step && <CameraDialog step={step} onClose={() => setStep(null)} onSubmit={async (photo) => {
         try {
           await (step.kind === "in" ? store.checkIn(step.context.projectId, step.fix, photo) : store.checkOut(step.context.projectId, step.fix, photo));
-          setNotice(step.kind === "in" ? "Đã chấm Vào." : "Đã chấm Ra.", "success");
+          setCheer({ kind: step.kind, place: `${step.context.code} · ${step.context.name}` });
           setStep(null);
           await reload();
           setRefreshKey((value) => value + 1);
@@ -216,6 +218,31 @@ function CameraDialog(props: { step: Step; onClose: () => void; onSubmit: (photo
           </> : <button type="button" className="button primary" disabled={!!error} onClick={() => void shoot()}><Camera className="ico" size={16} aria-hidden="true" /> Chụp</button>}
         </footer>
       </section>
+    </div>
+  );
+}
+
+/** Hộp thông báo có đầu nhân vật TNM ló lên (ảnh cắt từ nhân vật ở màn đăng nhập app), hiện sau khi chấm công xong. */
+function MascotAlert(props: { kind: "in" | "out"; place: string; onClose: () => void }) {
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    button.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props]);
+  return (
+    <div className="modal-backdrop ci-cheer-backdrop" role="presentation" onClick={props.onClose}>
+      <div className="ci-cheer" role="alertdialog" aria-modal="true" aria-labelledby="ci-cheer-title" aria-describedby="ci-cheer-msg" onClick={(event) => event.stopPropagation()}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/tnm-mascot-head.png" alt="" width={168} height={123} className="ci-cheer-head" />
+        <div className="ci-cheer-card">
+          <h2 id="ci-cheer-title">{props.kind === "in" ? "Đã chấm Vào" : "Đã chấm Ra"}</h2>
+          <p id="ci-cheer-msg">{props.kind === "in" ? "Chúc bạn một ngày làm việc vui vẻ! ❤️" : "Cảm ơn bạn, về nghỉ ngơi thật tốt nhé! ❤️"}</p>
+          <small>{props.place}</small>
+          <button ref={button} type="button" className="button primary" onClick={props.onClose}>Cảm ơn!</button>
+        </div>
+      </div>
     </div>
   );
 }

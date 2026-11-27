@@ -74,3 +74,15 @@
 .mv-requests li > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .mv-requests li .pill { margin-left: auto; }
 .mv-requests small { color: var(--muted); }
+
+/* Thông báo sau khi chấm công: đầu nhân vật TNM ló lên trên thẻ */
+.ci-cheer-backdrop { align-items: center; }
+.ci-cheer { width: 100%; max-width: 360px; display: flex; flex-direction: column; align-items: center; animation: ci-cheer-pop .38s cubic-bezier(.2, 1.4, .4, 1) both; }
+.ci-cheer-head { width: 168px; height: auto; display: block; position: relative; z-index: 0; }
+.ci-cheer-card { position: relative; z-index: 1; margin-top: -14px; width: 100%; background: var(--surface); border: 2px solid #0b1f66; border-radius: 16px; padding: 22px 18px 16px; display: grid; gap: 6px; text-align: center; box-shadow: var(--shadow-pop); }
+.ci-cheer-card h2 { margin: 0; font-size: 20px; color: #0b1f66; }
+.ci-cheer-card p { margin: 0; font-size: 16px; font-weight: 700; color: var(--accent); }
+.ci-cheer-card small { color: var(--muted); }
+.ci-cheer-card .button { margin-top: 6px; width: 100%; }
+@keyframes ci-cheer-pop { from { opacity: 0; transform: translateY(30px) scale(.9); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ci-cheer { animation: none; } }

@@ -8,6 +8,7 @@ import { AppIcon, Glyph } from "@/components/AppIcon";
 import { GradientButton, SecondaryButton } from "@/components/GradientButton";
 import { GridBackground } from "@/components/GridBackground";
 import { LogoLoader } from "@/components/LogoLoader";
+import { MascotAlert, type MascotMessage } from "@/components/MascotAlert";
 import { PickerSheet, type PickerItem } from "@/components/PickerSheet";
 import { PunchButton } from "@/components/PunchButton";
 import { Card, FadeSlide, Screen, SectionTitle } from "@/components/Screen";
@@ -71,6 +72,7 @@ export default function CheckinScreen() {
   const [problem, setProblem] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [cheer, setCheer] = useState<MascotMessage | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -162,7 +164,9 @@ export default function CheckinScreen() {
     setBusy(kind === "in" ? "Đang gửi chấm Vào…" : "Đang gửi chấm Ra…");
     try {
       await punch(kind, target.projectId, fix, photo.base64);
-      toast(kind === "in" ? `Đã chấm Vào tại ${target.code}.` : `Đã chấm Ra tại ${target.code}.`, "ok");
+      setCheer(kind === "in"
+        ? { title: "Đã chấm Vào", message: "Chúc bạn một ngày làm việc vui vẻ! ❤️", detail: `${target.code} · ${target.name}` }
+        : { title: "Đã chấm Ra", message: "Cảm ơn bạn, về nghỉ ngơi thật tốt nhé! ❤️", detail: `${target.code} · ${target.name}` });
       await Promise.all([load(), loadMonthData(month)]);
     } catch (error) {
       setProblem(errorText(error));
@@ -325,6 +329,8 @@ export default function CheckinScreen() {
         onCapture={(photo) => { if (shot) setPending({ ...shot, photo }); setShot(null); }}
         onError={(error) => { setShot(null); setProblem(errorText(error)); }}
       />
+
+      <MascotAlert value={cheer} onClose={() => setCheer(null)} />
 
       <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={busy !== null} transparent animationType="fade">
         <View style={styles.modalBg}>

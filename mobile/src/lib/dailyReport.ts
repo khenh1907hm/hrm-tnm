@@ -23,6 +23,8 @@ export type Draft = {
   otCount: number;
   otHours: number;
   tasks: Task[];
+  /** Mô hình đã đọc ảnh bảng phân công ("" hoặc không có khi nhập tay). */
+  model?: string;
 };
 export type SavedReport = Draft & { id: string; sentAt: string | null; sentError: string; createdByName: string };
 export type Photo = { uri: string; width: number; height: number };
@@ -84,10 +86,10 @@ function caption(input: Draft & { tasks: { task: string }[] }, project: { code: 
   ].join("\n").slice(0, 1000);
 }
 
-/** Thu nhỏ ảnh thi công cạnh dài 1280 px để gửi nhanh. */
-async function shrink(photo: Photo): Promise<string> {
+/** Thu nhỏ ảnh cạnh dài `max` px (ảnh thi công 1280) để gửi nhanh. */
+async function shrink(photo: Photo, max = 1280): Promise<string> {
   const context = ImageManipulator.manipulate(photo.uri);
-  if (Math.max(photo.width, photo.height) > 1280) context.resize(photo.width >= photo.height ? { width: 1280 } : { height: 1280 });
+  if (Math.max(photo.width, photo.height) > max) context.resize(photo.width >= photo.height ? { width: max } : { height: max });
   const image = await context.renderAsync();
   const saved = await image.saveAsync({ format: SaveFormat.JPEG, compress: 0.75 });
   return saved.uri;
@@ -97,11 +99,11 @@ export type SendResult = { telegramSent: boolean; telegramError: string; cumulat
 
 export async function sendReport(projectId: string, draft: Draft, photos: Photo[]): Promise<SendResult> {
   const tasks = draft.tasks.filter((t) => t.task.trim() || t.members.length).map((t, i) => ({ no: i + 1, task: t.task.trim(), leader: t.leader.trim(), members: t.members.map((m) => m.trim()).filter(Boolean) }));
-  const input = { ...draft, absentNames: draft.absentNames.map((n) => n.trim()).filter(Boolean), tasks, photoCount: Math.min(photos.length, MAX_PHOTOS), model: "" };
+  const input = { ...draft, absentNames: draft.absentNames.map((n) => n.trim()).filter(Boolean), tasks, photoCount: Math.min(photos.length, MAX_PHOTOS), model: draft.model ?? "" };
 
   const { data, error } = await supabase.rpc("daily_report_save", {
     p_project: projectId, p_date: input.date, p_total: input.total, p_present: input.present, p_absent: input.absent, p_absent_names: input.absentNames,
-    p_ot_count: input.otCount, p_ot_hours: input.otHours, p_tasks: input.tasks, p_photo_count: input.photoCount, p_model: "",
+    p_ot_count: input.otCount, p_ot_hours: input.otHours, p_tasks: input.tasks, p_photo_count: input.photoCount, p_model: input.model,
   });
   if (error) throw new Error(error.message);
   const saved = ((data ?? []) as Row[])[0];
@@ -134,4 +136,44 @@ export async function sendReport(projectId: string, draft: Draft, photos: Photo[
   }
   await supabase.rpc("daily_report_mark_sent", { p_id: reportId, p_error: result.sent ? "" : result.telegramError ?? "" });
   return { telegramSent: Boolean(result.sent), telegramError: result.telegramError ?? "", cumulativeWorkdays, cumulativeOtHours };
+}
+
+/** Một tên máy đọc từ bảng, đã so với danh sách công nhân dự án (giống web NameRef). */
+type NameRef = { text: string; name: string; matched: boolean; confidence: "exact" | "accent" | "fuzzy" | "none" | "manual"; fullName?: string };
+type ReadTask = { task: string; leader: NameRef | null; members: NameRef[] };
+type ReadData = { date: string; total: number | null; present: number | null; absent: number | null; absentNames: NameRef[]; tasks: ReadTask[]; model?: string };
+export type ReadResult = { draft: Draft; unsure: string[]; model: string };
+
+const unsureRef = (ref: NameRef) => ref.confidence === "none" || ref.confidence === "accent" || ref.confidence === "fuzzy";
+
+/**
+ * Đọc ảnh bảng phân công (bảng trắng / giấy ghi công việc, tổ trưởng, người làm, sĩ số) thành bản nháp báo cáo.
+ * Máy chủ VPS (/api/daily-report/read) chạy scripts/daily_report/read_board.py: mô hình xem ảnh đọc chữ,
+ * rồi so từng tên với danh sách công nhân của dự án để sửa chính tả. Tên không chắc chắn trả về trong `unsure`.
+ */
+export async function readBoard(projectId: string, photo: Photo, roster: RosterPerson[], date: string): Promise<ReadResult> {
+  const uri = await shrink(photo, 1600);
+  const body = new FormData();
+  body.append("project", projectId);
+  body.append("roster", JSON.stringify(roster.map((p) => ({ name: p.name, employeeId: null }))));
+  if (Platform.OS === "web") body.append("image", await (await fetch(uri)).blob(), "bang.jpg");
+  else body.append("image", { uri, name: "bang.jpg", type: "image/jpeg" } as unknown as Blob);
+  const response = await apiFetch("/api/daily-report/read", { method: "POST", body });
+  const reply = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; data?: ReadData } | null;
+  if (!response.ok || !reply?.ok || !reply.data) throw new Error(reply?.message ?? "Không đọc được ảnh bảng phân công.");
+  const read = reply.data;
+  const name = (ref: NameRef | null) => (ref ? ref.name || ref.text : "");
+  const unsure = new Set<string>();
+  const note = (ref: NameRef | null) => { if (ref && unsureRef(ref)) unsure.add(name(ref)); };
+  read.absentNames.forEach(note);
+  read.tasks.forEach((t) => { note(t.leader); t.members.forEach(note); });
+  const tasks = read.tasks.slice(0, MAX_TASKS).map((t) => ({ task: t.task, leader: name(t.leader), members: t.members.map(name).filter(Boolean) }));
+  return {
+    draft: {
+      date, total: read.total, present: read.present, absent: read.absent, absentNames: read.absentNames.map(name).filter(Boolean),
+      otCount: 0, otHours: 0, tasks: tasks.length ? tasks : [{ task: "", leader: "", members: [] }], model: read.model ?? "",
+    },
+    unsure: [...unsure].filter(Boolean),
+    model: read.model ?? "",
+  };
 }

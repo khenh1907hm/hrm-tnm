@@ -15,7 +15,7 @@ import { Columns, MODAL_ORIENTATIONS } from "@/lib/layout";
 import { Card, FadeSlide, Screen, SectionTitle } from "@/components/Screen";
 import { useToast } from "@/components/Toast";
 import { addDays, dayLabel, dmy, todayISO } from "@/lib/dates";
-import { emptyDraft, issuesOf, loadRecentReports, loadReportProjects, loadRoster, MAX_PHOTOS, MAX_TASKS, sendReport, type Draft, type Photo, type ReportProject, type SavedReport } from "@/lib/dailyReport";
+import { emptyDraft, issuesOf, loadRecentReports, loadReportProjects, loadRoster, MAX_PHOTOS, MAX_TASKS, readBoard, sendReport, type Draft, type Photo, type ReportProject, type RosterPerson, type SavedReport } from "@/lib/dailyReport";
 import { isLink } from "@/lib/attendance";
 import { errorText } from "@/lib/errors";
 import { colors, fonts, gradients, radius } from "@/lib/theme";
@@ -33,11 +33,13 @@ export default function ReportScreen() {
   const [projects, setProjects] = useState<ReportProject[] | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
-  const [roster, setRoster] = useState<string[]>([]);
+  const [people, setPeople] = useState<RosterPerson[]>([]);
+  const roster = useMemo(() => people.map((p) => p.name), [people]);
+  const [unsure, setUnsure] = useState<string[]>([]);
   const [recent, setRecent] = useState<SavedReport[]>([]);
   const [draft, setDraft] = useState<Draft>(() => emptyDraft(today));
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"send" | "read" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadProjects = useCallback(async () => {
@@ -57,8 +59,8 @@ export default function ReportScreen() {
   useEffect(() => {
     if (!projectId) return;
     let active = true;
-    setRoster([]); setRecent([]);
-    void loadRoster(projectId).then((list) => { if (active) setRoster(list.map((p) => p.name)); }, () => undefined);
+    setPeople([]); setRecent([]); setUnsure([]);
+    void loadRoster(projectId).then((list) => { if (active) setPeople(list); }, () => undefined);
     void loadRecentReports(projectId).then((list) => { if (active) setRecent(list); }, () => undefined);
     return () => { active = false; };
   }, [projectId]);
@@ -68,6 +70,7 @@ export default function ReportScreen() {
   useEffect(() => {
     setDraft((current) => (existing ? fromSaved(existing, current.date) : emptyDraft(current.date)));
     setPhotos([]);
+    setUnsure([]);
   }, [existing, projectId]);
 
   const project = projects?.find((p) => p.projectId === projectId) ?? null;
@@ -91,10 +94,34 @@ export default function ReportScreen() {
     setPhotos((list) => [...list, ...result.assets.map((a) => ({ uri: a.uri, width: a.width, height: a.height }))].slice(0, MAX_PHOTOS));
   };
 
+  /** Chụp / chọn ảnh bảng phân công rồi gửi máy chủ đọc thành bản nháp (giống nút "Đọc bảng" trên web). */
+  const readFromBoard = async (source: "camera" | "library") => {
+    if (!project) return;
+    const permission = source === "camera" ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) { toast("Hãy cho phép app dùng camera / thư viện ảnh.", "warn"); return; }
+    const result = source === "camera"
+      ? await ImagePicker.launchCameraAsync({ mediaTypes: ["images"], quality: 0.9 })
+      : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], quality: 0.9 });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    setBusy("read");
+    try {
+      const read = await readBoard(project.projectId, { uri: asset.uri, width: asset.width, height: asset.height }, people, draft.date);
+      setDraft(read.draft);
+      setUnsure(read.unsure);
+      const count = read.draft.tasks.filter((t) => t.task.trim()).length;
+      toast(read.unsure.length ? `Đã đọc ${count} công việc. Kiểm tra lại ${read.unsure.length} tên chưa chắc chắn.` : `Đã đọc ${count} công việc. Kiểm tra lại trước khi gửi.`, read.unsure.length ? "warn" : "ok");
+    } catch (error) {
+      toast(errorText(error), "err");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const send = async () => {
     if (!project) return;
     if (blocking.length) { toast(blocking[0]!.text, "err"); return; }
-    setBusy(true);
+    setBusy("send");
     try {
       const result = await sendReport(project.projectId, draft, photos);
       const totals = `${draft.present ?? 0} người hiện diện · lũy kế ${result.cumulativeWorkdays} công`;
@@ -104,7 +131,7 @@ export default function ReportScreen() {
     } catch (error) {
       toast(errorText(error), "err");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
@@ -165,6 +192,24 @@ export default function ReportScreen() {
               </Pressable>
             </FadeSlide>
           ) : null}
+
+          <FadeSlide delay={100}>
+            <Card style={styles.board}>
+              <View style={styles.boardHead}>
+                <AppIcon name="image" tone="orange" size={36} />
+                <View style={styles.flex}>
+                  <Text style={styles.boardTitle}>Nhập nhanh từ ảnh bảng phân công</Text>
+                  <Text style={styles.boardSub}>Chụp bảng ghi công việc, tổ trưởng, người làm, sĩ số. Máy đọc và điền sẵn các ô bên dưới (10–30 giây).</Text>
+                </View>
+              </View>
+              <View style={styles.photoBtns}>
+                <Pressable onPress={() => void readFromBoard("camera")} disabled={busy !== null} style={styles.photoBtn} accessibilityRole="button" accessibilityLabel="Chụp ảnh bảng phân công để đọc"><AppIcon name="camera" tone="sky" size={32} /><Text style={styles.photoBtnText}>Chụp bảng</Text></Pressable>
+                <Pressable onPress={() => void readFromBoard("library")} disabled={busy !== null} style={styles.photoBtn} accessibilityRole="button" accessibilityLabel="Chọn ảnh bảng phân công để đọc"><AppIcon name="image" tone="navy" size={32} /><Text style={styles.photoBtnText}>Chọn ảnh</Text></Pressable>
+              </View>
+              {draft.model ? <Text style={styles.hint}>Đã điền từ ảnh{existing ? " (thay bản đang mở)" : ""}. Sửa lại nếu máy đọc sai.</Text> : null}
+              {unsure.length > 0 && <Text style={[styles.issue, styles.issueWarn]}>Tên chưa chắc chắn, kiểm tra lại: {unsure.join(", ")}</Text>}
+            </Card>
+          </FadeSlide>
 
           <FadeSlide delay={120}><SectionTitle>Nhân lực</SectionTitle></FadeSlide>
           <FadeSlide delay={140}>
@@ -248,7 +293,7 @@ export default function ReportScreen() {
       )}
 
       <FadeSlide delay={340} from="up">
-        <GradientButton label={existing ? "Gửi lại báo cáo" : "Gửi báo cáo"} busyLabel="Đang gửi…" busy={busy} onPress={() => void send()} />
+        <GradientButton label={existing ? "Gửi lại báo cáo" : "Gửi báo cáo"} busyLabel="Đang gửi…" busy={busy === "send"} onPress={() => void send()} />
       </FadeSlide>
 
       <PickerSheet
@@ -262,11 +307,11 @@ export default function ReportScreen() {
         onClose={() => setPicking(false)}
       />
 
-      <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={busy} transparent animationType="fade">
+      <Modal supportedOrientations={MODAL_ORIENTATIONS} visible={busy !== null} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={styles.busy}>
             <LogoLoader size={80} stroke={4} variant="light" />
-            <Text style={styles.busyText}>Đang tạo file Excel và gửi Telegram…</Text>
+            <Text style={styles.busyText}>{busy === "read" ? "Đang đọc ảnh bảng phân công…" : "Đang tạo file Excel và gửi Telegram…"}</Text>
             <Text style={styles.busySub}>Có thể mất 10–30 giây</Text>
           </View>
         </View>
@@ -312,6 +357,10 @@ const styles = StyleSheet.create({
   photoBtns: { flexDirection: "row", gap: 8 },
   photoBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 48, borderRadius: radius.control, backgroundColor: colors.field, borderWidth: 1.5, borderColor: colors.fieldLine },
   photoBtnText: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, color: colors.navy },
+  board: { gap: 12 },
+  boardHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  boardTitle: { fontSize: 14, lineHeight: 20, fontFamily: fonts.bold, color: colors.navy },
+  boardSub: { fontSize: 12, lineHeight: 16, fontFamily: fonts.regular, color: colors.muted },
   hint: { fontSize: 12, lineHeight: 16, fontFamily: fonts.regular, color: colors.muted, textAlign: "center" },
   issues: { gap: 4 },
   issue: { fontSize: 12, lineHeight: 16, fontFamily: fonts.medium, borderRadius: 12, padding: 8, overflow: "hidden", borderWidth: 1 },
