@@ -5,15 +5,16 @@ import { AsideSlotContext } from "./asideSlot";
 import { OrderMiniPath } from "../purchases/OrderProgress";
 import { PURCHASE_STATUS_LABELS, type PurchaseOrder } from "../../../modules/purchases/types";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ClipboardList, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, Check, ClipboardList, FileSearch, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { CostCode } from "../../../modules/purchases/budget";
 import {
-  MATERIAL_STATUS_LABELS, MIN_TWO_QUOTES_FROM, materialCurrentLabel, materialProgress, type MaterialStage, cheapestByItem, materialIssue, needsSecondQuote, quoteTotal, quotedCount,
+  MATERIAL_STATUS_LABELS, MIN_TWO_QUOTES_FROM, materialCurrentLabel, materialProgress, type MaterialStage, cheapestByItem, materialIssue, matchQuoteItems, needsSecondQuote, quoteTotal, quotedCount,
   type MaterialItem, type MaterialQuote, type MaterialQuoteDraft, type MaterialRequest, type MaterialRequestDraft,
 } from "../../../modules/purchases/materials";
 import { ApprovalChain } from "../purchases/ApprovalChain";
+import { readQuote } from "../purchases/quoteImport";
 import { FormExportButtons } from "../purchases/FormExport";
 import { getPurchaseStore } from "../purchases/usePurchaseStore";
 import { projectOrderPath } from "../routes";
@@ -62,6 +63,9 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<MaterialRequestDraft | null>(null);
   const [quoteDraft, setQuoteDraft] = useState<MaterialQuoteDraft | null>(null);
+  // Đọc file báo giá NCC (PDF / ảnh) điền sẵn vào form báo giá: ô nào điền tự động thì nhắc kiểm tra
+  const [quoteReading, setQuoteReading] = useState(false);
+  const [quoteNotes, setQuoteNotes] = useState<string[]>([]);
   const [codeDraft, setCodeDraft] = useState<Record<string, string | null> | null>(null);
   const [canQuote, setCanQuote] = useState(false);
   const [created, setCreated] = useState<string[]>([]);
@@ -161,6 +165,40 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
   const groupOrderCell = (request: MaterialRequest, code: string | null) => {
     const list = groupOrders(request, code);
     return list.length ? <span className="mr-po-list-inline">{list.map(poLink)}</span> : <small className="muted">{request.status === "approved" || request.status === "ordered" ? "Chưa có PO: nhập báo giá rồi chọn để lập PO" : "Chưa có PO"}</small>;
+  };
+  /** Đọc báo giá NCC từ file: điền thông tin NCC và đơn giá các dòng khớp tên; chưa chọn hạng mục thì lấy hạng mục khớp nhiều dòng nhất. */
+  const readQuoteFile = async (file: File) => {
+    if (!opened || !quoteDraft) return;
+    setQuoteReading(true); setQuoteNotes([]);
+    try {
+      const { data, problems } = await readQuote(file);
+      const all = matchQuoteItems(opened.items, data.items);
+      const codeOf = (id: string) => opened.items.find((item) => item.id === id)?.budgetCode ?? null;
+      let code = quoteDraft.budgetCode;
+      if (!office) {
+        const counts = new Map<string, number>();
+        for (const id of Object.keys(all.prices)) { const c = codeOf(id); if (c) counts.set(c, (counts.get(c) ?? 0) + 1); }
+        const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+        if (best && !Object.keys(all.prices).some((id) => codeOf(id) === code)) code = best;
+      }
+      const prices = Object.fromEntries(Object.entries(all.prices).filter(([id]) => office || codeOf(id) === code));
+      const groupItems = opened.items.filter((item) => office || item.budgetCode === code);
+      const notes = [...problems];
+      const missing = groupItems.filter((item) => !(item.id in prices)).map((item) => item.name);
+      if (missing.length) notes.push(`Chưa tìm thấy giá cho: ${missing.join(", ")}. Nhập tay nếu NCC có báo.`);
+      if (all.unmatched.length) notes.push(`Dòng trong báo giá không khớp vật tư của phiếu: ${all.unmatched.slice(0, 6).join(", ")}${all.unmatched.length > 6 ? "…" : ""}.`);
+      if (data.vat) notes.push("Đơn giá điền là giá chưa VAT theo báo giá.");
+      setQuoteDraft({
+        ...quoteDraft, budgetCode: code,
+        supplier: data.supplier || quoteDraft.supplier, supplierContact: [data.contact, data.phone].filter(Boolean).join(" · ") || quoteDraft.supplierContact,
+        quoteRef: data.quoteNo || quoteDraft.quoteRef, quoteDate: data.quoteDate ?? quoteDraft.quoteDate,
+        paymentTerms: data.paymentTerms || quoteDraft.paymentTerms, prices: { ...quoteDraft.prices, ...prices },
+      });
+      setQuoteNotes(notes);
+      setNotice(`Đã đọc báo giá${data.supplier ? ` ${data.supplier}` : ""}: điền ${Object.keys(prices).length}/${groupItems.length} dòng. Kiểm tra rồi bấm Lưu báo giá.`, "success");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Chưa đọc được báo giá.", "error");
+    } finally { setQuoteReading(false); }
   };
   const openRequest = (id: string | null) => { setOpenId(id); setQuoteDraft(null); setCodeDraft(null); setCreated([]); };
   // Chuỗi ký của phiếu đang mở: ở tab dự án nằm khung bên phải, trên Người duyệt
@@ -310,6 +348,12 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
           {needsSecondQuote(quotes, opened.items) && <p className="warn-text">Giá trị từ {formatVnd(MIN_TWO_QUOTES_FROM)} trở lên nên có ít nhất 2 báo giá để so sánh (hoặc ghi lý do chỉ có một NCC vào ghi chú báo giá).</p>}
           {quoteDraft && (
             <div className="mr-form">
+              <div className="mr-quote-import">
+                <label className="button"><FileSearch className="ico" size={16} aria-hidden="true" /> {quoteReading ? "Đang đọc báo giá…" : "Đọc file báo giá (PDF / ảnh)"}
+                  <input type="file" hidden accept=".pdf,image/*" disabled={quoteReading} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (file && opened) void readQuoteFile(file); }} /></label>
+                <small className="muted">Tự điền NCC, số / ngày báo giá, điều kiện thanh toán và đơn giá từng dòng khớp tên vật tư. Kiểm tra lại trước khi lưu.</small>
+              </div>
+              {quoteNotes.length > 0 && <ul className="list-notice is-warn">{quoteNotes.map((note) => <li key={note}>{note}</li>)}</ul>}
               <div className="bs-head">
                 {!office && <label className="field"><span>Hạng mục (mỗi báo giá một PO) *</span><select value={quoteDraft.budgetCode ?? ""} onChange={(event) => {
                   const code = event.target.value || null;
@@ -340,8 +384,8 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
               </div>
               <label className="field"><span>Ghi chú</span><input value={quoteDraft.note} onChange={(event) => setQuoteDraft({ ...quoteDraft, note: event.target.value })} /></label>
               <div className="button-row">
-                <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => { await store.saveQuote(quoteDraft); setQuoteDraft(null); }, "Đã lưu báo giá.")}><Save className="ico" size={16} aria-hidden="true" /> Lưu báo giá</button>
-                <button type="button" className="button" onClick={() => setQuoteDraft(null)}>Đóng</button>
+                <button type="button" className="button primary" disabled={busy} onClick={() => void run(async () => { await store.saveQuote(quoteDraft); setQuoteDraft(null); setQuoteNotes([]); }, "Đã lưu báo giá.")}><Save className="ico" size={16} aria-hidden="true" /> Lưu báo giá</button>
+                <button type="button" className="button" onClick={() => { setQuoteDraft(null); setQuoteNotes([]); }}>Đóng</button>
               </div>
             </div>
           )}

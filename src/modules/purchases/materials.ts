@@ -180,3 +180,36 @@ export const materialCurrentLabel = (stages: readonly MaterialStage[]) => {
 /** Các nhóm (hạng mục) của phiếu theo thứ tự mã; nhóm chưa có mã (null) đứng cuối. Văn phòng: một nhóm. */
 export const materialGroupCodes = (request: Pick<MaterialRequest, "projectId" | "items">): (string | null)[] =>
   request.projectId === null ? [null] : [...new Set(request.items.map((item) => item.budgetCode ?? null))].sort((a, b) => a === null ? 1 : b === null ? -1 : a.localeCompare(b, "vi", { numeric: true }));
+
+/** Chữ thường, bỏ dấu, chỉ giữ chữ số và chữ cái để so tên vật tư. */
+const tokens = (text: string) => text.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/gi, "d").toLowerCase().split(/[^a-z0-9.x]+/).filter((token) => token.length > 1 || /\d/.test(token));
+
+/**
+ * Ghép dòng của báo giá NCC (đọc từ PDF/ảnh) vào dòng vật tư của phiếu YCVT theo tên + thông số:
+ * mỗi dòng phiếu lấy dòng báo giá giống nhất (trùng từ ≥ 50%), không dùng một dòng báo giá cho hai dòng phiếu.
+ * Trả về đơn giá theo id dòng phiếu và các dòng báo giá không ghép được.
+ */
+export function matchQuoteItems(items: readonly Pick<MaterialItem, "id" | "name" | "spec" | "maker">[], quoteItems: readonly { name: string; spec: string; unitPrice: number; quantity: number; amount: number }[]): { prices: Record<string, number>; unmatched: string[] } {
+  const priceOf = (line: { unitPrice: number; quantity: number; amount: number }) => line.unitPrice > 0 ? Math.round(line.unitPrice) : line.quantity > 0 && line.amount > 0 ? Math.round(line.amount / line.quantity) : 0;
+  const pairs: { item: string; line: number; score: number }[] = [];
+  items.forEach((item) => {
+    const want = new Set(tokens(`${item.name} ${item.spec} ${item.maker}`));
+    if (!want.size) return;
+    quoteItems.forEach((line, index) => {
+      const have = new Set(tokens(`${line.name} ${line.spec}`));
+      if (!have.size || priceOf(line) <= 0) return;
+      const common = [...want].filter((token) => have.has(token)).length;
+      const score = common / Math.min(want.size, have.size);
+      if (score >= 0.5) pairs.push({ item: item.id, line: index, score });
+    });
+  });
+  pairs.sort((a, b) => b.score - a.score);
+  const prices: Record<string, number> = {};
+  const usedLines = new Set<number>();
+  for (const pair of pairs) {
+    if (pair.item in prices || usedLines.has(pair.line)) continue;
+    prices[pair.item] = priceOf(quoteItems[pair.line]!);
+    usedLines.add(pair.line);
+  }
+  return { prices, unmatched: quoteItems.filter((line, index) => !usedLines.has(index) && priceOf(line) > 0).map((line) => line.name) };
+}
