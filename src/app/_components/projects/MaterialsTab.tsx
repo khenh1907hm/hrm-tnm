@@ -5,12 +5,12 @@ import { AsideSlotContext } from "./asideSlot";
 import { OrderMiniPath } from "../purchases/OrderProgress";
 import { PURCHASE_STATUS_LABELS, type PurchaseOrder } from "../../../modules/purchases/types";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, ClipboardList, FileSearch, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
+import { ArrowLeft, ClipboardList, FileSearch, FilePlus2, FileSpreadsheet, Plus, Save, Send, ShoppingCart, Trash2, Upload, X } from "lucide-react";
 import { systemClock, todayVN } from "../../../lib/clock";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { CostCode } from "../../../modules/purchases/budget";
 import {
-  MATERIAL_STATUS_LABELS, MIN_TWO_QUOTES_FROM, materialCurrentLabel, materialProgress, type MaterialStage, cheapestByItem, materialIssue, matchQuoteItems, needsSecondQuote, quoteTotal, quotedCount,
+  MATERIAL_STATUS_LABELS, MIN_TWO_QUOTES_FROM, cheapestByItem, materialIssue, matchQuoteItems, needsSecondQuote, quoteTotal, quotedCount,
   type MaterialItem, type MaterialQuote, type MaterialQuoteDraft, type MaterialRequest, type MaterialRequestDraft,
 } from "../../../modules/purchases/materials";
 import { ApprovalChain } from "../purchases/ApprovalChain";
@@ -153,7 +153,6 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
   const setItem = (index: number, patch: Partial<MaterialItem>) => editing && setEditing({ ...editing, items: editing.items.map((item, i) => i === index ? { ...item, ...patch } : item) });
   const project = { code: scope.code, name: scope.name, site: scope.site };
   const ordersOf = (request: MaterialRequest) => orders.filter((order) => request.orderIds.includes(order.id));
-  const progressOf = (request: MaterialRequest) => materialProgress(request, request.id === openedId && showQuotes ? quotes.length : quoteCounts[request.id] ?? 0, ordersOf(request));
   const codeName = (code: string | null) => code ? `${code} ${codes.find((item) => item.code === code)?.name ?? ""}`.trim() : "Chưa có hạng mục";
   /** Vật tư theo hạng mục (mã ngân sách); văn phòng không chia hạng mục. */
   const groupsOf = (request: MaterialRequest) => office ? [{ code: null as string | null, items: request.items }]
@@ -264,7 +263,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
         {!shownList.length && !editing ? <p className="muted">Chưa có phiếu yêu cầu vật tư nào.</p> : shownList.length > 0 && (
           <div className="table-scroll">
             <table className="pj-table mr-list">
-              <thead><tr><th>Số phiếu</th><th>Người yêu cầu</th><th>Vật tư</th><th className="pj-num">Báo giá</th><th>PO</th><th>Tiến độ</th><th /></tr></thead>
+              <thead><tr><th>Số phiếu</th><th>Người yêu cầu</th><th>Vật tư</th><th className="pj-num">Báo giá</th><th>PO</th><th>Tình trạng</th><th /></tr></thead>
               <tbody>{shownList.map((request) => {
                 const groups = office ? 0 : new Set(request.items.map((item) => item.budgetCode ?? "")).size;
                 return (
@@ -278,7 +277,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
                       const linked = ordersOf(request).filter((order) => order.status !== "cancelled");
                       return linked.length ? <div className="mr-po-list">{linked.map((order) => <a key={order.id} className="mr-po-link" href={orderHref(order.id)} onClick={(event) => event.stopPropagation()}>{order.code}{!office && order.budgetCode ? <small> · {order.budgetCode}</small> : null}</a>)}</div> : <small className="muted">—</small>;
                     })()}</td>
-                    <td><MaterialMiniPath stages={progressOf(request)} /></td>
+                    <td><span className={`pill ${TONE[request.status]}`}>{MATERIAL_STATUS_LABELS[request.status]}</span></td>
                     <td className="button-row" onClick={(event) => event.stopPropagation()}>
                       {(request.status === "draft" || request.status === "rejected") && <button type="button" className="button" onClick={() => { setEditing({ id: request.id, projectId, requestedOn: request.requestedOn, note: request.note, items: request.items }); setOpenId(null); }}>Sửa</button>}
                       {request.status === "draft" && <button type="button" className="button danger" aria-label="Xóa" onClick={() => { if (window.confirm(`Xóa ${request.number}?`)) void run(() => store.deleteMaterialRequest(request.id), "Đã xóa phiếu nháp."); }}><Trash2 className="ico" size={15} aria-hidden="true" /></button>}
@@ -293,9 +292,6 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
 
       {opened && <>
         {!fixedRequestId && <button type="button" className="back-button" onClick={() => openRequest(null)}><ArrowLeft className="ico" size={16} aria-hidden="true" /> {openOnly ? "Danh sách đơn hàng" : "Danh sách yêu cầu vật tư"}</button>}
-        <section className="panel pj-section" aria-label="Tiến độ phiếu">
-          <MaterialProgressBar stages={progressOf(opened)} />
-        </section>
       </>}
       {opened && (
         <section className="panel pj-section" aria-labelledby="mr-open-title" id="mr-sec-items">
@@ -417,36 +413,6 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
         </section>
       )}
     </div>
-  );
-}
-
-/** Dải nhỏ ở danh sách: mỗi giai đoạn một vạch + bước hiện tại. */
-function MaterialMiniPath({ stages }: { stages: readonly MaterialStage[] }) {
-  const label = materialCurrentLabel(stages);
-  return (
-    <div className="op-mini">
-      <div className="op-mini-bar" role="img" aria-label={`${label}: ${stages.filter((stage) => stage.state === "done").length}/${stages.length} giai đoạn`}>
-        {stages.map((stage) => <span key={stage.key} className={`is-${stage.state === "bad" ? "current" : stage.state}`} />)}
-      </div>
-      <small className={stages.some((stage) => stage.state === "bad") ? "warn-text" : undefined}>{label}</small>
-    </div>
-  );
-}
-
-/** Thanh tiến độ ở trang chi tiết phiếu; bấm một giai đoạn để cuộn tới phần tương ứng. */
-function MaterialProgressBar({ stages }: { stages: readonly MaterialStage[] }) {
-  const target: Record<MaterialStage["key"], string> = { draft: "mr-sec-items", signing: "mr-sec-items", quoting: "mr-sec-quotes", po: "mr-sec-quotes", orders: "mr-sec-orders", done: "mr-sec-orders" };
-  return (
-    <ol className="op-track op-pickable mr-progress" aria-label="Tiến độ phiếu yêu cầu vật tư">
-      {stages.map((stage, index) => (
-        <li key={stage.key} className={`op-step is-${stage.state === "bad" ? "current" : stage.state}${stage.state === "bad" ? " is-bad" : ""}`} aria-current={stage.state === "current" ? "step" : undefined}>
-          <button type="button" className="op-nav-btn" onClick={() => document.getElementById(target[stage.key])?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-            <span className="op-num" aria-hidden="true">{stage.state === "done" ? <Check size={13} strokeWidth={3} /> : index + 1}</span>
-            <span className="op-text"><span className="op-label">{stage.label}</span>{stage.note && <small className="op-dept">{stage.note}</small>}</span>
-          </button>
-        </li>
-      ))}
-    </ol>
   );
 }
 
