@@ -7,7 +7,7 @@ import { ArrowLeft, Check, FolderCheck, PackageCheck, Pencil, Send, Truck, Wareh
 import { formatVnd } from "../../../modules/projects/cost";
 import { systemClock, todayVN } from "../../../lib/clock";
 import type { Project } from "../../../modules/projects/types";
-import { allowedActions, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
+import { allowedActions, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, receiveBlock, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
 import { OrderProgress } from "./OrderProgress";
 import { projectOrderPath, routePath } from "../routes";
 import { StepDetail } from "./StepDetail";
@@ -215,6 +215,7 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
         {panel === "payment" && <PaymentPanel kinds={requestKinds} order={order} payments={payments} remaining={Math.max(0, summary.remaining - summary.pending)} onCancel={() => setPanel(null)}
           onSubmit={(input) => act(async () => { await store.requestPayment(order.id, input); setChainKey((value) => value + 1); }, `Đã gửi đề nghị ${PAYMENT_KIND_LABELS[input.kind].toLowerCase()} ${order.usesChain ? "đi ký duyệt" : "cho sếp duyệt"}.`)} />}
         {actions.has("track") && order.status === "approved" && orderBlock(order, payments) && <p className="warn-text">{projectText("PO_ADVANCE_NOT_PAID")}</p>}
+        {receiveBlock(order, payments) && <p className="warn-text">{projectText("PO_PREPAY_NOT_PAID")}</p>}
         {panel === "track" && <TrackPanel expected={order.expectedDelivery} onCancel={() => setPanel(null)} onSubmit={(note, expected) => act(() => store.track(order.id, note, expected), "Đã cập nhật theo dõi.")} />}
         {panel === "receive" && <ReceivePanel order={order} onCancel={() => setPanel(null)} onSubmit={(lines, note, record) => act(() => store.receive(order.id, lines, note, record), "Đã ghi nhận hàng và kết quả kiểm tra.")} />}
         {panel === "stockIn" && <StockInPanel order={order} onCancel={() => setPanel(null)} onSubmit={(receiptNo, location, note) => act(() => store.stockIn(order.id, receiptNo, location, note), "Đã nhập kho. Tiếp theo: thu thập chứng từ để thanh toán.")} />}

@@ -43,7 +43,15 @@ describe("purchase flow", () => {
     expect(allowedActions(order("approved"), requester)).toEqual(new Set(["order", "track", "requestAdvance", "requestPrepayment", "cancel"]));
     expect(allowedActions(order("ordered"), requester).has("cancel")).toBe(false);
     expect(allowedActions(order("ordered"), boss).has("cancel")).toBe(true);
-    expect(allowedActions(order("ordered"), requester).has("requestFinal")).toBe(true);
+    // Thanh toán còn lại / sau nhận hàng chỉ sau khi nhận hàng
+    expect(allowedActions(order("ordered"), requester).has("requestFinal")).toBe(false);
+    expect(allowedActions(order("received"), requester).has("requestFinal")).toBe(true);
+    expect(allowedActions({ ...order("received"), usesChain: true }, requester).has("requestFinal")).toBe(false);
+    expect(allowedActions({ ...order("received"), usesChain: true, docsCollectedAt: "x" }, requester).has("requestFinal")).toBe(true);
+    expect(allowedActions({ ...order("received"), prepayRequired: true }, requester).has("requestPrepayment")).toBe(false);
+    // Thanh toán trước khi nhận hàng: chưa chi thì chưa nhận hàng
+    expect(allowedActions({ ...order("ordered"), prepayRequired: true }, requester).has("receive")).toBe(false);
+    expect(allowedActions({ ...order("ordered"), prepayRequired: true }, requester, [{ kind: "prepayment", status: "paid" }]).has("receive")).toBe(true);
     expect(allowedActions(order("received"), requester, [{ status: "approved" }]).has("complete")).toBe(false);
     expect(allowedActions(order("received"), requester, [{ status: "paid" }]).has("complete")).toBe(false);
     const ready = { ...order("received"), stockedAt: "2026-11-20T03:00:00Z", docsCollectedAt: "2026-11-21T03:00:00Z" };

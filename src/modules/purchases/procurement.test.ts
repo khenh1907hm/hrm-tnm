@@ -134,6 +134,11 @@ describe("procurement phase A", () => {
     expect(paymentIssue(order, paid, { kind: "final", amount: 28_000_001, vatAmount: 0, invoiceNo: "HD9" })).toBe("PO_PAY_OVER");
     expect(paymentIssue(order, paid, { kind: "final", amount: 28_000_000, vatAmount: 2_240_000, invoiceNo: "HD9" })).toBeNull();
     expect(paymentIssue(order, paid, { kind: "final", amount: 0, vatAmount: 0, invoiceNo: "HD9" })).toBe("PO_BAD_AMOUNT");
+    // Tạm ứng 30% của 40 triệu = tối đa 12 triệu (cộng dồn các lần tạm ứng chưa bị từ chối)
+    const withPct = { ...order, advancePct: 30 };
+    expect(paymentIssue(withPct, [], { kind: "advance", amount: 12_000_001, vatAmount: 0, invoiceNo: "" })).toBe("PO_ADVANCE_OVER_PCT");
+    expect(paymentIssue(withPct, [{ amount: 10_000_000, status: "paid", kind: "advance" }], { kind: "advance", amount: 2_000_000, vatAmount: 0, invoiceNo: "" })).toBeNull();
+    expect(paymentIssue(withPct, [{ amount: 10_000_000, status: "paid", kind: "advance" }], { kind: "advance", amount: 2_000_001, vatAmount: 0, invoiceNo: "" })).toBe("PO_ADVANCE_OVER_PCT");
   });
 
   it("PRC_33 project payment requests are signed by person in charge, technical, material and leadership before accounting pays; a return rejects the request", async () => {

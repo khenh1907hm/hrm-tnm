@@ -42,14 +42,16 @@ describe("memory purchase store", () => {
     await expect(store.receive(draft.id, [{ id: order.items[0]!.id, receivedQty: 100, acceptedQty: 95, note: "" }], "Nhận đủ")).rejects.toThrow("PO_RECEIPT_RECORD_REQUIRED");
     await store.receive(draft.id, [{ id: order.items[0]!.id, receivedQty: 100, acceptedQty: 95, note: "5 m móp" }], "Nhận đủ", { recordNo: "BBGN-01", signedByBoth: true });
     expect((await store.getOrder(draft.id))!.totalActual).toBe(4_750_000);
-    await expect(store.requestPayment(draft.id, { kind: "final", amount: 3_000_000, vatAmount: 0, invoiceNo: "HD001", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_PAY_OVER");
-    await store.requestPayment(draft.id, { kind: "final", amount: 2_750_000, vatAmount: 220_000, invoiceNo: "HD001", invoiceDate: "2026-11-20", payee: "Vật tư Hòa Phát", note: "" });
+    // Thanh toán còn lại chỉ sau khi nhập kho và thu đủ chứng từ
+    await expect(store.requestPayment(draft.id, { kind: "final", amount: 2_750_000, vatAmount: 220_000, invoiceNo: "HD001", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_FINAL_TOO_EARLY");
     await expect(store.complete(draft.id, "")).rejects.toThrow("PO_NOT_STOCKED");
     await expect(store.collectDocs(draft.id, "")).rejects.toThrow("PO_NOT_STOCKED");
     expect(await store.stockIn(draft.id, "", "Kho công trường", "")).toMatch(/^PNK-DH-/);
     await expect(store.receive(draft.id, [], "")).rejects.toThrow("PO_ALREADY_STOCKED");
     await expect(store.complete(draft.id, "")).rejects.toThrow("PO_DOCS_NOT_COLLECTED");
     await store.collectDocs(draft.id, "HĐ GTGT HD001, BBGN-01");
+    await expect(store.requestPayment(draft.id, { kind: "final", amount: 3_000_000, vatAmount: 0, invoiceNo: "HD001", invoiceDate: null, payee: "", note: "" })).rejects.toThrow("PO_PAY_OVER");
+    await store.requestPayment(draft.id, { kind: "final", amount: 2_750_000, vatAmount: 220_000, invoiceNo: "HD001", invoiceDate: "2026-11-20", payee: "Vật tư Hòa Phát", note: "" });
     await expect(store.complete(draft.id, "")).rejects.toThrow("PO_PAYMENTS_PENDING");
     const final = (await store.listPayments(draft.id)).find((payment) => payment.kind === "final")!;
     for (const step of await store.listSteps("payment", final.id)) await store.sign(step.id, true, "");
@@ -59,7 +61,7 @@ describe("memory purchase store", () => {
     expect((await projects.listExpenses("proj-1"))?.map((expense) => [expense.category, expense.amount, expense.status])).toEqual([["material", 4_750_000, "approved"]]);
     expect((await store.listEvents(draft.id)).map((event) => event.action)).toEqual(["submit", "sign:pic", "sign:technical", "sign:material", "sign:accounting", "approve", "issue_po", "supplier_accept",
       "payment_request:advance", "payment_sign:pic", "payment_sign:technical", "payment_sign:material", "payment_approve:advance", "paid:advance", "order", "receive",
-      "payment_request:final", "stock_in", "collect_docs", "payment_sign:pic", "payment_sign:technical", "payment_sign:material", "payment_approve:final", "paid:final", "complete"]);
+      "stock_in", "collect_docs", "payment_request:final", "payment_sign:pic", "payment_sign:technical", "payment_sign:material", "payment_approve:final", "paid:final", "complete"]);
     await expect(store.cancel(draft.id, "Hủy thử")).rejects.toThrow("PO_BAD_STATUS");
   });
 });

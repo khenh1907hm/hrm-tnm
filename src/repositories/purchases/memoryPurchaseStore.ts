@@ -1,6 +1,6 @@
 import { systemClock, todayVN, type Clock } from "../../lib/clock";
 import type { ProjectStore } from "../../modules/projects/store";
-import { actualTotal, estimateTotal, mergeStageDepartments, orderBlock, paymentIssue, poBlock } from "../../modules/purchases/flow";
+import { actualTotal, estimateTotal, mergeStageDepartments, orderBlock, paymentIssue, paymentTimingIssue, poBlock, receiveBlock } from "../../modules/purchases/flow";
 import type { PurchaseStore } from "../../modules/purchases/store";
 import type { PurchaseApprover, PurchaseEvent, PurchaseOrder, PurchasePayment, PurchaseStatus } from "../../modules/purchases/types";
 import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type DepartmentMembers } from "../../modules/purchases/approval";
@@ -164,7 +164,8 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       if (expected) order.expectedDelivery = expected; log(id, "track", note); return done();
     },
     async requestPayment(id, input) {
-      const order = orderOf(id); expect(order, "approved", "ordered", "received"); if (input.kind === "final" && order.status === "approved") fail("PO_BAD_STATUS");
+      const order = orderOf(id); expect(order, "approved", "ordered", "received");
+      const timing = paymentTimingIssue(order, input.kind); if (timing) fail(timing);
       // PRC-30: đơn quy trình mới chỉ cho loại khoản NCC cần
       if (order.usesChain && ((input.kind === "advance" && !order.advanceRequired) || (input.kind === "prepayment" && !order.prepayRequired))) fail("PO_PAYMENT_NOT_NEEDED");
       if (input.kind === "advance") { const blocked = poBlock(order); if (blocked) fail(blocked); }
@@ -213,6 +214,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
     async receive(id, lines, note, record) {
       const order = orderOf(id); expect(order, "ordered", "received");
       if (order.stockedAt) fail("PO_ALREADY_STOCKED");
+      const blocked = receiveBlock(order, data.payments.filter((payment) => payment.orderId === id)); if (blocked) fail(blocked);
       // PRC-35: đơn dự án cần biên bản giao nhận có chữ ký hai bên
       if (order.usesChain && (!record || !record.recordNo.trim() || !record.signedByBoth)) fail("PO_RECEIPT_RECORD_REQUIRED");
       if (record?.recordNo.trim()) order.receiptRecordNo = record.recordNo.trim();

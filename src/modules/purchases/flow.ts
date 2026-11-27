@@ -165,11 +165,11 @@ export function allowedActions(order: Pick<PurchaseOrder, "status" | "requesterI
       // Đơn đi quy trình mới: chỉ mở loại khoản NCC cần (đơn cũ giữ như trước)
       const terms = order.advanceRequired !== undefined;
       if ((!terms || order.advanceRequired) && !poBlock(order)) actions.add("requestAdvance");
-      if (!terms || order.prepayRequired) actions.add("requestPrepayment");
-      if (status !== "approved") actions.add("requestFinal");
+      if ((!terms || order.prepayRequired) && status !== "received") actions.add("requestPrepayment");
+      if (!paymentTimingIssue({ status, ...(order.usesChain !== undefined ? { usesChain: order.usesChain } : {}), ...(order.docsCollectedAt !== undefined ? { docsCollectedAt: order.docsCollectedAt } : {}) }, "final")) actions.add("requestFinal");
     }
   }
-  if ((handler || me.isProjectLead || may("received")) && (status === "ordered" || (status === "received" && !order.stockedAt))) actions.add("receive");
+  if ((handler || me.isProjectLead || may("received")) && (status === "ordered" || (status === "received" && !order.stockedAt)) && !receiveBlock(order, payments)) actions.add("receive");
   // Nhập kho (mặc định Kho) rồi thu thập chứng từ (mặc định P. Vật tư), rồi mới hoàn tất
   if (status === "received" && !order.stockedAt && may("stocked")) actions.add("stockIn");
   if (status === "received" && order.stockedAt && !order.docsCollectedAt && may("final")) actions.add("collectDocs");
@@ -197,13 +197,35 @@ export function orderBlock(order: Partial<Pick<PurchaseOrder, "advanceRequired" 
 }
 
 /** PRC-32: kiểm tra một đề nghị trước khi gửi: số tiền > 0, thuế không âm, có số hóa đơn (tạm ứng thì "tạm ứng"), tổng trước thuế không vượt giá trị đơn. */
-export function paymentIssue(order: Pick<PurchaseOrder, "totalEstimate" | "totalActual">, payments: readonly Pick<PurchasePayment, "amount" | "status">[], input: { kind: PaymentKind; amount: number; vatAmount: number; invoiceNo: string }): string | null {
+export function paymentIssue(order: Pick<PurchaseOrder, "totalEstimate" | "totalActual"> & Partial<Pick<PurchaseOrder, "advancePct">>, payments: readonly (Pick<PurchasePayment, "amount" | "status"> & Partial<Pick<PurchasePayment, "kind">>)[], input: { kind: PaymentKind; amount: number; vatAmount: number; invoiceNo: string }): string | null {
   if (!(input.amount > 0) || !Number.isInteger(input.amount)) return "PO_BAD_AMOUNT";
   if (!(input.vatAmount >= 0) || !Number.isInteger(input.vatAmount)) return "PO_BAD_AMOUNT";
   if (input.kind !== "advance" && input.invoiceNo.trim().length < 1) return "PO_INVOICE_REQUIRED";
-  const used = payments.filter((payment) => payment.status !== "rejected").reduce((sum, payment) => sum + payment.amount, 0);
-  if (used + input.amount > (order.totalActual ?? order.totalEstimate)) return "PO_PAY_OVER";
+  const basis = order.totalActual ?? order.totalEstimate;
+  const live = payments.filter((payment) => payment.status !== "rejected");
+  if (live.reduce((sum, payment) => sum + payment.amount, 0) + input.amount > basis) return "PO_PAY_OVER";
+  // Tạm ứng không vượt % đã chốt trên PO
+  if (input.kind === "advance" && order.advancePct && order.advancePct > 0) {
+    const advanced = live.filter((payment) => payment.kind === "advance").reduce((sum, payment) => sum + payment.amount, 0);
+    if (advanced + input.amount > Math.round(basis * order.advancePct / 100)) return "PO_ADVANCE_OVER_PCT";
+  }
   return null;
+}
+
+/**
+ * Thời điểm được lập từng loại đề nghị (như máy chủ purchase_request_rfp):
+ * thanh toán trước giao chỉ trước khi nhận hàng; thanh toán còn lại / sau nhận hàng chỉ khi đã nhận hàng (đơn dự án: đã thu đủ chứng từ).
+ */
+export function paymentTimingIssue(order: Pick<PurchaseOrder, "status"> & Partial<Pick<PurchaseOrder, "usesChain" | "docsCollectedAt">>, kind: PaymentKind): string | null {
+  if (kind === "prepayment" && order.status === "received") return "PO_PREPAY_TOO_LATE";
+  if (kind === "final" && (order.status !== "received" || (order.usesChain && !order.docsCollectedAt))) return "PO_FINAL_TOO_EARLY";
+  return null;
+}
+
+/** Thanh toán trước khi nhận hàng: chưa chi đề nghị thanh toán trước giao thì chưa nhận hàng được. */
+export function receiveBlock(order: Pick<PurchaseOrder, "status"> & Partial<Pick<PurchaseOrder, "prepayRequired">>, payments: readonly (Pick<PurchasePayment, "status"> & Partial<Pick<PurchasePayment, "kind">>)[]): string | null {
+  if (order.status !== "ordered" || !order.prepayRequired) return null;
+  return payments.some((payment) => payment.kind === "prepayment" && payment.status === "paid") ? null : "PO_PREPAY_NOT_PAID";
 }
 
 /** PUR-05: tổng tiền theo loại khoản chi đã chi, và số còn phải trả nhà cung cấp so với tiền thực nhận (tạm ứng tính vào đã trả). */

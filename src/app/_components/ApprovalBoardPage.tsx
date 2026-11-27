@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { ApprovalMobile } from "./ApprovalMobile";
 import { invalidatePurchaseCache } from "./purchases/usePurchaseStore";
 import { SkeletonBoard } from "./Skeleton";
 import { Check, ClipboardSignature, Crown, ExternalLink, GripVertical, RefreshCw, Undo2 } from "lucide-react";
@@ -23,6 +24,16 @@ const docLabel = (type: string) => DOC_TYPE_LABELS[type as ApprovalDocType] ?? t
 
 type Pending = { card: BoardCard; action: "approve" | "return" | "director" };
 
+/** Màn hẹp (điện thoại): dùng giao diện ký duyệt dạng danh sách thay cho bảng kéo thả. */
+const NARROW = "(max-width: 760px)";
+function useNarrow() {
+  return useSyncExternalStore(
+    (notify) => { const query = window.matchMedia(NARROW); query.addEventListener("change", notify); return () => query.removeEventListener("change", notify); },
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  );
+}
+
 /**
  * Trang "Đơn phiếu cần duyệt của tôi": bảng 4 cột kiểu kéo thả (Chờ tôi duyệt → Đã duyệt / Bị trả về).
  * Kéo thả trên máy tính; điện thoại dùng nút Ký / Trả về trên từng thẻ.
@@ -36,6 +47,7 @@ export function ApprovalBoardPage(props: { live: boolean; setNotice: Notify }) {
   const [dragging, setDragging] = useState<BoardCard | null>(null);
   const [over, setOver] = useState<BoardColumn | null>(null);
   const [pending, setPending] = useState<Pending | null>(null);
+  const narrow = useNarrow();
 
   const load = useCallback(async () => {
     try { setCards(await approvalBoard()); } catch (error) { setNotice(errorMessage(error), "error"); setCards([]); }
@@ -58,6 +70,14 @@ export function ApprovalBoardPage(props: { live: boolean; setNotice: Notify }) {
   }, [cards, query, type]);
 
   if (!props.live) return <section className="pj-page"><div className="panel empty-state"><p>Bảng duyệt chỉ có ở chế độ thật (đã đăng nhập).</p></div></section>;
+
+  if (narrow) return (
+    <section className="pj-page ab-page">
+      <h2 className="ab-title"><ClipboardSignature className="ico" size={19} aria-hidden="true" /> Ký duyệt</h2>
+      {!cards ? <SkeletonBoard columns={1} label="Đang tải phiếu…" /> : <ApprovalMobile cards={cards} isDirector={isDirector} onAction={(card, action) => setPending({ card, action })} setNotice={setNotice} />}
+      {pending && <SignDialog pending={pending} onClose={() => setPending(null)} onDone={(message) => { setPending(null); setNotice(message, "success"); void load(); }} setNotice={setNotice} />}
+    </section>
+  );
 
   /** Thả thẻ vào cột: chỉ các bước hợp lệ mới chạy. */
   const drop = (card: BoardCard, target: BoardColumn) => {
