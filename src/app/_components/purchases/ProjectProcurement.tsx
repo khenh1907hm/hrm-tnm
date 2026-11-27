@@ -6,7 +6,8 @@ import { FLOW_GROUPS, orderGroup, type FlowGroup, type PathKey } from "../../../
 import type { MaterialRequest } from "../../../modules/purchases/materials";
 import { PAYMENT_KIND_LABELS, PURCHASE_PAYMENT_STATUS_LABELS, type PaymentKind, type PurchaseOrder, type PurchasePayment } from "../../../modules/purchases/types";
 import type { TabProps } from "../projects/ProjectDetail";
-import { MaterialsTab } from "../projects/MaterialsTab";
+import { MaterialRequestsPanel } from "../projects/MaterialsTab";
+import { projectOrderPath } from "../routes";
 import { errorMessage } from "../projects/projectShared";
 import { SkeletonTable } from "../Skeleton";
 import { ProjectOrderDetail, useProjectOrder } from "./ProjectOrderDetail";
@@ -18,9 +19,9 @@ import "./purchases.css";
 /** Mục cũ (?muc=…) của tab Purchasing, giữ để link cũ và khung Người duyệt đúng loại phiếu. */
 export type ProcurementStage = "materials" | "podraft" | "purchases" | "payments";
 type View = "materials" | "orders" | "payments";
-const viewOf = (stage: ProcurementStage): View => stage === "materials" ? "materials" : stage === "payments" ? "payments" : "orders";
+// Không còn tab Yêu cầu vật tư riêng: YCVT lập và theo dõi ngay ở màn Đơn hàng (đường dẫn cũ ?muc=yeu-cau-vat-tu mở Đơn hàng)
+const viewOf = (stage: ProcurementStage): View => stage === "payments" ? "payments" : "orders";
 const ORDER_GROUPS = FLOW_GROUPS.filter((group) => group.key !== "material");
-const OPEN_MATERIAL = new Set<MaterialRequest["status"]>(["draft", "submitted", "approved", "rejected"]);
 const dmy = (iso: string | null) => iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—";
 const PAY_TONE: Record<PurchasePayment["status"], string> = { requested: "warn", approved: "warn", paid: "ok", rejected: "bad" };
 /** Bước trên thanh của đơn ứng với một đề nghị: đã duyệt / đã chi thì mở bước "Chi …", còn lại mở bước "Đề nghị …". */
@@ -39,10 +40,12 @@ export function ProjectProcurement(props: TabProps & { stage: ProcurementStage; 
   const [group, setGroup] = useState<FlowGroup | "all">(props.stage === "podraft" ? "draft" : "all");
   const [refresh, setRefresh] = useState(0);
   const [rows, setRows] = useState<{ order: PurchaseOrder; payments: PurchasePayment[]; group: FlowGroup }[] | null>(null);
-  const [materials, setMaterials] = useState<MaterialRequest[]>([]);
+  const [, setMaterials] = useState<MaterialRequest[]>([]);
   const [pending, setPending] = useState<PurchasePayment[]>([]);
   const [creating, setCreating] = useState(false);
   const [payFilter, setPayFilter] = useState<"open" | "all">("open");
+  const [newMaterial, setNewMaterial] = useState(0);
+  const [materialBusy, setMaterialBusy] = useState(false);
   const track = useRef<HTMLOListElement>(null);
 
   useEffect(() => {
@@ -76,7 +79,6 @@ export function ProjectProcurement(props: TabProps & { stage: ProcurementStage; 
     .sort((a, b) => b.payment.requestedAt.localeCompare(a.payment.requestedAt));
   const openPays = payRows.filter((row) => row.payment.status === "requested" || row.payment.status === "approved");
   const tabs: readonly { key: View; label: string; count: number; icon: ReactNode; stage: ProcurementStage }[] = [
-    { key: "materials", label: "Yêu cầu vật tư", count: materials.filter((request) => OPEN_MATERIAL.has(request.status)).length, icon: <ClipboardList size={16} aria-hidden="true" />, stage: "materials" },
     { key: "orders", label: "Đơn hàng", count: activeOrders, icon: <ShoppingCart size={16} aria-hidden="true" />, stage: "purchases" },
     { key: "payments", label: "Đề nghị thanh toán", count: openPays.length, icon: <Receipt size={16} aria-hidden="true" />, stage: "payments" },
   ];
@@ -91,15 +93,22 @@ export function ProjectProcurement(props: TabProps & { stage: ProcurementStage; 
         ))}
       </div>
 
-      {view === "materials" && <MaterialsTab {...props} />}
-
       {view === "orders" && (
+        // Phiếu YCVT đang xử lý (soạn, ký, hỏi giá); phiếu đã lên PO xem ở bước đầu trên thanh của từng PO
+        <MaterialRequestsPanel store={purchases} scope={{ projectId: data.project.id, code: data.project.code, name: data.project.name, site: data.project.site }}
+          myEmployeeId={data.myEmployeeId} isAdmin={props.viewer.isAdmin} isLead={props.viewer.isLead} canSeeMoney={props.viewer.canSeeMoney}
+          orderHref={(id) => projectOrderPath(data.project.id, id, "dat-hang")} setNotice={setNotice}
+          openOnly newSignal={newMaterial} onOpenChange={setMaterialBusy} />
+      )}
+
+      {view === "orders" && !materialBusy && (
         <section className="panel pj-section" aria-labelledby="pj-flow-title">
           <div className="pj-section-head">
             <h2 id="pj-flow-title">Đơn hàng{group !== "all" ? ` · ${ORDER_GROUPS.find((item) => item.key === group)?.label}` : ""}</h2>
             <div className="button-row">
               {group !== "all" && <button type="button" className="button" onClick={() => setGroup("all")}>Xem tất cả</button>}
-              <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus className="ico" size={16} aria-hidden="true" /> New PO Draft</button>
+              <button type="button" className="button primary" onClick={() => setNewMaterial((value) => value + 1)}><ClipboardList className="ico" size={16} aria-hidden="true" /> Phiếu YCVT mới</button>
+              <button type="button" className="button" onClick={() => setCreating(true)} title="PO lập tay, không từ phiếu yêu cầu vật tư"><Plus className="ico" size={16} aria-hidden="true" /> New PO Draft</button>
             </div>
           </div>
           <nav aria-label="Lọc đơn theo bước">

@@ -26,7 +26,7 @@ const TONE: Record<MaterialRequest["status"], string> = { draft: "", submitted: 
 const dmy = (iso: string | null) => iso ? iso.slice(0, 10).split("-").reverse().join("/") : "—";
 let tempSeq = 0;
 const blankItem = (): MaterialItem => ({ id: `tmp-${++tempSeq}`, name: "", spec: "", maker: "", unit: "", quantity: 1, neededOn: null, note: "", budgetCode: null });
-const blankQuote = (requestId: string): MaterialQuoteDraft => ({ requestId, supplier: "", supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices: {} });
+const blankQuote = (requestId: string, budgetCode: string | null): MaterialQuoteDraft => ({ requestId, budgetCode, supplier: "", supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices: {} });
 
 /**
  * Tab Yêu cầu vật tư của dự án (P-COST-08): công trường lập phiếu (điện thoại dùng được), ký Phòng Vật tư → P. Kỹ thuật → Lãnh đạo;
@@ -43,9 +43,17 @@ export function MaterialsTab({ store: projectStore, data, viewer, setNotice }: T
 export type MaterialScope = { projectId: string | null; code: string; name: string; site: string };
 
 /** Danh sách + soạn + ký + hỏi giá YCVT, dùng chung cho tab dự án và trang Văn phòng. */
-export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isLead, canSeeMoney, orderHref, setNotice }: {
+export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isLead, canSeeMoney, orderHref, setNotice, fixedRequestId, openOnly, newSignal, onOpenChange }: {
   store: PurchaseStore; scope: MaterialScope; myEmployeeId: string | null; isAdmin: boolean; isLead: boolean; canSeeMoney: boolean;
   orderHref: (orderId: string) => string; setNotice: Notify;
+  /** Chỉ hiện một phiếu (bước "Yêu cầu vật tư" trên thanh của PO): không có danh sách, không có nút quay lại. */
+  fixedRequestId?: string;
+  /** Danh sách chỉ phiếu đang xử lý (chưa lên PO, chưa đóng) — dùng ở màn Đơn hàng. */
+  openOnly?: boolean;
+  /** Tăng số này để mở form phiếu mới (nút "Phiếu YCVT mới" đặt ở màn Đơn hàng). */
+  newSignal?: number;
+  /** Báo cho màn cha khi đang mở / soạn một phiếu (để ẩn danh sách đơn bên dưới). */
+  onOpenChange?: (open: boolean) => void;
 }) {
   const office = scope.projectId === null;
   const [list, setList] = useState<MaterialRequest[] | null>(null);
@@ -83,9 +91,18 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
     }, (error: unknown) => { if (active) { setNotice(errorMessage(error), "error"); setList([]); } });
     return () => { active = false; };
   }, [load, setNotice, attempt, myEmployeeId, isAdmin, isLead, store.mode]);
-  const opened = list?.find((item) => item.id === openId) ?? null;
+  const opened = list?.find((item) => item.id === (fixedRequestId ?? openId)) ?? null;
+  // Nút "Phiếu YCVT mới" ở màn cha
+  const [seenSignal, setSeenSignal] = useState(newSignal ?? 0);
+  if ((newSignal ?? 0) !== seenSignal) {
+    setSeenSignal(newSignal ?? 0);
+    if (newSignal) { setEditing({ projectId, requestedOn: todayVN(systemClock), note: "", items: [blankItem()] }); setOpenId(null); setImportNotes([]); }
+  }
+  const busyView = Boolean(opened || editing);
+  const shownList = (list ?? []).filter((request) => !openOnly || ["draft", "submitted", "approved", "rejected"].includes(request.status));
+  useEffect(() => { onOpenChange?.(busyView); }, [busyView, onOpenChange]);
   // Không còn hỏi giá ở phiếu: đơn giá, NCC điền thẳng trong PO nháp. Phiếu cũ đã có báo giá vẫn xem được bảng so sánh.
-  const showQuotes = Boolean(opened && (opened.status === "approved" || opened.status === "ordered" || opened.status === "closed") && (canSeeMoney || canQuote) && (quoteCounts[opened.id] ?? 0) > 0);
+  const showQuotes = Boolean(opened && (opened.status === "approved" || opened.status === "ordered" || opened.status === "closed") && (canSeeMoney || canQuote));
   const openedId = opened?.id ?? null;
   useEffect(() => {
     let active = true;
@@ -107,7 +124,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
     const id = await store.saveMaterialRequest(editing);
     if (submit) await store.submitMaterialRequest(id);
     setEditing(null); setOpenId(id);
-  }, submit ? "Đã gửi phiếu và lập PO nháp cho từng hạng mục. Mở PO nháp để điền nhà cung cấp, đơn giá rồi gửi duyệt." : "Đã lưu nháp phiếu.");
+  }, submit ? "Đã gửi phiếu đi ký (P. Vật tư → P. Kỹ thuật → Lãnh đạo)." : "Đã lưu nháp phiếu.");
   /** Nhập phiếu từ file Excel theo mẫu P-COST-08: điền sẵn vào phiếu mới (hoặc thêm vào phiếu đang soạn) để kiểm tra rồi lưu. */
   const importFile = async (file: File | undefined) => {
     if (!file) return;
@@ -124,7 +141,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
         : { projectId, requestedOn: result.requestedOn ?? todayVN(systemClock), note: "", items: imported.length ? imported : [blankItem()] });
       setOpenId(null);
       setImportNotes(notes);
-      setNotice(`Đã đọc ${imported.length} dòng vật tư từ ${file.name}. Kiểm tra rồi bấm Lưu nháp hoặc Lưu và lập PO nháp.`, "success");
+      setNotice(`Đã đọc ${imported.length} dòng vật tư từ ${file.name}. Kiểm tra rồi bấm Lưu nháp hoặc Lưu và gửi ký.`, "success");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Không đọc được file.", "error");
     } finally { setImporting(false); }
@@ -138,40 +155,32 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
   const groupsOf = (request: MaterialRequest) => office ? [{ code: null as string | null, items: request.items }]
     : [...new Set(request.items.map((item) => item.budgetCode))].sort((a, b) => a === null ? 1 : b === null ? -1 : a.localeCompare(b, "vi", { numeric: true }))
       .map((code) => ({ code, items: request.items.filter((item) => item.budgetCode === code) }));
-  /** PO (chưa hủy) của một hạng mục trong phiếu; văn phòng: cả phiếu một PO. */
-  const groupOrder = (request: MaterialRequest, code: string | null) => ordersOf(request).find((order) => order.status !== "cancelled" && (office || order.budgetCode === code)) ?? null;
-  const canMakeOrder = (request: MaterialRequest) => (canQuote || isLead || isAdmin) && (request.status === "submitted" || request.status === "approved" || request.status === "ordered");
-  const makeOrder = (request: MaterialRequest, code: string | null) => run(async () => {
-    const id = await store.orderFromGroup(request.id, code);
-    window.location.href = orderHref(id);
-  }, `Đã lập PO nháp${code ? ` cho hạng mục ${code}` : ""}. Điền nhà cung cấp, đơn giá rồi gửi duyệt.`);
-  /** Ô hạng mục: PO đã có (bấm để mở) hoặc nút lập PO nháp. */
+  /** Các PO (chưa hủy) của một hạng mục trong phiếu (mỗi báo giá chọn ra một PO); văn phòng: cả phiếu. */
+  const groupOrders = (request: MaterialRequest, code: string | null) => ordersOf(request).filter((order) => order.status !== "cancelled" && (office || order.budgetCode === code));
+  const poLink = (order: PurchaseOrder) => <a key={order.id} className="mr-po-link" href={orderHref(order.id)} onClick={(event) => event.stopPropagation()}><ShoppingCart size={13} aria-hidden="true" /> {order.code}{order.supplier ? ` · ${order.supplier}` : ""} <span className={`pill ${order.status === "draft" ? "" : "ok"}`}>{PURCHASE_STATUS_LABELS[order.status]}</span></a>;
   const groupOrderCell = (request: MaterialRequest, code: string | null) => {
-    const order = groupOrder(request, code);
-    if (order) return <a className="mr-po-link" href={orderHref(order.id)} onClick={(event) => event.stopPropagation()}><ShoppingCart size={13} aria-hidden="true" /> {order.code} <span className={`pill ${order.status === "draft" ? "" : "ok"}`}>{PURCHASE_STATUS_LABELS[order.status]}</span></a>;
-    if (!canMakeOrder(request)) return <small className="muted">{request.status === "draft" || request.status === "submitted" || request.status === "rejected" ? "Gửi phiếu để lập PO nháp" : "Chưa có PO"}</small>;
-    return <button type="button" className="button mr-po-make" disabled={busy} onClick={(event) => { event.stopPropagation(); void makeOrder(request, code); }}><Plus className="ico" size={14} aria-hidden="true" /> Lập PO nháp</button>;
+    const list = groupOrders(request, code);
+    return list.length ? <span className="mr-po-list-inline">{list.map(poLink)}</span> : <small className="muted">{request.status === "approved" || request.status === "ordered" ? "Chưa có PO: nhập báo giá rồi chọn để lập PO" : "Chưa có PO"}</small>;
   };
   const openRequest = (id: string | null) => { setOpenId(id); setQuoteDraft(null); setCodeDraft(null); setCreated([]); };
   // Chuỗi ký của phiếu đang mở: ở tab dự án nằm khung bên phải, trên Người duyệt
-  // Chuỗi ký YCVT chỉ còn ở phiếu cũ (gửi trước khi bỏ bước ký); phiếu mới gửi là ra PO nháp ngay
-  const chain = opened && (opened.status === "submitted" || (opened.status === "approved" && !ordersOf(opened).length))
+  const chain = opened && opened.status !== "draft"
     ? <ApprovalChain store={store} docType="material" docId={opened.id} refreshKey={attempt} title={`Chuỗi ký ${opened.number}`} compact={Boolean(asideSlot)} onChanged={() => setAttempt((value) => value + 1)} setNotice={setNotice} />
     : null;
 
   return (
     <div className="pj-page">
-      {!opened && <section className="panel pj-section">
+      {!opened && !fixedRequestId && (!openOnly || editing || shownList.length > 0) && <section className="panel pj-section">
         <div className="pj-section-head">
-          <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> Yêu cầu vật tư <small className="muted">(P-COST-08)</small></h2>
+          <h2><ClipboardList className="ico" size={18} aria-hidden="true" /> {openOnly ? "Yêu cầu vật tư đang xử lý" : "Yêu cầu vật tư"} <small className="muted">(P-COST-08)</small></h2>
           {!editing && <div className="button-row">
             <a className="button" href="/templates/quy-trinh/P-COST-08.xlsx" download="P-COST-08 Phieu yeu cau vat tu (mau).xlsx"><FileSpreadsheet className="ico" size={16} aria-hidden="true" /> Tải file mẫu</a>
             <label className="button"><Upload className="ico" size={16} aria-hidden="true" /> {importing ? "Đang đọc file…" : "Nhập từ file Excel"}
               <input type="file" hidden accept=".xls,.xlsx" disabled={importing} onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
-            <button type="button" className="button primary" onClick={() => { setEditing({ projectId, requestedOn: todayVN(systemClock), note: "", items: [blankItem()] }); setOpenId(null); setImportNotes([]); }}><FilePlus2 className="ico" size={16} aria-hidden="true" /> Phiếu yêu cầu mới</button>
+            {!openOnly && <button type="button" className="button primary" onClick={() => { setEditing({ projectId, requestedOn: todayVN(systemClock), note: "", items: [blankItem()] }); setOpenId(null); setImportNotes([]); }}><FilePlus2 className="ico" size={16} aria-hidden="true" /> Phiếu yêu cầu mới</button>}
           </div>}
         </div>
-        <p className="muted">Công trường ghi vật tư / dụng cụ cần dùng (gõ trực tiếp hoặc nhập từ file Excel theo mẫu P-COST-08). Bấm «Lưu và lập PO nháp» là hệ thống lập ngay PO nháp (POD) cho từng hạng mục (mã ngân sách) của phiếu; dòng chưa có mã gộp một PO, chọn mã trong PO. PO nháp đi tiếp ký duyệt → Purchase Order → Request for Payment.</p>
+        <p className="muted">Công trường ghi vật tư / dụng cụ cần dùng (gõ trực tiếp hoặc nhập từ file Excel theo mẫu P-COST-08). Phiếu ký P. Vật tư → P. Kỹ thuật → Lãnh đạo; duyệt xong P. Vật tư nhập báo giá (mỗi báo giá một hạng mục), chọn báo giá nào là ra một PO nháp. Trên thanh của PO, YCVT là bước đầu tiên.</p>
 
         {editing && (
           <div className="mr-form mr-paper">
@@ -208,17 +217,17 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
               <label className="button"><Upload className="ico" size={16} aria-hidden="true" /> {importing ? "Đang đọc file…" : "Thêm từ file Excel"}
                 <input type="file" hidden accept=".xls,.xlsx" disabled={importing} onChange={(event) => { void importFile(event.target.files?.[0]); event.target.value = ""; }} /></label>
               <button type="button" className="button" disabled={busy} onClick={() => void saveRequest(false)}><Save className="ico" size={16} aria-hidden="true" /> Lưu nháp</button>
-              <button type="button" className="button primary" disabled={busy} onClick={() => void saveRequest(true)}><Send className="ico" size={16} aria-hidden="true" /> Lưu và lập PO nháp</button>
+              <button type="button" className="button primary" disabled={busy} onClick={() => void saveRequest(true)}><Send className="ico" size={16} aria-hidden="true" /> Lưu và gửi ký</button>
               <button type="button" className="button" onClick={() => { setEditing(null); setImportNotes([]); }}>Đóng</button>
             </div>
           </div>
         )}
 
-        {!list.length && !editing ? <p className="muted">Chưa có phiếu yêu cầu vật tư nào.</p> : list.length > 0 && (
+        {!shownList.length && !editing ? <p className="muted">Chưa có phiếu yêu cầu vật tư nào.</p> : shownList.length > 0 && (
           <div className="table-scroll">
             <table className="pj-table mr-list">
-              <thead><tr><th>Số phiếu</th><th>Người yêu cầu</th><th>Vật tư</th><th>PO theo hạng mục</th><th>Tiến độ</th><th /></tr></thead>
-              <tbody>{list.map((request) => {
+              <thead><tr><th>Số phiếu</th><th>Người yêu cầu</th><th>Vật tư</th><th className="pj-num">Báo giá</th><th>PO</th><th>Tiến độ</th><th /></tr></thead>
+              <tbody>{shownList.map((request) => {
                 const groups = office ? 0 : new Set(request.items.map((item) => item.budgetCode ?? "")).size;
                 return (
                   <tr key={request.id} className="mr-row" onClick={() => openRequest(request.id)}>
@@ -226,11 +235,10 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
                     <td>{request.requesterName || "—"}</td>
                     <td>{request.items.slice(0, 2).map((item) => item.name).join(", ")}{request.items.length > 2 ? ` và ${request.items.length - 2} dòng khác` : ""}<br />
                       <small className="muted">{request.items.length} dòng{groups ? ` · ${groups} hạng mục` : ""}</small></td>
+                    <td className="pj-num">{quoteCounts[request.id] ?? 0}</td>
                     <td>{(() => {
-                      const groupList = groupsOf(request);
-                      const linked = groupList.map((group) => groupOrder(request, group.code)).filter((order): order is PurchaseOrder => Boolean(order));
-                      return linked.length ? <div className="mr-po-list">{linked.map((order) => <a key={order.id} className="mr-po-link" href={orderHref(order.id)} onClick={(event) => event.stopPropagation()}>{order.code}{!office && order.budgetCode ? <small> · {order.budgetCode}</small> : null}</a>)}{linked.length < groupList.length && <small className="muted">{groupList.length - linked.length} hạng mục chưa có PO</small>}</div>
-                        : <small className="muted">{groupList.length ? `${groupList.length} hạng mục chưa có PO` : "—"}</small>;
+                      const linked = ordersOf(request).filter((order) => order.status !== "cancelled");
+                      return linked.length ? <div className="mr-po-list">{linked.map((order) => <a key={order.id} className="mr-po-link" href={orderHref(order.id)} onClick={(event) => event.stopPropagation()}>{order.code}{!office && order.budgetCode ? <small> · {order.budgetCode}</small> : null}</a>)}</div> : <small className="muted">—</small>;
                     })()}</td>
                     <td><MaterialMiniPath stages={progressOf(request)} /></td>
                     <td className="button-row" onClick={(event) => event.stopPropagation()}>
@@ -246,7 +254,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
       </section>}
 
       {opened && <>
-        <button type="button" className="back-button" onClick={() => openRequest(null)}><ArrowLeft className="ico" size={16} aria-hidden="true" /> Danh sách yêu cầu vật tư</button>
+        {!fixedRequestId && <button type="button" className="back-button" onClick={() => openRequest(null)}><ArrowLeft className="ico" size={16} aria-hidden="true" /> {openOnly ? "Danh sách đơn hàng" : "Danh sách yêu cầu vật tư"}</button>}
         <section className="panel pj-section" aria-label="Tiến độ phiếu">
           <MaterialProgressBar stages={progressOf(opened)} />
         </section>
@@ -297,12 +305,18 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
         <section className="panel pj-section" aria-labelledby="mr-quote-title" id="mr-sec-quotes">
           <div className="pj-section-head">
             <h2 id="mr-quote-title"><ShoppingCart className="ico" size={18} aria-hidden="true" /> Hỏi giá và bảng so sánh</h2>
-            {canQuote && opened.status !== "closed" && !quoteDraft && <button type="button" className="button primary" onClick={() => setQuoteDraft(blankQuote(opened.id))}><Plus className="ico" size={16} aria-hidden="true" /> Nhập báo giá NCC</button>}
+            {canQuote && opened.status !== "closed" && !quoteDraft && <button type="button" className="button primary" onClick={() => setQuoteDraft(blankQuote(opened.id, office ? null : groupsOf(opened).find((group) => group.code)?.code ?? null))}><Plus className="ico" size={16} aria-hidden="true" /> Nhập báo giá NCC</button>}
           </div>
           {needsSecondQuote(quotes, opened.items) && <p className="warn-text">Giá trị từ {formatVnd(MIN_TWO_QUOTES_FROM)} trở lên nên có ít nhất 2 báo giá để so sánh (hoặc ghi lý do chỉ có một NCC vào ghi chú báo giá).</p>}
           {quoteDraft && (
             <div className="mr-form">
               <div className="bs-head">
+                {!office && <label className="field"><span>Hạng mục (mỗi báo giá một PO) *</span><select value={quoteDraft.budgetCode ?? ""} onChange={(event) => {
+                  const code = event.target.value || null;
+                  // Đổi hạng mục: bỏ giá của các dòng không thuộc hạng mục mới
+                  const keep = new Set(opened.items.filter((item) => item.budgetCode === code).map((item) => item.id));
+                  setQuoteDraft({ ...quoteDraft, budgetCode: code, prices: Object.fromEntries(Object.entries(quoteDraft.prices).filter(([id]) => keep.has(id))) });
+                }}>{groupsOf(opened).filter((group) => group.code).map((group) => <option key={group.code} value={group.code!}>{codeName(group.code)}</option>)}</select></label>}
                 <label className="field"><span>Nhà cung cấp *</span><input value={quoteDraft.supplier} onChange={(event) => setQuoteDraft({ ...quoteDraft, supplier: event.target.value })} /></label>
                 <label className="field"><span>Người liên hệ / điện thoại</span><input value={quoteDraft.supplierContact} onChange={(event) => setQuoteDraft({ ...quoteDraft, supplierContact: event.target.value })} /></label>
                 <label className="field"><span>Số báo giá</span><input value={quoteDraft.quoteRef} onChange={(event) => setQuoteDraft({ ...quoteDraft, quoteRef: event.target.value })} /></label>
@@ -313,7 +327,7 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
               <div className="table-scroll">
                 <table className="pj-table">
                   <thead><tr><th>Vật tư</th><th className="pj-num">SL</th><th className="pj-num">Đơn giá (VNĐ, chưa VAT)</th><th className="pj-num">Thành tiền</th></tr></thead>
-                  <tbody>{opened.items.map((item) => (
+                  <tbody>{opened.items.filter((item) => office || item.budgetCode === quoteDraft.budgetCode).map((item) => (
                     <tr key={item.id}>
                       <td>{item.name} <small className="muted">{item.unit}</small></td>
                       <td className="pj-num">{item.quantity.toLocaleString("vi-VN")}</td>
@@ -332,10 +346,10 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
             </div>
           )}
           {!quotes.length ? <p className="muted">Chưa có báo giá nào.</p> : <QuoteCompare request={opened} quotes={quotes} canQuote={canQuote && opened.status !== "closed"} busy={busy}
-            onEdit={(quote) => setQuoteDraft({ id: quote.id, requestId: quote.requestId, supplier: quote.supplier, supplierContact: quote.supplierContact, quoteRef: quote.quoteRef, quoteDate: quote.quoteDate, deliveryDays: quote.deliveryDays, paymentTerms: quote.paymentTerms, note: quote.note, prices: quote.prices })}
+            onEdit={(quote) => setQuoteDraft({ id: quote.id, requestId: quote.requestId, budgetCode: quote.budgetCode, supplier: quote.supplier, supplierContact: quote.supplierContact, quoteRef: quote.quoteRef, quoteDate: quote.quoteDate, deliveryDays: quote.deliveryDays, paymentTerms: quote.paymentTerms, note: quote.note, prices: quote.prices })}
             onDelete={(quote) => { if (window.confirm(`Xóa báo giá của ${quote.supplier}?`)) void run(() => store.deleteQuote(quote.id), "Đã xóa báo giá."); }}
-            onOrder={(quote) => { if (window.confirm(`Chọn ${quote.supplier}: điền đơn giá vào PO nháp của từng hạng mục (hạng mục chưa có PO sẽ được lập mới)?`)) void run(async () => { setCreated(await store.ordersFromQuote(opened.id, quote.id)); }, "Đã điền báo giá vào PO nháp. Mở đơn để kiểm tra rồi gửi duyệt."); }} />}
-          {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id, index) => <a key={id} className="link-button" href={orderHref(id)}>Mở đơn {index + 1}</a>)}</p>}
+            onOrder={(quote) => { if (window.confirm(`Lập PO nháp từ báo giá ${quote.supplier}${quote.budgetCode ? ` (hạng mục ${quote.budgetCode})` : ""}?`)) void run(async () => { setCreated(await store.ordersFromQuote(opened.id, quote.id)); }, "Đã lập PO nháp từ báo giá. Mở PO để kiểm tra rồi gửi duyệt."); }} codeName={codeName} />}
+          {created.length > 0 && <p className="po-terms-line">Đơn vừa lập: {created.map((id) => <a key={id} className="link-button" href={orderHref(id)}>Mở PO nháp</a>)}</p>}
         </section>
       )}
 
@@ -377,7 +391,7 @@ function MaterialMiniPath({ stages }: { stages: readonly MaterialStage[] }) {
 
 /** Thanh tiến độ ở trang chi tiết phiếu; bấm một giai đoạn để cuộn tới phần tương ứng. */
 function MaterialProgressBar({ stages }: { stages: readonly MaterialStage[] }) {
-  const target: Record<MaterialStage["key"], string> = { draft: "mr-sec-items", po: "mr-sec-items", orders: "mr-sec-items", done: "mr-sec-items" };
+  const target: Record<MaterialStage["key"], string> = { draft: "mr-sec-items", signing: "mr-sec-items", quoting: "mr-sec-quotes", po: "mr-sec-quotes", orders: "mr-sec-orders", done: "mr-sec-orders" };
   return (
     <ol className="op-track op-pickable mr-progress" aria-label="Tiến độ phiếu yêu cầu vật tư">
       {stages.map((stage, index) => (
@@ -392,7 +406,7 @@ function MaterialProgressBar({ stages }: { stages: readonly MaterialStage[] }) {
   );
 }
 
-function QuoteCompare(props: { request: MaterialRequest; quotes: MaterialQuote[]; canQuote: boolean; busy: boolean; onEdit: (quote: MaterialQuote) => void; onDelete: (quote: MaterialQuote) => void; onOrder: (quote: MaterialQuote) => void }) {
+function QuoteCompare(props: { request: MaterialRequest; quotes: MaterialQuote[]; canQuote: boolean; busy: boolean; onEdit: (quote: MaterialQuote) => void; onDelete: (quote: MaterialQuote) => void; onOrder: (quote: MaterialQuote) => void; codeName: (code: string | null) => string }) {
   const { request, quotes } = props;
   const cheapest = cheapestByItem(quotes, request.items);
   const totals = quotes.map((quote) => quoteTotal(quote, request.items));
@@ -401,7 +415,7 @@ function QuoteCompare(props: { request: MaterialRequest; quotes: MaterialQuote[]
     <div className="table-scroll">
       <table className="pj-table mr-compare">
         <thead>
-          <tr><th>Vật tư</th><th className="pj-num">SL</th>{quotes.map((quote) => <th key={quote.id} className="pj-num">{quote.supplier}{quote.selected && <><br /><span className="pill ok">Đã chọn</span></>}</th>)}</tr>
+          <tr><th>Vật tư</th><th className="pj-num">SL</th>{quotes.map((quote) => <th key={quote.id} className="pj-num">{quote.supplier}{quote.budgetCode && <><br /><small className="muted">{props.codeName(quote.budgetCode)}</small></>}{quote.selected && <><br /><span className="pill ok">Đã lập PO</span></>}</th>)}</tr>
         </thead>
         <tbody>
           {request.items.map((item) => (
@@ -420,7 +434,7 @@ function QuoteCompare(props: { request: MaterialRequest; quotes: MaterialQuote[]
           <tr><td colSpan={2}>Giao / thanh toán</td>{quotes.map((quote) => <td key={quote.id} className="pj-num"><small>{quote.deliveryDays !== null ? `${quote.deliveryDays} ngày` : "—"}<br />{quote.paymentTerms || "—"}{quote.quoteRef ? <><br />{quote.quoteRef}</> : null}</small></td>)}</tr>
           {props.canQuote && <tr><td colSpan={2} />{quotes.map((quote) => (
             <td key={quote.id} className="pj-num">{!quote.selected && <span className="button-row">
-              <button type="button" className="button primary" disabled={props.busy} onClick={() => props.onOrder(quote)}>Chọn, lên đơn</button>
+              <button type="button" className="button primary" disabled={props.busy} onClick={() => props.onOrder(quote)}>Lập PO nháp</button>
               <button type="button" className="button" onClick={() => props.onEdit(quote)}>Sửa</button>
               <button type="button" className="button danger" aria-label="Xóa báo giá" onClick={() => props.onDelete(quote)}><Trash2 className="ico" size={14} aria-hidden="true" /></button>
             </span>}</td>

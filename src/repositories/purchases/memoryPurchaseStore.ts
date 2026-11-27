@@ -7,7 +7,7 @@ import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type Departmen
 import { activeSheet, budgetNumber, categoryAmounts, DEFAULT_COST_CODES, sheetIssue, type BudgetSheet } from "../../modules/purchases/budget";
 import { BUDGET_CATEGORIES } from "../../modules/projects/types";
 import { budgetIncrements, explanatoryIssue, explanatoryNumber, type ExplanatoryReport } from "../../modules/purchases/explanatory";
-import { allGroupsOrdered, materialGroupCodes, materialIssue, materialNumber, orderFromGroup, ordersFromQuote, type MaterialQuote, type MaterialRequest } from "../../modules/purchases/materials";
+import { allGroupsOrdered, materialIssue, materialNumber, orderFromGroup, ordersFromQuote, type MaterialQuote, type MaterialRequest } from "../../modules/purchases/materials";
 import { contractIssue, noContractAttachments, type ProjectContract } from "../../modules/purchases/contract";
 
 type Data = {
@@ -82,6 +82,11 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   const requestOf = (id: string) => data.materials.find((item) => item.id === id) ?? fail("MR_NOT_FOUND");
   /** PO chưa hủy của một hạng mục trong phiếu (văn phòng: cả phiếu). */
   const liveOrderOf = (request: MaterialRequest, code: string | null) => request.orderIds.map((id) => data.orders.find((order) => order.id === id)).find((order): order is PurchaseOrder => Boolean(order) && order!.status !== "cancelled" && (request.projectId === null || (order!.budgetCode ?? null) === (code ?? null))) ?? null;
+  /** Phiếu YCVT sinh ra đơn (bước đầu trên thanh của PO), như cột material_request_id ở bản thật. */
+  const withMaterial = (order: PurchaseOrder): PurchaseOrder => {
+    const request = data.materials.find((item) => item.orderIds.includes(order.id));
+    return { ...order, materialRequest: request ? { id: request.id, number: request.number } : null };
+  };
   const contractOf = (id: string) => data.contracts.find((item) => item.id === id) ?? fail("CONTRACT_NOT_FOUND");
   const editableStatus = (status: string) => status === "draft" || status === "rejected";
   /** PRC-41: Lãnh đạo duyệt P-COST-05 → cộng E vào mã của ngân sách đang dùng, tính lại 4 khoản. */
@@ -107,8 +112,8 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
     async approvers() { return clone(data.approvers); },
     async setApprovers(employeeIds) { data.approvers = employeeIds.map((employeeId) => data.approvers.find((item) => item.employeeId === employeeId) ?? { employeeId, name: employeeId, hasAccount: false }); return done(); },
 
-    async listOrders() { return clone(data.orders).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
-    async getOrder(id) { return clone(data.orders.find((order) => order.id === id) ?? null); },
+    async listOrders() { return clone(data.orders.map(withMaterial)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)); },
+    async getOrder(id) { const order = data.orders.find((item) => item.id === id); return clone(order ? withMaterial(order) : null); },
     async saveDraft(draft) {
       const existing = draft.id ? orderOf(draft.id) : null;
       if (existing && (existing.status !== "draft" && existing.status !== "rejected")) fail("PO_BAD_STATUS");
@@ -435,10 +440,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
     async submitMaterialRequest(id) {
       const request = requestOf(id); if (!editableStatus(request.status)) fail("MR_BAD_STATUS");
       const issue = materialIssue(request, true); if (issue) fail(issue);
-      // Không còn chuỗi ký YCVT: gửi phiếu là lập PO nháp cho từng hạng mục ngay
-      Object.assign(request, { status: "ordered", submittedAt: now(), approvedAt: now() });
-      for (const code of materialGroupCodes(request)) if (!liveOrderOf(request, code)) await this.orderFromGroup(id, code);
-      persist(); return done();
+      Object.assign(request, { status: "submitted", submittedAt: now() }); startChain("material", id); return done();
     },
     async deleteMaterialRequest(id) {
       const request = requestOf(id); if (request.status !== "draft") fail("MR_BAD_STATUS");
@@ -459,7 +461,7 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const request = requestOf(draft.requestId); if (!["approved", "ordered"].includes(request.status)) fail("MR_NOT_APPROVED");
       if (draft.supplier.trim().length < 2) fail("PO_SUPPLIER_REQUIRED");
       if (Object.values(draft.prices).some((price) => !Number.isFinite(price) || price < 0)) fail("BUDGET_BAD_AMOUNT");
-      const body = { ...clone(draft), supplier: draft.supplier.trim(), supplierContact: draft.supplierContact.trim(), quoteRef: draft.quoteRef.trim(), paymentTerms: draft.paymentTerms.trim(), note: draft.note.trim() };
+      const body = { ...clone(draft), budgetCode: request.projectId === null ? null : draft.budgetCode ?? null, supplier: draft.supplier.trim(), supplierContact: draft.supplierContact.trim(), quoteRef: draft.quoteRef.trim(), paymentTerms: draft.paymentTerms.trim(), note: draft.note.trim() };
       if (draft.id) { const quote = data.quotes.find((item) => item.id === draft.id) ?? fail("MR_QUOTE_NOT_FOUND"); if (quote.selected) fail("MR_QUOTE_USED"); Object.assign(quote, body); persist(); return quote.id; }
       const quote: MaterialQuote = { ...body, id: newId(), selected: false, createdAt: now() };
       data.quotes.push(quote); persist(); return quote.id;
@@ -474,18 +476,11 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       if (quote.selected) fail("MR_QUOTE_USED");
       const drafts = ordersFromQuote(request, quote);
       if (!Array.isArray(drafts)) return fail(drafts.error);
+      // Mỗi báo giá ra một PO
       const ids: string[] = [];
-      for (const draft of drafts) {
-        // Hạng mục đã có PO nháp thì điền báo giá vào đó; đã đi quá bước nháp thì bỏ qua
-        const existing = liveOrderOf(request, draft.budgetCode);
-        if (existing && existing.status !== "draft") continue;
-        const saved = await this.saveDraft(existing ? { ...draft, id: existing.id, title: existing.title } : draft);
-        ids.push(saved.id);
-        if (!request.orderIds.includes(saved.id)) request.orderIds = [...request.orderIds, saved.id];
-      }
-      if (!ids.length) fail("MR_GROUPS_ALL_ORDERED");
+      for (const draft of drafts) ids.push((await this.saveDraft(draft)).id);
       quote.selected = true;
-      if (allGroupsOrdered(request, request.orderIds.map(orderOf))) request.status = "ordered";
+      Object.assign(request, { status: "ordered", orderIds: [...request.orderIds, ...ids] });
       persist();
       return ids;
     },

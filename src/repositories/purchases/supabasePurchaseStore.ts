@@ -244,11 +244,12 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
         id: str(row.id), requestId: str(row.request_id), supplier: str(row.supplier), supplierContact: str(row.supplier_contact), quoteRef: str(row.quote_ref), quoteDate: strOrNull(row.quote_date),
         deliveryDays: row.delivery_days === null || row.delivery_days === undefined ? null : num(row.delivery_days), paymentTerms: str(row.payment_terms), note: str(row.note),
         prices: Object.fromEntries(Object.entries((row.prices ?? {}) as Record<string, unknown>).map(([key, value]) => [key, num(value)])), selected: Boolean(row.selected), createdAt: str(row.created_at),
+        budgetCode: strOrNull(row.budget_code),
       }));
     },
     async saveQuote(draft) {
       return str(await rpc("material_quote_save", { p_id: draft.id ?? null, p_request: draft.requestId, p_data: {
-        supplier: draft.supplier, supplierContact: draft.supplierContact, quoteRef: draft.quoteRef, quoteDate: draft.quoteDate ?? "", deliveryDays: draft.deliveryDays ?? "", paymentTerms: draft.paymentTerms, note: draft.note, prices: draft.prices,
+        supplier: draft.supplier, supplierContact: draft.supplierContact, quoteRef: draft.quoteRef, quoteDate: draft.quoteDate ?? "", deliveryDays: draft.deliveryDays ?? "", paymentTerms: draft.paymentTerms, note: draft.note, prices: draft.prices, budgetCode: draft.budgetCode ?? "",
       } }));
     },
     async deleteQuote(id) { await rpc("material_quote_delete", { p_id: id }); },

@@ -9,7 +9,7 @@ import { systemClock, todayVN } from "../../../lib/clock";
 import type { Project } from "../../../modules/projects/types";
 import { allowedActions, lineTotal, nextHint, orderBlock, orderPath, paymentIssue, paymentSummary, stageDepartmentLabel, type EnforcedStage, type PathKey, type StageDepartments } from "../../../modules/purchases/flow";
 import { OrderProgress } from "./OrderProgress";
-import { projectPath, routePath } from "../routes";
+import { projectOrderPath, routePath } from "../routes";
 import { StepDetail } from "./StepDetail";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import {
@@ -21,6 +21,7 @@ import { PurchaseFormModal } from "./PurchaseFormModal";
 import { ApprovalChain } from "./ApprovalChain";
 import { FormExportButtons, PoBundleButton } from "./FormExport";
 import { listAttachments } from "./purchaseFiles";
+import { MaterialRequestsPanel } from "../projects/MaterialsTab";
 
 export const STATUS_TONE: Record<PurchaseOrder["status"], string> = { draft: "", submitted: "warn", approved: "ok", rejected: "bad", ordered: "warn", received: "ok", completed: "ok", cancelled: "" };
 const PAY_TONE: Record<PurchasePayment["status"], string> = { requested: "warn", approved: "warn", paid: "ok", rejected: "bad" };
@@ -39,6 +40,8 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
   const [departments, setDepartments] = useState<StageDepartments | undefined>(undefined);
   const [stages, setStages] = useState<ReadonlySet<EnforcedStage>>(new Set());
   const [picked, setPicked] = useState<PathKey | null>(props.initialStep ?? null);
+  /** Đang xem bước "Yêu cầu vật tư" (phiếu YCVT đã duyệt + báo giá) thay cho bước của đơn. */
+  const [materialOpen, setMaterialOpen] = useState(false);
   const [today] = useState(() => todayVN(systemClock));
   // Tab dự án có khung bên phải: chuỗi ký hiện ở đó, trên khung Người duyệt
   const asideSlot = useContext(AsideSlotContext);
@@ -181,8 +184,8 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
       </div>
 
       <section className="panel pj-section" aria-label="Tiến trình đơn hàng">
-        <OrderProgress order={order} payments={payments} departments={departments} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} selected={shownStep.key} onSelect={(key) => setPicked(key)}
-          material={order.materialRequest ? { number: order.materialRequest.number, href: order.projectId ? `${projectPath(order.projectId)}?muc=yeu-cau-vat-tu` : `${routePath("purchases")}?muc=yeu-cau-vat-tu` } : null} />
+        <OrderProgress order={order} payments={payments} departments={departments} hint={nextHint(order, { userId: props.userId, ...props.roles }, payments)} selected={materialOpen ? null : shownStep.key} onSelect={(key) => { setMaterialOpen(false); setPicked(key); }}
+          material={order.materialRequest ? { number: order.materialRequest.number, selected: materialOpen, onSelect: () => setMaterialOpen(true) } : null} />
         {dueDays !== null && dueDays <= 3 && (
           <div className={`po-due${dueDays < 0 ? " is-over" : ""}`} role="status">
             <b>{dueDays > 0 ? `Còn ${dueDays} ngày tới hạn giao (${dmy(due)})` : dueDays === 0 ? `Hôm nay là hạn giao (${dmy(due)})` : `Quá hạn giao ${-dueDays} ngày (hạn ${dmy(due)})`}</b>
@@ -218,7 +221,13 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
         {order.status === "received" && !order.stockedAt && !actions.has("stockIn") && deptName("stocked") && <p className="muted">Chờ <b>{deptName("stocked")}</b> nhập kho.</p>}
         {order.status === "received" && order.stockedAt && !order.docsCollectedAt && !actions.has("collectDocs") && deptName("final") && <p className="muted">Chờ <b>{deptName("final")}</b> thu thập chứng từ.</p>}
         {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
-        <StepDetail step={shownStep} order={order} payments={payments} events={events} forms={stepForms(shownStep.key)} extra={stepExtra(shownStep.key)} live={store.mode === "live"} editable={order.status !== "cancelled"} setNotice={setNotice} />
+        {materialOpen && order.materialRequest ? (() => {
+          const project = props.projects.find((item) => item.id === order.projectId);
+          const scope = project ? { projectId: project.id, code: project.code, name: project.name, site: project.site } : { projectId: null, code: "VP", name: "Văn phòng", site: "" };
+          return <MaterialRequestsPanel store={store} scope={scope} fixedRequestId={order.materialRequest.id} myEmployeeId={null} isAdmin={props.isAdmin}
+            isLead={Boolean(order.projectId && props.leadProjectIds.has(order.projectId))} canSeeMoney
+            orderHref={(id) => order.projectId ? projectOrderPath(order.projectId, id, "dat-hang") : `${routePath("purchases")}/${encodeURIComponent(id)}`} setNotice={setNotice} />;
+        })() : <StepDetail step={shownStep} order={order} payments={payments} events={events} forms={stepForms(shownStep.key)} extra={stepExtra(shownStep.key)} live={store.mode === "live"} editable={order.status !== "cancelled"} setNotice={setNotice} />}
       </section>
 
       {asideSlot ? createPortal(chains, asideSlot) : chains}

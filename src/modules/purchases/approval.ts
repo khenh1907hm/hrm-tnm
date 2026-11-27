@@ -7,7 +7,7 @@ export type Department = "technical" | "material" | "warehouse" | "accounting" |
 export type ApprovalRole = "pic" | Department | "admin_office";
 export const DEPARTMENTS: readonly Department[] = ["leader", "technical", "material", "warehouse", "accounting"];
 export const ROLE_LABELS: Record<ApprovalRole, string> = {
-  pic: "Phụ trách", technical: "P. Kỹ thuật", material: "Kho (Vật tư)", warehouse: "Kho", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
+  pic: "Phụ trách", technical: "P. Kỹ thuật", material: "P. Vật tư", warehouse: "Kho", accounting: "Kế toán", leader: "Lãnh đạo", admin_office: "Hành chánh",
 };
 export type ApprovalDocType = "budget" | "purchase" | "payment" | "explanatory" | "material" | "contract";
 export const DOC_TYPE_LABELS: Record<ApprovalDocType, string> = {
@@ -23,7 +23,7 @@ export const CHAINS: Record<ApprovalDocType, readonly ApprovalRole[]> = {
   /** P-COST-05: ô ký Phụ trách → P. Kỹ thuật → P. Vật tư → P. HC-KT (Kế toán) → LĐ. */
   explanatory: ["pic", "technical", "material", "accounting", "leader"],
   /** P-COST-08: người yêu cầu lập → Kho (kiểm tồn) → P. Vật tư → P. Kỹ thuật → Lãnh đạo. */
-  material: ["warehouse", "material", "technical", "leader"],
+  material: ["material", "technical", "leader"],
   /** P-COST-01: Phụ trách → P. Kỹ thuật → VT-Kho → Lãnh đạo → Kế toán (lên số dự án, kiểm tra HĐ). */
   contract: ["pic", "technical", "material", "leader", "accounting"],
 };

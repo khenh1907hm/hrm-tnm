@@ -12,7 +12,11 @@ const deptOf = (departments: StageDepartments | undefined, step: PathStep) => st
  */
 export function OrderProgress(props: { order: PurchaseOrder; payments: readonly PurchasePayment[]; departments?: StageDepartments | undefined; hint: string;
   /** Bước đang mở xem lịch sử / kết quả (bấm vào bước). */ selected?: PathKey | null; onSelect?: (key: PathKey) => void;
-  /** Phiếu YCVT sinh ra đơn: hiện thành bước đầu (đã xong), bấm để mở danh sách YCVT. */ material?: { number: string; href: string } | null }) {
+  /**
+   * Bước đầu "Yêu cầu vật tư": phiếu YCVT sinh ra đơn (đã xong, bấm để xem phiếu đã duyệt và các báo giá);
+   * null = đơn lập tay không từ YCVT (bước hiện mờ "Không có YCVT"); bỏ trống = không hiện bước này.
+   */
+  material?: { number: string; selected: boolean; onSelect: () => void } | null }) {
   const steps = orderPath(props.order, props.payments);
   const cancelled = props.order.status === "cancelled";
   const completed = props.order.status === "completed";
@@ -45,15 +49,23 @@ export function OrderProgress(props: { order: PurchaseOrder; payments: readonly 
         <span className="op-terms">{paymentTermsLabel(props.order)}</span>
       </div>
       <ol className={`op-track${props.onSelect ? " op-pickable" : ""}`} ref={track} aria-label="Các bước của đơn hàng (bấm một bước để xem lịch sử, kết quả)">
-        {props.material && (
-          <li className="op-step is-done" title={`Yêu cầu vật tư ${props.material.number}`}>
-            <a className="op-nav-btn" href={props.material.href}>
+        {props.material ? (
+          <li className={`op-step is-done${props.material.selected ? " is-picked" : ""}`} title={`Yêu cầu vật tư ${props.material.number}: bấm để xem phiếu đã duyệt và các báo giá`}>
+            <button type="button" className="op-nav-btn" aria-pressed={props.material.selected} onClick={props.material.onSelect}>
               <span className="op-num" aria-hidden="true"><Check size={13} strokeWidth={3} /></span>
               <span className="op-text"><span className="op-label">Yêu cầu vật tư</span><small className="op-dept">{props.material.number}</small></span>
               <span className="sr-only"> (đã xong)</span>
-            </a>
+            </button>
           </li>
-        )}
+        ) : props.material === null ? (
+          <li className="op-step is-skipped" title="Đơn lập tay, không từ phiếu yêu cầu vật tư">
+            <span className="op-nav-btn">
+              <span className="op-num" aria-hidden="true">1</span>
+              <span className="op-text"><span className="op-label">Yêu cầu vật tư</span><small className="op-dept">Không có YCVT</small></span>
+              <span className="sr-only"> (không dùng)</span>
+            </span>
+          </li>
+        ) : null}
         {steps.map((step, index) => {
           const stepDept = deptOf(props.departments, step);
           return (
@@ -61,7 +73,7 @@ export function OrderProgress(props: { order: PurchaseOrder; payments: readonly 
               title={stepDept ? `${step.label} · ${stepDept}` : step.label}>
               {(() => {
                 const inner = <>
-                  <span className="op-num" aria-hidden="true">{step.state === "done" ? <Check size={13} strokeWidth={3} /> : index + (props.material ? 2 : 1)}</span>
+                  <span className="op-num" aria-hidden="true">{step.state === "done" ? <Check size={13} strokeWidth={3} /> : index + (props.material !== undefined ? 2 : 1)}</span>
                   <span className="op-text">
                     <span className="op-label">{step.label}</span>
                     {stepDept && <small className="op-dept">{stepDept}</small>}

@@ -54,6 +54,8 @@ export type MaterialQuote = {
   paymentTerms: string;
   note: string;
   prices: Record<string, number>;
+  /** Hạng mục (mã ngân sách) của báo giá: mỗi báo giá một hạng mục, chọn xong ra một PO. Văn phòng: null. */
+  budgetCode: string | null;
   /** Đã chọn để lên đơn. */
   selected: boolean;
   createdAt: string;
@@ -100,23 +102,24 @@ export const needsSecondQuote = (quotes: readonly MaterialQuote[], items: readon
   quotes.length < 2 && quotes.some((quote) => quoteTotal(quote, items) >= MIN_TWO_QUOTES_FROM);
 
 /**
- * PRC-53: báo giá được chọn → đơn đặt hàng nháp, mỗi mã ngân sách một đơn (đơn dự án gắn một mã).
- * Chỉ các dòng có giá; dòng chưa có mã ngân sách thì báo lỗi để P. Vật tư điền trước.
+ * PRC-53: chọn một báo giá → MỘT PO nháp (mỗi báo giá ra một PO). Báo giá gắn một hạng mục (mã ngân sách) nên PO chỉ một hạng mục;
+ * báo giá cũ chưa gắn hạng mục thì lấy hạng mục của các dòng có giá (phải đúng một hạng mục). Chỉ các dòng có giá.
  */
 export function ordersFromQuote(request: Pick<MaterialRequest, "projectId" | "number" | "items" | "note">, quote: MaterialQuote, projectAddress = ""): PurchaseDraft[] | { error: string } {
-  const lines = request.items.filter((item) => (quote.prices[item.id] ?? 0) > 0);
+  const office = request.projectId === null;
+  const lines = request.items.filter((item) => (quote.prices[item.id] ?? 0) > 0 && (office || !quote.budgetCode || item.budgetCode === quote.budgetCode));
   if (!lines.length) return { error: "MR_QUOTE_EMPTY" };
-  if (lines.some((item) => !item.budgetCode || !groupOf(item.budgetCode))) return { error: "MR_ITEM_CODE_REQUIRED" };
-  const byCode = new Map<string, MaterialItem[]>();
-  for (const item of lines) byCode.set(item.budgetCode!, [...(byCode.get(item.budgetCode!) ?? []), item]);
-  return [...byCode.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([code, items]) => ({
-    kind: "project", projectId: request.projectId, budgetCode: code,
-    title: `${request.number} · ${items.length === 1 ? items[0]!.name : `${items[0]!.name} và ${items.length - 1} mục khác`}`.slice(0, 200),
-    department: "", neededBy: items.map((item) => item.neededOn).filter((day): day is string => Boolean(day)).sort()[0] ?? null, deliveryAddress: projectAddress, supplier: quote.supplier, supplierContact: quote.supplierContact, supplierAddress: "", supplierPhone: "", supplierEmail: "",
+  const codes = [...new Set(lines.map((item) => item.budgetCode ?? null))];
+  if (!office && !quote.budgetCode && codes.length > 1) return { error: "MR_QUOTE_MULTI_GROUP" };
+  const code = office ? null : quote.budgetCode ?? codes[0] ?? null;
+  return [{
+    kind: office ? "office" : "project", projectId: request.projectId, budgetCode: code,
+    title: `${request.number} · ${lines.length === 1 ? lines[0]!.name : `${lines[0]!.name} và ${lines.length - 1} mục khác`}`.slice(0, 200),
+    department: "", neededBy: lines.map((item) => item.neededOn).filter((day): day is string => Boolean(day)).sort()[0] ?? null, deliveryAddress: projectAddress, supplier: quote.supplier, supplierContact: quote.supplierContact, supplierAddress: "", supplierPhone: "", supplierEmail: "",
     note: [`Theo phiếu ${request.number}`, quote.quoteRef ? `báo giá ${quote.quoteRef}` : "", quote.paymentTerms ? `ĐK thanh toán: ${quote.paymentTerms}` : ""].filter(Boolean).join(" · "),
     advanceRequired: false, advancePct: null, prepayRequired: false,
-    items: items.map((item) => ({ id: "", name: item.name, spec: [item.spec, item.maker].filter(Boolean).join(" · "), unit: item.unit, quantity: item.quantity, unitPrice: quote.prices[item.id] ?? 0 })),
-  }));
+    items: lines.map((item) => ({ id: "", name: item.name, spec: [item.spec, item.maker].filter(Boolean).join(" · "), unit: item.unit, quantity: item.quantity, unitPrice: quote.prices[item.id] ?? 0 })),
+  }];
 }
 
 /**
@@ -146,22 +149,24 @@ export function allGroupsOrdered(request: Pick<MaterialRequest, "projectId" | "i
 }
 
 /**
- * Tiến độ một phiếu YCVT (hiện ở danh sách và trang chi tiết). Không còn ký duyệt / hỏi giá ở phiếu:
- * Lập phiếu → PO nháp (mỗi hạng mục một PO, lập ngay khi gửi phiếu) → Mua, nhận hàng, thanh toán (theo các PO) → Hoàn tất.
+ * Tiến độ một phiếu YCVT: Lập phiếu → Ký duyệt (P. Vật tư → P. Kỹ thuật → Lãnh đạo) → Hỏi giá (nhiều báo giá)
+ * → PO nháp (mỗi báo giá chọn ra một PO) → Mua, nhận hàng, thanh toán → Hoàn tất. Trên thanh của từng PO, YCVT là bước đầu.
  */
-export type MaterialStageKey = "draft" | "po" | "orders" | "done";
+export type MaterialStageKey = "draft" | "signing" | "quoting" | "po" | "orders" | "done";
 export type MaterialStage = { key: MaterialStageKey; label: string; state: "done" | "current" | "todo" | "bad" | "skipped"; note: string };
-export function materialProgress(request: Pick<MaterialRequest, "status">, _quoteCount: number, orders: readonly { status: string }[]): MaterialStage[] {
+export function materialProgress(request: Pick<MaterialRequest, "status">, quoteCount: number, orders: readonly { status: string }[]): MaterialStage[] {
   const { status } = request;
+  const signed = status === "approved" || status === "ordered" || status === "closed";
   const live = orders.filter((order) => order.status !== "cancelled");
   const drafts = live.filter((order) => order.status === "draft" || order.status === "rejected").length;
   const finished = live.filter((order) => order.status === "completed").length;
   const allOrdersDone = live.length > 0 && finished === live.length;
   const closed = status === "closed";
-  const sent = status !== "draft" && status !== "rejected";
   return [
     { key: "draft", label: "Lập phiếu", state: status === "draft" ? "current" : status === "rejected" ? "bad" : "done", note: status === "rejected" ? "Bị trả về: sửa và gửi lại" : status === "draft" ? "Đang soạn" : "" },
-    { key: "po", label: "PO nháp (POD)", state: !sent ? "todo" : !live.length ? (closed ? "skipped" : "current") : drafts ? "current" : "done", note: !sent ? "" : !live.length ? (closed ? "" : "Chờ lập PO nháp") : drafts ? `${drafts}/${live.length} PO nháp chưa gửi duyệt` : `${live.length} PO` },
+    { key: "signing", label: "Ký duyệt", state: status === "submitted" ? "current" : signed ? "done" : "todo", note: status === "submitted" ? "Đang chờ ký" : "" },
+    { key: "quoting", label: "Hỏi giá", state: status === "approved" && quoteCount === 0 && !live.length ? "current" : quoteCount > 0 || live.length ? "done" : closed ? "skipped" : "todo", note: quoteCount ? `${quoteCount} báo giá` : "" },
+    { key: "po", label: "PO nháp", state: !signed ? "todo" : !live.length ? (closed ? "skipped" : quoteCount > 0 ? "current" : "todo") : drafts ? "current" : "done", note: !live.length ? (signed && quoteCount > 0 && !closed ? "Chọn báo giá để lập PO" : "") : drafts ? `${drafts}/${live.length} PO nháp chưa gửi duyệt` : `${live.length} PO` },
     { key: "orders", label: "Mua, nhận hàng, thanh toán", state: allOrdersDone ? "done" : live.length > drafts ? "current" : closed ? "skipped" : "todo", note: live.length > drafts && !allOrdersDone ? `${finished}/${live.length} PO xong` : "" },
     { key: "done", label: "Hoàn tất", state: closed || allOrdersDone ? "done" : "todo", note: closed ? "Đã đóng phiếu" : "" },
   ];

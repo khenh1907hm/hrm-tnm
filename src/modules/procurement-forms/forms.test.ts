@@ -146,7 +146,7 @@ describe("procurement forms (Excel theo mẫu công ty)", () => {
       submittedAt: "2026-11-12T02:30:00Z", approvedAt: "2026-11-12T05:00:00Z", orderIds: [],
       items: [{ id: "a", name: "Cáp CVV 4x2.5", spec: "0.6/1kV", maker: "Cadivi", unit: "m", quantity: 500, neededOn: "2026-11-18", note: "", budgetCode: "177" }, { id: "b", name: "Máng cáp 200x100", spec: "", maker: "", unit: "m", quantity: 60, neededOn: null, note: "", budgetCode: "176" }],
     };
-    const quote = (id: string, supplier: string, a: number, b: number): MaterialQuote => ({ id, requestId: "m1", supplier, supplierContact: "", quoteRef: `BG-${id}`, quoteDate: "2026-11-13", deliveryDays: 3, paymentTerms: "30 ngày", note: "", prices: { a, b }, selected: false, createdAt: "2026-11-13T02:00:00Z" });
+    const quote = (id: string, supplier: string, a: number, b: number): MaterialQuote => ({ id, requestId: "m1", supplier, supplierContact: "", quoteRef: `BG-${id}`, quoteDate: "2026-11-13", deliveryDays: 3, paymentTerms: "30 ngày", note: "", prices: { a, b }, budgetCode: null, selected: false, createdAt: "2026-11-13T02:00:00Z" });
     const book = await reopen(await buildMaterialRequest({ request, project, steps: [signed("material", "VT Hoàng E")], quotes: [quote("q1", "NCC 1", 20_000, 150_000), quote("q2", "NCC 2", 21_000, 140_000)] }));
     expect(JSON.stringify(cell(book, "A8"))).toContain(project.name);
     expect([cell(book, "A6"), cell(book, "H8"), cell(book, "B13"), cell(book, "G13"), cell(book, "I13")]).toEqual(["PHIẾU YÊU CẦU VẬT TƯ", "12/11/2026", "Cáp CVV 4x2.5", 500, "Mã 177"]);

@@ -72,7 +72,7 @@ describe("yêu cầu vật tư P-COST-08 và hỏi giá", () => {
       { id: "c", name: "Ốc", spec: "", maker: "", unit: "bộ", quantity: 10, neededOn: null, note: "", budgetCode: "176" },
     ],
   };
-  const quote = (id: string, prices: Record<string, number>): MaterialQuote => ({ id, requestId: "m1", supplier: `NCC ${id}`, supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices, selected: false, createdAt: "" });
+  const quote = (id: string, prices: Record<string, number>, budgetCode: string | null = null): MaterialQuote => ({ id, requestId: "m1", supplier: `NCC ${id}`, supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices, budgetCode, selected: false, createdAt: "" });
 
   it("PRC_50 kiểm tra dòng vật tư và chuỗi ký", async () => {
     expect(materialIssue({ items: request.items }, true)).toBeNull();
@@ -81,7 +81,7 @@ describe("yêu cầu vật tư P-COST-08 và hỏi giá", () => {
     expect(materialIssue({ items: [{ ...request.items[0]!, quantity: 0 }] }, false)).toBe("MR_BAD_QUANTITY");
     expect(materialIssue({ items: [{ ...request.items[0]!, unit: " " }] }, true)).toBe("MR_UNIT_REQUIRED");
     expect(materialIssue({ items: [{ ...request.items[0]!, budgetCode: "999" }] }, false)).toBe("BUDGET_UNKNOWN_CODE");
-    expect(CHAINS.material).toEqual(["warehouse", "material", "technical", "leader"]);
+    expect(CHAINS.material).toEqual(["material", "technical", "leader"]);
   });
 
   it("PRC_52 bảng so sánh: giá thấp nhất từng dòng, cảnh báo một báo giá từ 50 triệu", () => {
@@ -94,32 +94,41 @@ describe("yêu cầu vật tư P-COST-08 và hỏi giá", () => {
     expect(needsSecondQuote([quote("3", { a: 100_000 }), q1], request.items)).toBe(false);
   });
 
-  it("PRC_53 chọn báo giá → đơn nháp theo từng mã ngân sách", async () => {
-    const drafts = ordersFromQuote(request, quote("2", { a: 21_000, b: 140_000, c: 5_000 }), "Công trường");
-    expect(Array.isArray(drafts) && drafts.map((draft) => [draft.budgetCode, draft.items.length, draft.supplier, draft.neededBy])).toEqual([["176", 2, "NCC 2", "2026-11-18"], ["177", 1, "NCC 2", "2026-11-20"]]);
-    expect(ordersFromQuote(request, quote("x", {}))).toEqual({ error: "MR_QUOTE_EMPTY" });
-    expect(ordersFromQuote({ ...request, items: [{ ...request.items[0]!, budgetCode: null }] }, quote("1", { a: 1 }))).toEqual({ error: "MR_ITEM_CODE_REQUIRED" });
-
+  it("PRC_53 mỗi báo giá ra một PO nháp, chỉ một hạng mục", async () => {
+    const one = ordersFromQuote(request, quote("2", { a: 21_000, b: 140_000, c: 5_000 }, "176"), "Công trường");
+    expect(Array.isArray(one) && one.map((draft) => [draft.budgetCode, draft.items.length, draft.supplier, draft.neededBy, draft.items.map((item) => item.unitPrice)])).toEqual([["176", 2, "NCC 2", "2026-11-18", [140_000, 5_000]]]);
+    expect(ordersFromQuote(request, quote("x", {}, "176"))).toEqual({ error: "MR_QUOTE_EMPTY" });
+    // Báo giá cũ chưa gắn hạng mục: lấy hạng mục của dòng có giá, nhiều hạng mục thì báo lỗi
+    expect(ordersFromQuote(request, quote("3", { a: 21_000, b: 1 }))).toEqual({ error: "MR_QUOTE_MULTI_GROUP" });
+    const legacy = ordersFromQuote(request, quote("4", { a: 21_000 }));
+    expect(Array.isArray(legacy) && legacy[0]!.budgetCode).toBe("177");
   });
 
-  it("PRC_54 gửi YCVT là ra PO nháp ngay: mỗi hạng mục một PO, dòng chưa có mã gộp một PO; báo giá cũ điền vào đúng PO", async () => {
-    const { store } = setup();
-    const items = [...request.items, { ...request.items[0]!, id: "d", name: "Dây rút", budgetCode: null }];
-    const id = await store.saveMaterialRequest({ projectId: "proj-1", requestedOn: "2026-11-12", note: "", items: items.map((item) => ({ ...item, id: `tmp-${item.id}` })) });
-    await expect(store.orderFromGroup(id, "176")).rejects.toThrow("MR_NOT_APPROVED");
+  it("PRC_54 YCVT ký P. Vật tư → P. Kỹ thuật → Lãnh đạo, duyệt xong mới nhập báo giá; chọn báo giá nào ra PO đó", async () => {
+    const { store, signAll } = setup();
+    const id = await store.saveMaterialRequest({ projectId: "proj-1", requestedOn: "2026-11-12", note: "", items: request.items.map((item) => ({ ...item, id: `tmp-${item.id}` })) });
     await store.submitMaterialRequest(id);
+    expect((await store.listMaterialRequests("proj-1"))[0]!).toMatchObject({ status: "submitted", orderIds: [] });
+    expect(CHAINS.material).toEqual(["material", "technical", "leader"]);
+    await expect(store.saveQuote({ requestId: id, budgetCode: "176", supplier: "NCC A", supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices: {} })).rejects.toThrow("MR_NOT_APPROVED");
+    await signAll("material", id);
     const saved = (await store.listMaterialRequests("proj-1"))[0]!;
-    expect(saved.status).toBe("ordered");
-    expect(saved.orderIds).toHaveLength(3);
-    const orders = await Promise.all(saved.orderIds.map((orderId) => store.getOrder(orderId)));
-    expect(orders.map((order) => [order!.budgetCode, order!.items.length, order!.status, order!.supplier])).toEqual([["176", 2, "draft", ""], ["177", 1, "draft", ""], [null, 1, "draft", ""]]);
-    expect(orders.every((order) => order!.items.every((item) => item.unitPrice === 0))).toBe(true);
-    expect(await store.listSteps("material", id)).toEqual([]);
-    await expect(store.orderFromGroup(id, "176")).rejects.toThrow("MR_GROUP_HAS_ORDER");
+    expect(saved.status).toBe("approved");
 
-    const prices = Object.fromEntries(saved.items.map((item) => [item.id, 2_000]));
-    const qid = await store.saveQuote({ requestId: id, supplier: "NCC B", supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices });
-    await expect(store.ordersFromQuote(id, qid)).rejects.toThrow("MR_ITEM_CODE_REQUIRED");
+    const price = (code: string, value: number) => Object.fromEntries(saved.items.filter((item) => item.budgetCode === code).map((item) => [item.id, value]));
+    const qa = await store.saveQuote({ requestId: id, budgetCode: "176", supplier: "NCC A", supplierContact: "", quoteRef: "BG-A", quoteDate: null, deliveryDays: 3, paymentTerms: "", note: "", prices: price("176", 1_000) });
+    const qb = await store.saveQuote({ requestId: id, budgetCode: "176", supplier: "NCC B", supplierContact: "", quoteRef: "BG-B", quoteDate: null, deliveryDays: 3, paymentTerms: "", note: "", prices: price("176", 900) });
+    const qc = await store.saveQuote({ requestId: id, budgetCode: "177", supplier: "NCC C", supplierContact: "", quoteRef: "", quoteDate: null, deliveryDays: null, paymentTerms: "", note: "", prices: price("177", 2_000) });
+    expect(await store.listQuotes(id)).toHaveLength(3);
+
+    const [po176] = await store.ordersFromQuote(id, qb);
+    expect(await store.getOrder(po176!)).toMatchObject({ status: "draft", budgetCode: "176", supplier: "NCC B", items: [{ unitPrice: 900 }, { unitPrice: 900 }] });
+    const [po177] = await store.ordersFromQuote(id, qc);
+    expect(await store.getOrder(po177!)).toMatchObject({ budgetCode: "177", supplier: "NCC C" });
+    expect((await store.listMaterialRequests("proj-1"))[0]).toMatchObject({ status: "ordered", orderIds: [po176, po177] });
+    await expect(store.ordersFromQuote(id, qb)).rejects.toThrow("MR_QUOTE_USED");
+    await expect(store.deleteQuote(qb)).rejects.toThrow("MR_QUOTE_USED");
+    await store.deleteQuote(qa);
   });
 });
 
