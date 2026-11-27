@@ -120,6 +120,32 @@ export function ordersFromQuote(request: Pick<MaterialRequest, "projectId" | "nu
 }
 
 /**
+ * YCVT ↔ PO nháp: mỗi hạng mục (mã ngân sách) của phiếu là một PO nháp riêng; văn phòng không chia hạng mục nên cả phiếu một PO.
+ * PO nháp trống: chưa NCC, đơn giá 0 — P. Vật tư điền sau (hoặc chọn báo giá để điền tự động).
+ */
+export function orderFromGroup(request: Pick<MaterialRequest, "projectId" | "number" | "items">, code: string | null, projectAddress = ""): PurchaseDraft | { error: string } {
+  const office = request.projectId === null;
+  if (!office && !code) return { error: "MR_ITEM_CODE_REQUIRED" };
+  const items = request.items.filter((item) => office || item.budgetCode === code);
+  if (!items.length) return { error: "MR_GROUP_EMPTY" };
+  return {
+    kind: office ? "office" : "project", projectId: request.projectId, budgetCode: office ? null : code,
+    title: `${request.number} · ${items.length === 1 ? items[0]!.name : `${items[0]!.name} và ${items.length - 1} mục khác`}`.slice(0, 200),
+    department: "", neededBy: items.map((item) => item.neededOn).filter((day): day is string => Boolean(day)).sort()[0] ?? null, deliveryAddress: projectAddress,
+    supplier: "", supplierContact: "", supplierAddress: "", supplierPhone: "", supplierEmail: "", note: `Theo phiếu ${request.number}`,
+    advanceRequired: false, advancePct: null, prepayRequired: false,
+    items: items.map((item) => ({ id: "", name: item.name, spec: [item.spec, item.maker].filter(Boolean).join(" · "), unit: item.unit, quantity: item.quantity, unitPrice: 0 })),
+  };
+}
+
+/** Mọi hạng mục (đã có mã) của phiếu đều đã có PO chưa hủy → phiếu "Đã lên đơn". */
+export function allGroupsOrdered(request: Pick<MaterialRequest, "projectId" | "items">, orders: readonly { budgetCode: string | null; status: string }[]): boolean {
+  const live = orders.filter((order) => order.status !== "cancelled");
+  if (request.projectId === null) return live.length > 0;
+  return request.items.filter((item) => item.budgetCode).every((item) => live.some((order) => order.budgetCode === item.budgetCode));
+}
+
+/**
  * Tiến độ một phiếu YCVT (hiện ở danh sách và trang chi tiết):
  * Lập phiếu → Ký duyệt → Hỏi giá (nhiều báo giá) → Chọn NCC, lên đơn → Đơn hàng (mua, nhận, thanh toán) → Hoàn tất.
  */

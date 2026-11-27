@@ -92,6 +92,8 @@ export interface PurchaseStore {
   deleteQuote(id: string): Promise<void>;
   /** Chọn báo giá và lập đơn đặt hàng nháp (mỗi mã ngân sách một đơn); trả về id các đơn. */
   ordersFromQuote(requestId: string, quoteId: string): Promise<string[]>;
+  /** Lập PO nháp trống cho một hạng mục (mã ngân sách) của phiếu; văn phòng truyền null (cả phiếu một PO). Trả về id đơn. */
+  orderFromGroup(requestId: string, code: string | null): Promise<string>;
 
   /* Xác nhận dự án P-COST-01 (mỗi lần sửa hợp đồng là một lần mới). */
   listContracts(projectId: string): Promise<ProjectContract[]>;

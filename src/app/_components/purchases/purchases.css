@@ -308,3 +308,21 @@
 .mr-group td { background: var(--ok-bg); color: var(--ok); font-size: 13px; padding-top: 6px; padding-bottom: 6px; }
 .mr-progress .op-step.is-bad { --op-bg: var(--bad-bg); --op-ink: var(--bad); }
 .op-mini-bar .is-bad { background: var(--bad); }
+
+/* YCVT: mỗi hạng mục một PO nháp */
+.mr-group-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.mr-po-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--brand); text-decoration: none; }
+.mr-po-link:hover { text-decoration: underline; }
+.mr-po-link .pill { font-weight: 600; }
+.mr-po-make.button { padding: 4px 10px; font-size: 13px; background: #fff; }
+.mr-po-list { display: grid; gap: 2px; }
+.mr-po-list small { font-weight: 400; }
+
+/* Điều kiện thanh toán PO: hai câu hỏi độc lập (tạm ứng / thời điểm thanh toán) */
+.po-term-q { display: grid; gap: 6px; }
+.po-term-q-label { font-weight: 700; font-size: 13px; }
+.po-term-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+.po-term-row .po-term { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.po-term-row .po-term.is-on { border-color: var(--brand); background: var(--brand-soft); }
+.po-term-q .po-term-pct { margin: 0; }
+.po-term-summary { margin: 0; font-weight: 600; color: var(--brand); }

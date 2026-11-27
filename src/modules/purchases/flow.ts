@@ -281,11 +281,14 @@ export const PATH_LABELS: Record<PathKey, string> = {
   ordered: "Theo dõi đơn hàng", prepayment: "Đề nghị TT trước giao", prepayment_pay: "Chi TT trước giao", received: "Nhận hàng, kiểm đếm", stocked: "Nhập kho",
   docs: "Hóa đơn, chứng từ cho kho", final: "Đề nghị thanh toán", final_pay: "Chi thanh toán", completed: "Hoàn tất",
 };
-/** Điều kiện thanh toán của đơn (hai lựa chọn trên form): trước khi nhận hàng (kèm tạm ứng có / không) hoặc sau khi nhận hàng. */
-export const payBeforeDelivery = (order: Partial<Pick<PurchaseOrder, "advanceRequired" | "prepayRequired">>) => Boolean(order.prepayRequired || order.advanceRequired);
+/**
+ * Điều kiện thanh toán của đơn (hai câu hỏi độc lập trên form):
+ * 1) Tạm ứng: có (bao nhiêu %) / không. 2) Thanh toán (phần còn lại nếu có tạm ứng): trước khi nhận hàng / sau khi nhận hàng.
+ */
+export const payBeforeDelivery = (order: Partial<Pick<PurchaseOrder, "prepayRequired">>) => Boolean(order.prepayRequired);
 export function paymentTermsLabel(order: Partial<Pick<PurchaseOrder, "advanceRequired" | "advancePct" | "prepayRequired">>): string {
-  if (!payBeforeDelivery(order)) return "Thanh toán sau khi nhận hàng";
-  return order.advanceRequired ? `Thanh toán trước khi nhận hàng · Tạm ứng ${order.advancePct ?? 0}%` : "Thanh toán trước khi nhận hàng · Không tạm ứng";
+  const when = payBeforeDelivery(order) ? "trước khi nhận hàng" : "sau khi nhận hàng";
+  return order.advanceRequired ? `Tạm ứng ${order.advancePct ?? 0}% · còn lại thanh toán ${when}` : `Không tạm ứng · Thanh toán ${when}`;
 }
 
 /**

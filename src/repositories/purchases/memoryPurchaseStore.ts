@@ -7,7 +7,7 @@ import { buildSteps, currentStep, DEPARTMENTS, type ApprovalStep, type Departmen
 import { activeSheet, budgetNumber, categoryAmounts, DEFAULT_COST_CODES, sheetIssue, type BudgetSheet } from "../../modules/purchases/budget";
 import { BUDGET_CATEGORIES } from "../../modules/projects/types";
 import { budgetIncrements, explanatoryIssue, explanatoryNumber, type ExplanatoryReport } from "../../modules/purchases/explanatory";
-import { materialIssue, materialNumber, ordersFromQuote, type MaterialQuote, type MaterialRequest } from "../../modules/purchases/materials";
+import { allGroupsOrdered, materialIssue, materialNumber, orderFromGroup, ordersFromQuote, type MaterialQuote, type MaterialRequest } from "../../modules/purchases/materials";
 import { contractIssue, noContractAttachments, type ProjectContract } from "../../modules/purchases/contract";
 
 type Data = {
@@ -80,6 +80,8 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
   const projectCode = async (projectId: string) => (await options.projects?.listProjects().catch(() => []))?.find((project) => project.id === projectId)?.code ?? "DA";
   const reportOf = (id: string) => data.explanatory.find((item) => item.id === id) ?? fail("EXP_NOT_FOUND");
   const requestOf = (id: string) => data.materials.find((item) => item.id === id) ?? fail("MR_NOT_FOUND");
+  /** PO chưa hủy của một hạng mục trong phiếu (văn phòng: cả phiếu). */
+  const liveOrderOf = (request: MaterialRequest, code: string | null) => request.orderIds.map((id) => data.orders.find((order) => order.id === id)).find((order): order is PurchaseOrder => Boolean(order) && order!.status !== "cancelled" && (request.projectId === null || order!.budgetCode === code)) ?? null;
   const contractOf = (id: string) => data.contracts.find((item) => item.id === id) ?? fail("CONTRACT_NOT_FOUND");
   const editableStatus = (status: string) => status === "draft" || status === "rejected";
   /** PRC-41: Lãnh đạo duyệt P-COST-05 → cộng E vào mã của ngân sách đang dùng, tính lại 4 khoản. */
@@ -470,11 +472,30 @@ export function createMemoryPurchaseStore(options: { persistKey?: string; clock?
       const drafts = ordersFromQuote(request, quote);
       if (!Array.isArray(drafts)) return fail(drafts.error);
       const ids: string[] = [];
-      for (const draft of drafts) ids.push((await this.saveDraft(draft)).id);
+      for (const draft of drafts) {
+        // Hạng mục đã có PO nháp thì điền báo giá vào đó; đã đi quá bước nháp thì bỏ qua
+        const existing = liveOrderOf(request, draft.budgetCode);
+        if (existing && existing.status !== "draft") continue;
+        const saved = await this.saveDraft(existing ? { ...draft, id: existing.id, title: existing.title } : draft);
+        ids.push(saved.id);
+        if (!request.orderIds.includes(saved.id)) request.orderIds = [...request.orderIds, saved.id];
+      }
+      if (!ids.length) fail("MR_GROUPS_ALL_ORDERED");
       quote.selected = true;
-      Object.assign(request, { status: "ordered", orderIds: [...request.orderIds, ...ids] });
+      if (allGroupsOrdered(request, request.orderIds.map(orderOf))) request.status = "ordered";
       persist();
       return ids;
+    },
+    async orderFromGroup(requestId, code) {
+      const request = requestOf(requestId); if (!["approved", "ordered"].includes(request.status)) fail("MR_NOT_APPROVED");
+      const draft = orderFromGroup(request, code);
+      if (!("items" in draft)) return fail(draft.error);
+      if (liveOrderOf(request, draft.budgetCode)) fail("MR_GROUP_HAS_ORDER");
+      const saved = await this.saveDraft(draft);
+      request.orderIds = [...request.orderIds, saved.id];
+      if (allGroupsOrdered(request, request.orderIds.map(orderOf))) request.status = "ordered";
+      persist();
+      return saved.id;
     },
 
     async listContracts(projectId) { return clone(data.contracts.filter((item) => item.projectId === projectId)).sort((a, b) => b.revision - a.revision); },

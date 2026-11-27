@@ -253,6 +253,7 @@ export function createSupabasePurchaseStore(client: SupabaseClient): PurchaseSto
     },
     async deleteQuote(id) { await rpc("material_quote_delete", { p_id: id }); },
     async ordersFromQuote(requestId, quoteId) { return (((await rpc("material_quote_to_orders", { p_request: requestId, p_quote: quoteId })) ?? []) as unknown[]).map(str); },
+    async orderFromGroup(requestId, code) { return str(await rpc("material_group_to_order", { p_request: requestId, p_code: code })); },
 
     async listContracts(projectId) {
       const { data, error } = await client.from("project_contracts").select("*").eq("project_id", projectId).order("revision", { ascending: false });

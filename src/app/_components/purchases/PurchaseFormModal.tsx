@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { FileSearch, Plus, ShoppingCart, Sparkles, Trash2 } from "lucide-react";
 import { formatVnd } from "../../../modules/projects/cost";
 import type { Project } from "../../../modules/projects/types";
-import { draftIssue, estimateTotal, lineTotal } from "../../../modules/purchases/flow";
+import { draftIssue, estimateTotal, lineTotal, paymentTermsLabel } from "../../../modules/purchases/flow";
 import type { PurchaseStore } from "../../../modules/purchases/store";
 import { PURCHASE_KIND_LABELS, type PurchaseDraft, type PurchaseKind, type PurchaseOrder } from "../../../modules/purchases/types";
 import { errorMessage, moneyInput, parseMoney, projectText } from "../projects/projectShared";
@@ -217,17 +217,27 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
           {check && <div style={{ gridColumn: "1 / -1" }}><BudgetCheckBox check={check} /></div>}
           <fieldset className={`po-terms${imported?.fields.has("terms") ? " po-ai-box" : ""}`} style={{ gridColumn: "1 / -1" }}>
             <legend>Điều kiện thanh toán của nhà cung cấp</legend>
-            {/* Trước khi nhận hàng (kèm tạm ứng có / không) hoặc sau khi nhận hàng: quyết định các bước của đơn trên thanh tiến trình */}
-            <label className="po-term"><input type="radio" name="po-pay-when" checked={draft.prepayRequired || draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: true }))} />
-              <span><b>Thanh toán trước khi nhận hàng</b><small>Lập đề nghị thanh toán, ký duyệt và kế toán chi trước khi NCC giao hàng.</small></span></label>
-            {(draft.prepayRequired || draft.advanceRequired) && <div className="po-term-sub" role="radiogroup" aria-label="Tạm ứng">
-              <span className="po-term-sub-label">Tạm ứng:</span>
-              <label className="po-term-chip"><input type="radio" name="po-advance" checked={draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, advanceRequired: true, advancePct: current.advancePct ?? 30 }))} /> Có</label>
-              <label className="po-term-chip"><input type="radio" name="po-advance" checked={!draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, advanceRequired: false, advancePct: null }))} /> Không</label>
-              {draft.advanceRequired && <label className="field po-term-pct"><span>Tạm ứng (%)</span><input type="number" min={1} max={100} step="any" value={draft.advancePct ?? ""} onChange={(event) => set("advancePct", event.target.value ? Number(event.target.value) : null)} /><small className="field-hint">≈ {formatVnd(Math.round(estimateTotal(items) * (draft.advancePct ?? 0) / 100))}. Chi tạm ứng xong mới được đặt hàng.</small></label>}
-            </div>}
-            <label className="po-term"><input type="radio" name="po-pay-when" checked={!draft.prepayRequired && !draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: false, advanceRequired: false, advancePct: null }))} />
-              <span><b>Thanh toán sau khi nhận hàng</b><small>Nhận hàng, kiểm đếm, nhập kho, thu thập hóa đơn chứng từ rồi mới đề nghị thanh toán.</small></span></label>
+            {/* Hai câu hỏi độc lập: có tạm ứng không, và thanh toán (phần còn lại) trước hay sau khi nhận hàng; quyết định các bước của đơn trên thanh tiến trình */}
+            <div className="po-term-q">
+              <span className="po-term-q-label">1. Tạm ứng cho NCC</span>
+              <div className="po-term-row" role="radiogroup" aria-label="Tạm ứng">
+                <label className={`po-term${draft.advanceRequired ? " is-on" : ""}`}><input type="radio" name="po-advance" checked={draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, advanceRequired: true, advancePct: current.advancePct ?? 30 }))} />
+                  <span><b>Có tạm ứng</b><small>Lập đề nghị tạm ứng, chi xong mới đặt hàng.</small></span></label>
+                <label className={`po-term${!draft.advanceRequired ? " is-on" : ""}`}><input type="radio" name="po-advance" checked={!draft.advanceRequired} onChange={() => setDraft((current) => ({ ...current, advanceRequired: false, advancePct: null }))} />
+                  <span><b>Không tạm ứng</b><small>Đặt hàng ngay sau khi PO hiệu lực.</small></span></label>
+              </div>
+              {draft.advanceRequired && <label className="field po-term-pct"><span>Tạm ứng (%)</span><input type="number" min={1} max={100} step="any" value={draft.advancePct ?? ""} onChange={(event) => set("advancePct", event.target.value ? Number(event.target.value) : null)} /><small className="field-hint">≈ {formatVnd(Math.round(estimateTotal(items) * (draft.advancePct ?? 0) / 100))}</small></label>}
+            </div>
+            <div className="po-term-q">
+              <span className="po-term-q-label">2. {draft.advanceRequired ? "Thanh toán phần còn lại" : "Thanh toán"}</span>
+              <div className="po-term-row" role="radiogroup" aria-label="Thời điểm thanh toán">
+                <label className={`po-term${draft.prepayRequired ? " is-on" : ""}`}><input type="radio" name="po-pay-when" checked={draft.prepayRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: true }))} />
+                  <span><b>Trước khi nhận hàng</b><small>Đề nghị thanh toán (kèm hóa đơn), ký duyệt, kế toán chi rồi NCC mới giao hàng.</small></span></label>
+                <label className={`po-term${!draft.prepayRequired ? " is-on" : ""}`}><input type="radio" name="po-pay-when" checked={!draft.prepayRequired} onChange={() => setDraft((current) => ({ ...current, prepayRequired: false }))} />
+                  <span><b>Sau khi nhận hàng</b><small>Nhận hàng, kiểm đếm, nhập kho, thu chứng từ rồi mới đề nghị thanh toán.</small></span></label>
+              </div>
+            </div>
+            <p className="po-term-summary">{paymentTermsLabel(draft)}</p>
           </fieldset>
           <label className="field" style={{ gridColumn: "1 / -1" }}><span>Ghi chú, lý do mua</span><input value={draft.note} placeholder="Người lập tự nhập: lý do mua, ghi chú cho người duyệt" onChange={(event) => set("note", event.target.value)} /></label>
           {live && <fieldset className="po-terms" style={{ gridColumn: "1 / -1" }}>
