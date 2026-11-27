@@ -222,25 +222,33 @@ function CameraDialog(props: { step: Step; onClose: () => void; onSubmit: (photo
   );
 }
 
-/** Hộp thông báo có đầu nhân vật TNM ló lên (ảnh cắt từ nhân vật ở màn đăng nhập app), hiện sau khi chấm công xong. */
+/**
+ * Thông báo nổi sau khi chấm công: đầu nhân vật TNM (cắt từ nhân vật ở màn đăng nhập app) ló lên từ vòng gradient,
+ * nhãn trạng thái + lời chúc, thanh thời gian chạy hết thì tự đóng; bấm bất kỳ đâu hoặc Esc cũng đóng.
+ */
 function MascotAlert(props: { kind: "in" | "out"; place: string; onClose: () => void }) {
-  const button = useRef<HTMLButtonElement>(null);
+  const close = useRef(props.onClose);
+  useEffect(() => { close.current = props.onClose; }, [props.onClose]);
+  const [at] = useState(() => new Date().toLocaleTimeString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" }));
   useEffect(() => {
-    button.current?.focus();
-    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") props.onClose(); };
+    const timer = window.setTimeout(() => close.current(), 3200);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close.current(); };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [props]);
+    return () => { window.clearTimeout(timer); window.removeEventListener("keydown", onKey); };
+  }, []);
   return (
-    <div className="modal-backdrop ci-cheer-backdrop" role="presentation" onClick={props.onClose}>
-      <div className="ci-cheer" role="alertdialog" aria-modal="true" aria-labelledby="ci-cheer-title" aria-describedby="ci-cheer-msg" onClick={(event) => event.stopPropagation()}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/tnm-mascot-head.png" alt="" width={168} height={123} className="ci-cheer-head" />
+    <div className="ci-cheer-backdrop" role="presentation" onClick={() => close.current()}>
+      <div className="ci-cheer" role="status" aria-live="polite">
+        <div className="ci-cheer-mascot" aria-hidden="true">
+          <span className="ci-cheer-halo" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/tnm-mascot-head.png" alt="" width={150} height={110} />
+        </div>
         <div className="ci-cheer-card">
-          <h2 id="ci-cheer-title">{props.kind === "in" ? "Đã chấm Vào" : "Đã chấm Ra"}</h2>
-          <p id="ci-cheer-msg">{props.kind === "in" ? "Chúc bạn một ngày làm việc vui vẻ! ❤️" : "Cảm ơn bạn, về nghỉ ngơi thật tốt nhé! ❤️"}</p>
+          <span className="ci-cheer-chip"><Check size={12} strokeWidth={3.5} aria-hidden="true" /> {props.kind === "in" ? "Đã chấm Vào" : "Đã chấm Ra"} · {at}</span>
+          <p>{props.kind === "in" ? "Chúc bạn một ngày làm việc vui vẻ! ❤️" : "Cảm ơn bạn, về nghỉ ngơi thật tốt nhé! ❤️"}</p>
           <small>{props.place}</small>
-          <button ref={button} type="button" className="button primary" onClick={props.onClose}>Cảm ơn!</button>
+          <span className="ci-cheer-timer" />
         </div>
       </div>
     </div>

@@ -164,9 +164,10 @@ export default function CheckinScreen() {
     setBusy(kind === "in" ? "Đang gửi chấm Vào…" : "Đang gửi chấm Ra…");
     try {
       await punch(kind, target.projectId, fix, photo.base64);
+      const at = clockVN(new Date().toISOString());
       setCheer(kind === "in"
-        ? { title: "Đã chấm Vào", message: "Chúc bạn một ngày làm việc vui vẻ! ❤️", detail: `${target.code} · ${target.name}` }
-        : { title: "Đã chấm Ra", message: "Cảm ơn bạn, về nghỉ ngơi thật tốt nhé! ❤️", detail: `${target.code} · ${target.name}` });
+        ? { title: `Đã chấm Vào · ${at}`, message: "Chúc bạn một ngày làm việc vui vẻ! ❤️", detail: `${target.code} · ${target.name}` }
+        : { title: `Đã chấm Ra · ${at}`, message: "Cảm ơn bạn, về nghỉ ngơi thật tốt nhé! ❤️", detail: `${target.code} · ${target.name}` });
       await Promise.all([load(), loadMonthData(month)]);
     } catch (error) {
       setProblem(errorText(error));
