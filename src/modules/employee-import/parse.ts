@@ -16,7 +16,7 @@ export const IMPORT_FIELD_LABELS: Record<ImportField, string> = {
 };
 
 /** Cột bắt buộc phải có trong file. Giới tính không bắt buộc vì suy được từ số CCCD. */
-export const REQUIRED_IMPORT_FIELDS: readonly ImportField[] = ["code", "name", "dob", "cccd", "phone", "position", "startDate"];
+export const REQUIRED_IMPORT_FIELDS: readonly ImportField[] = ["code", "name", "dob", "cccd", "position", "startDate"];
 
 /** Các cách đặt tên cột thường gặp (đã bỏ dấu, chữ thường). So khớp nguyên cụm. */
 const HEADER_ALIASES: Record<ImportField, readonly string[]> = {

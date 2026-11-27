@@ -64,7 +64,7 @@ describe("đọc file Excel nhân sự", () => {
     const sheet = parseSheet([["Mã NV", "Họ và tên", "Ngày sinh"], [null, null, null], ["TNM002", "Lê Văn B", "01/01/1990"]]);
     expect(sheet?.rows).toHaveLength(1);
     expect(sheet?.rows[0]?.rowNumber).toBe(3);
-    expect(sheet?.missing).toEqual(["cccd", "phone", "position", "startDate"]);
+    expect(sheet?.missing).toEqual(["cccd", "position", "startDate"]);
   });
 });
 

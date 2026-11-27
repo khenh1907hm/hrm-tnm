@@ -85,11 +85,11 @@ describe("HOSO codes", () => {
 });
 
 describe("HOSO plan", () => {
-  it("HOSO_04 new employee is validated like manual entry and needs a phone", () => {
+  it("HOSO_04 new employee is validated like manual entry; phone is optional", () => {
     const file = parsed();
     const noPhone = planHoSo(file, {}, [employee({ id: "x", cccd: "001095000009", code: "TNM130" })], TODAY, []);
     expect(noPhone).toMatchObject({ kind: "new", code: "TNM131" });
-    expect(noPhone.errors.map((item) => item.code)).toEqual(["PHONE_REQUIRED"]);
+    expect(noPhone.errors).toEqual([]);
     const ok = planHoSo(file, { phone: "+84 912 345 679", startDate: "2026-10-01", group: 3 }, [], TODAY, []);
     expect(ok.errors).toEqual([]);
     expect(ok.input).toMatchObject({ code: "TNM001", phone: "0912345679", startDate: "2026-10-01", group: 3, status: "active" });
@@ -138,7 +138,7 @@ describe("HOSO plan", () => {
     expect(diffHoSo(employee(), parsed({}, { currentAddress: "Chỗ ở mới" }), {}, false)).toEqual([{ field: "currentAddress", old: null, new: "Chỗ ở mới" }]);
     const legacy = employee({ phone: "", currentAddress: "x" });
     const invalid = planHoSo(parsed({}, { address: "Mới" }), {}, [legacy], TODAY, []);
-    expect(invalid.errors.map((item) => item.code)).toEqual(["PHONE_REQUIRED"]);
+    expect(invalid.errors).toEqual([]);
     const badShape = planHoSo(parsed({}, { position: "Bảo vệ" }), {}, [employee()], TODAY, []);
     expect(badShape.errors.map((item) => item.code)).toEqual(["EMP_POSITION_INVALID"]);
     expect(updatedEmployeeRecord(current, applyHoSoChanges(current, []), [], null).photo).toBeNull();

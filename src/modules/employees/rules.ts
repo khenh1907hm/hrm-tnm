@@ -6,7 +6,8 @@ import { normalizePhone, validatePhone } from "../../lib/vietnam/phone";
 import type { EmployeeInput } from "./types";
 
 export function validateEmployee(input: EmployeeInput, today: string, existing: { code: string; cccd: string; phone: string; id?: string; archivedAt?: string | null }[] = [], excludeId?: string, commanderIds: string[] = ["cmd-1", "cmd-2"]): { value: EmployeeInput; errors: Issue[]; warnings: Issue[] } {
-  const phoneResult = validatePhone(input.phone);
+  // SĐT không bắt buộc: bỏ trống vẫn tạo được hồ sơ, có nhập thì phải đúng định dạng
+  const phoneResult = validatePhone(input.phone, false);
   const value = { ...input, code: input.code.trim().toUpperCase(), companyStartDate: input.companyStartDate?.trim() || null, name: validateName(input.name).value, phone: phoneResult.value ?? normalizePhone(input.phone) };
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
@@ -43,7 +44,7 @@ export function validateEmployee(input: EmployeeInput, today: string, existing: 
   // CCCD chỉ không trùng với hồ sơ đang hoạt động: người cũ đã lưu trữ quay lại thì nhập hồ sơ mới được
   if (existing.some((employee) => employee.cccd === input.cccd && employee.id !== excludeId && !employee.archivedAt)) errors.push(issue("CCCD_DUPLICATE", "cccd"));
   add(phoneResult.issues);
-  if (existing.some((employee) => employee.phone === value.phone && employee.id !== excludeId)) warnings.push(issue("PHONE_DUPLICATE", "phone", "warning"));
+  if (value.phone && existing.some((employee) => employee.phone === value.phone&& employee.id !== excludeId)) warnings.push(issue("PHONE_DUPLICATE", "phone", "warning"));
   if (input.group !== null && (!Number.isInteger(input.group) || input.group < 1 || input.group > 6)) errors.push(issue("EMP_GROUP_INVALID", "group"));
   if (input.emergencyContactId && !commanderIds.includes(input.emergencyContactId)) errors.push(issue("EMP_EMERGENCY_CONTACT_INVALID", "emergencyContactId"));
   if (input.status === "resigned" && (!input.endDate || !isValidISODate(input.endDate) || input.endDate < input.startDate || input.endDate > today)) errors.push(issue("EMP_END_DATE_INVALID", "endDate"));
