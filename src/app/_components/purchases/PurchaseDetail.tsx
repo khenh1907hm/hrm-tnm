@@ -42,6 +42,7 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
   const [picked, setPicked] = useState<PathKey | null>(props.initialStep ?? null);
   /** Đang xem bước "Yêu cầu vật tư" (phiếu YCVT đã duyệt + báo giá) thay cho bước của đơn. */
   const [materialOpen, setMaterialOpen] = useState(false);
+  const [formKey, setFormKey] = useState(0);
   const [today] = useState(() => todayVN(systemClock));
   // Tab dự án có khung bên phải: chuỗi ký hiện ở đó, trên khung Người duyệt
   const asideSlot = useContext(AsideSlotContext);
@@ -86,6 +87,8 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
   // Bước đang xem lịch sử / kết quả: mặc định bước hiện tại
   const steps = orderPath(order, payments);
   const shownStep = steps.find((step) => step.key === picked) ?? steps.find((step) => step.state === "current") ?? steps[0]!;
+  // PO nháp người lập sửa được: hiện thẳng form đầy đủ (NCC, giao hàng, dòng hàng, điều kiện thanh toán, tệp, nút đọc báo giá PDF)
+  const editInline = actions.has("edit") && !materialOpen && (shownStep.key === "draft" || shownStep.key === "submitted");
   const paymentForm = (payment: PurchasePayment) => (
     <FormExportButtons key={payment.id} compact code="P-CF-03" fileBase={`${payment.rfpNo || order.code} ${order.supplier}`} setNotice={setNotice} build={async (forms, template) => {
       const base = await orderFormInput();
@@ -196,8 +199,8 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
         {order.status === "rejected" && <p className="warn-text">{order.usesChain ? "Bị trả về" : "Sếp từ chối"}: {order.decisionNote}. Sửa đơn rồi lập lại.</p>}
         {order.status === "cancelled" && <p className="warn-text">Đơn đã hủy: {order.decisionNote}</p>}
         <div className="po-actions">
-          {actions.has("edit") && <button type="button" className="button" onClick={() => setEditing(true)}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa đơn</button>}
-          {actions.has("submit") && <button type="button" className="button primary" onClick={() => void act(async () => { await store.submit(order.id); setChainKey((value) => value + 1); }, order.kind === "project" ? "Đã lập đơn, gửi ký duyệt." : "Đã lập đơn, gửi sếp duyệt.")}><Send className="ico" size={16} aria-hidden="true" /> Lập đơn, gửi duyệt</button>}
+          {actions.has("edit") && !editInline && <button type="button" className="button" onClick={() => setEditing(true)}><Pencil className="ico" size={16} aria-hidden="true" /> Sửa đơn</button>}
+          {actions.has("submit") && !editInline && <button type="button" className="button primary" onClick={() => void act(async () => { await store.submit(order.id); setChainKey((value) => value + 1); }, order.kind === "project" ? "Đã lập đơn, gửi ký duyệt." : "Đã lập đơn, gửi sếp duyệt.")}><Send className="ico" size={16} aria-hidden="true" /> Lập đơn, gửi duyệt</button>}
           {actions.has("approve") && <button type="button" className="button primary" onClick={() => void act(() => store.decide(order.id, true, window.prompt("Ghi chú khi duyệt (có thể để trống):") ?? ""), "Đã duyệt đơn hàng.")}><Check className="ico" size={16} aria-hidden="true" /> Duyệt đơn</button>}
           {actions.has("reject") && <button type="button" className="button danger" onClick={() => { const why = ask("Lý do từ chối (ít nhất 3 ký tự):"); if (why) void act(() => store.decide(order.id, false, why), "Đã từ chối, đơn trả về người lập."); }}><X className="ico" size={16} aria-hidden="true" /> Từ chối</button>}
           {actions.has("issuePo") && <button type="button" className="button primary" onClick={() => setPanel("issuePo")}><Send className="ico" size={16} aria-hidden="true" /> Phát hành PO</button>}
@@ -222,7 +225,9 @@ export function PurchaseDetail(props: { /** Bước mở sẵn khi vào đơn (v
         {order.status === "received" && !order.stockedAt && !actions.has("stockIn") && deptName("stocked") && <p className="muted">Chờ <b>{deptName("stocked")}</b> nhập kho.</p>}
         {order.status === "received" && order.stockedAt && !order.docsCollectedAt && !actions.has("collectDocs") && deptName("final") && <p className="muted">Chờ <b>{deptName("final")}</b> thu thập chứng từ.</p>}
         {panel === "issuePo" && <IssuePoPanel order={order} onCancel={() => setPanel(null)} onSubmit={(supplier, contact) => act(() => store.issuePo(order.id, supplier, contact), "Đã phát hành PO. Gửi PO cho nhà cung cấp ký xác nhận.")} />}
-        {materialOpen && order.materialRequest ? (() => {
+        {editInline ? <PurchaseFormModal key={`${order.id}-${formKey}`} inline store={store} projects={props.projects} initial={order} lockProject={Boolean(order.projectId)} onClose={() => undefined}
+          onSaved={(_, submitted) => { setNotice(submitted ? (order.kind === "project" ? "Đã lập đơn, gửi ký duyệt." : "Đã lập đơn, gửi sếp duyệt.") : "Đã lưu nháp.", "success"); setFormKey((value) => value + 1); setChainKey((value) => value + 1); void reload(); }} />
+        : materialOpen && order.materialRequest ? (() => {
           const project = props.projects.find((item) => item.id === order.projectId);
           const scope = project ? { projectId: project.id, code: project.code, name: project.name, site: project.site } : { projectId: null, code: "VP", name: "Văn phòng", site: "" };
           return <MaterialRequestsPanel store={store} scope={scope} fixedRequestId={order.materialRequest.id} myEmployeeId={null} isAdmin={props.isAdmin}

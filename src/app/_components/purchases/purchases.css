@@ -328,3 +328,10 @@
 .po-term-summary { margin: 0; font-weight: 600; color: var(--brand); }
 .mr-quote-import { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border: 1px dashed var(--brand); border-radius: 8px; background: var(--brand-soft); margin-bottom: 10px; }
 .mr-quote-import .button { cursor: pointer; }
+
+/* PO nháp sửa ngay trên trang (form đầy đủ, không phải hộp nổi) */
+.po-form-inline > .panel { overflow: hidden; }
+.po-form-inline header { padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+.po-form-inline h2 { font-size: 17px; margin: 0; }
+.po-form-inline footer { padding: 14px 20px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--line); position: sticky; bottom: 0; background: var(--surface); }
+@media (max-width: 760px) { .po-form-inline .form-grid { grid-template-columns: 1fr; } }

@@ -19,7 +19,7 @@ type ItemDraft = PurchaseDraft["items"][number];
 const blankItem = (): ItemDraft => ({ id: "", name: "", spec: "", unit: "", quantity: 1, unitPrice: 0 });
 
 /** Soạn đơn nháp (PUR-02): dự án hoặc văn phòng, danh sách hàng cần mua. Lưu nháp hoặc Lập đơn (gửi sếp duyệt). */
-export function PurchaseFormModal(props: { store: PurchaseStore; projects: readonly Project[]; initial: PurchaseOrder | null; defaultProjectId?: string | null; lockProject?: boolean; /** Trang Đặt hàng dự án / Văn phòng: cố định loại đơn, ẩn ô "Mua cho". */ fixedKind?: PurchaseKind; onClose: () => void; onSaved: (order: PurchaseOrder, submitted: boolean) => void }) {
+export function PurchaseFormModal(props: { store: PurchaseStore; projects: readonly Project[]; initial: PurchaseOrder | null; defaultProjectId?: string | null; lockProject?: boolean; /** Trang Đặt hàng dự án / Văn phòng: cố định loại đơn, ẩn ô "Mua cho". */ fixedKind?: PurchaseKind; /** Hiện ngay trên trang PO nháp (không phải hộp nổi): đủ các ô và nút đọc báo giá PDF. */ inline?: boolean; onClose: () => void; onSaved: (order: PurchaseOrder, submitted: boolean) => void }) {
   const start = props.initial;
   const [draft, setDraft] = useState<Omit<PurchaseDraft, "items">>(() => start
     ? { kind: start.kind, projectId: start.projectId, title: start.title, department: start.department, neededBy: start.neededBy, deliveryAddress: start.deliveryAddress, supplier: start.supplier, supplierContact: start.supplierContact, supplierAddress: start.supplierAddress, supplierPhone: start.supplierPhone, supplierEmail: start.supplierEmail, note: start.note, budgetCode: start.budgetCode,
@@ -149,9 +149,9 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onKeyDown={(event) => { if (event.key === "Escape") props.onClose(); }}>
-      <section className="modal-card" role="dialog" aria-modal="true" aria-labelledby="po-form-title" style={{ maxWidth: 960 }}>
-        <header><h2 id="po-form-title"><ShoppingCart className="ico" size={18} aria-hidden="true" /> {start ? `Sửa đơn ${start.code}` : "Đơn hàng mới"}{props.lockProject && lockedProject ? ` · ${lockedProject.code}` : ""}</h2><button type="button" className="close" aria-label="Đóng" onClick={props.onClose}>×</button></header>
+    <div className={props.inline ? "po-form-inline" : "modal-backdrop"} role="presentation" onKeyDown={(event) => { if (event.key === "Escape" && !props.inline) props.onClose(); }}>
+      <section className={props.inline ? "panel" : "modal-card"} role={props.inline ? "region" : "dialog"} aria-modal={props.inline ? undefined : true} aria-labelledby="po-form-title" style={props.inline ? undefined : { maxWidth: 960 }}>
+        <header><h2 id="po-form-title"><ShoppingCart className="ico" size={18} aria-hidden="true" /> {props.inline && start ? `PO nháp ${start.code}` : start ? `Sửa đơn ${start.code}` : "Đơn hàng mới"}{props.lockProject && lockedProject ? ` · ${lockedProject.code}` : ""}</h2>{!props.inline && <button type="button" className="close" aria-label="Đóng" onClick={props.onClose}>×</button>}</header>
         <div className="form-grid">
           <div className="po-import">
             <label className="button primary"><FileSearch size={16} aria-hidden="true" /> {importing ? "Đang đọc báo giá…" : "Nhập từ báo giá NCC (PDF / ảnh)"}
@@ -247,7 +247,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
           {error && <p className="form-error" role="alert" style={{ gridColumn: "1 / -1" }}>{error}</p>}
         </div>
         <footer>
-          <button type="button" className="button" onClick={props.onClose}>Hủy</button>
+          {!props.inline && <button type="button" className="button" onClick={props.onClose}>Hủy</button>}
           <button type="button" className="button" disabled={busy} onClick={() => void save(false)}>Lưu nháp</button>
           <button type="button" className="button primary" disabled={busy || Boolean(check?.over)} onClick={() => void save(true)}>{busy ? "Đang gửi…" : draft.kind === "project" ? "Lập đơn, gửi ký duyệt" : "Lập đơn, gửi sếp duyệt"}</button>
         </footer>
