@@ -187,6 +187,8 @@ export function MaterialRequestsPanel({ store, scope, myEmployeeId, isAdmin, isL
       if (missing.length) notes.push(`Chưa tìm thấy giá cho: ${missing.join(", ")}. Nhập tay nếu NCC có báo.`);
       if (all.unmatched.length) notes.push(`Dòng trong báo giá không khớp vật tư của phiếu: ${all.unmatched.slice(0, 6).join(", ")}${all.unmatched.length > 6 ? "…" : ""}.`);
       if (data.vat) notes.push("Đơn giá điền là giá chưa VAT theo báo giá.");
+      // Báo giá ghi giá ĐÃ GỒM VAT mà không tách tiền thuế: đơn giá điền vào đang gồm VAT, PO và ngân sách tính giá chưa VAT
+      else if (data.vatIncluded) notes.push("⚠ Báo giá ghi giá ĐÃ GỒM VAT nhưng không tách tiền thuế: đơn giá vừa điền đang GỒM VAT. Sửa lại thành giá chưa VAT (chia 1,08 hoặc 1,1 tùy thuế suất) trước khi lưu, vì PO và ngân sách tính giá chưa VAT.");
       setQuoteDraft({
         ...quoteDraft, budgetCode: code,
         supplier: data.supplier || quoteDraft.supplier, supplierContact: [data.contact, data.phone].filter(Boolean).join(" · ") || quoteDraft.supplierContact,

@@ -76,6 +76,7 @@ export function PurchaseFormModal(props: { store: PurchaseStore; projects: reado
         if (final.from === "items") warnings.push("Báo giá không ghi rõ tổng cộng: giá cuối lấy bằng cộng các dòng, kiểm tra lại.");
       } else warnings.push("Không đọc được giá cuối cùng của báo giá: nhập tay giá.");
       if (data.vat) warnings.push(`Giá điền là giá chưa VAT (thuế trên báo giá ${formatVnd(data.vat)}).`);
+      else if (data.vatIncluded) warnings.push("⚠ Báo giá ghi giá ĐÃ GỒM VAT nhưng không tách tiền thuế: giá vừa điền đang GỒM VAT. Sửa lại thành giá chưa VAT (chia 1,08 hoặc 1,1 tùy thuế suất), vì PO in \"Cộng (chưa gồm VAT)\" và ngân sách tính giá chưa VAT.");
       // Báo giá NCC chính là tệp "Báo giá có ký xác nhận hoặc PO/Hợp đồng"
       if (live) setPending((current) => [...current, { key: `signed_quote-${file.name}-${file.size}-${Date.now()}`, kind: "signed_quote", file }]);
       setImported({ source, fields, warnings });
