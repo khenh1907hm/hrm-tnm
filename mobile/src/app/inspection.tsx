@@ -7,6 +7,7 @@ import { Glyph } from "@/components/AppIcon";
 import { GradientButton, SecondaryButton } from "@/components/GradientButton";
 import { LogoLoader } from "@/components/LogoLoader";
 import { MarkedPhoto, PhotoMarker } from "@/components/PhotoMarker";
+import { DateField } from "@/components/DatePicker";
 import { PickerSheet } from "@/components/PickerSheet";
 import { Card, Screen, SectionTitle } from "@/components/Screen";
 import { useToast } from "@/components/Toast";
@@ -39,36 +40,25 @@ function Field({ label, value, onChange, placeholder, multiline, editable = true
   );
 }
 
-/** Chọn ngày nhanh: lùi / tiến một ngày, về hôm nay. */
-function DateField({ label, value, onChange, editable = true }: { label: string; value: string | null; onChange: (v: string) => void; editable?: boolean }) {
-  const day = value ?? todayISO();
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <View style={styles.dateRow}>
-        {editable && <Pressable style={styles.dateBtn} onPress={() => onChange(addDays(day, -1))} accessibilityLabel="Lùi một ngày"><Text style={styles.dateArrow}>−</Text></Pressable>}
-        <Text style={styles.dateText}>{value ? dmy(value) : "—"}</Text>
-        {editable && <Pressable style={styles.dateBtn} onPress={() => onChange(addDays(day, 1))} accessibilityLabel="Thêm một ngày"><Text style={styles.dateArrow}>+</Text></Pressable>}
-        {editable && <Pressable style={styles.chip} onPress={() => onChange(todayISO())}><Text style={styles.chipText}>Hôm nay</Text></Pressable>}
-      </View>
-    </View>
-  );
-}
-
 /** Ảnh một phía + chụp / chọn + khoanh. */
 function PhotoBlock({ title, photo, urls, marks, editable, onPhoto, onMarks }: { title: string; photo: Photo | null; urls: Record<string, string>; marks: PhotoMark[]; editable: boolean; onPhoto: (p: Photo) => void; onMarks: (m: PhotoMark[]) => void }) {
   const toast = useToast();
+  const [drawing, setDrawing] = useState(false);
   const uri = photo?.uri ?? (photo?.path ? urls[photo.path] : undefined);
+  // Chụp / chọn ảnh xong mở luôn khung vẽ cố định để khoanh
+  const pick = (source: "camera" | "library") => void takePhoto(source, (t) => toast(t, "warn")).then((p) => { if (p) { onPhoto(p); onMarks([]); setDrawing(true); } });
   return (
     <View style={{ gap: 8 }}>
       <Text style={styles.sideTitle}>{title}</Text>
-      {editable && uri ? <PhotoMarker uri={uri} marks={marks} onChange={onMarks} /> : <MarkedPhoto uri={uri} marks={marks} />}
+      <MarkedPhoto uri={uri} marks={marks} onPress={editable && uri ? () => setDrawing(true) : undefined} />
+      {editable && uri ? <SecondaryButton label={marks.length ? `Sửa nét khoanh (${marks.length})` : "◯ Khoanh / ▢ đánh dấu lỗi"} onPress={() => setDrawing(true)} /> : null}
       {editable && (
         <View style={styles.row}>
-          <View style={{ flex: 1 }}><GradientButton label={uri ? "Chụp lại" : "Chụp ảnh"} onPress={() => void takePhoto("camera", (t) => toast(t, "warn")).then((p) => { if (p) { onPhoto(p); onMarks([]); } })} /></View>
-          <View style={{ flex: 1 }}><SecondaryButton label="Thư viện" onPress={() => void takePhoto("library", (t) => toast(t, "warn")).then((p) => { if (p) { onPhoto(p); onMarks([]); } })} /></View>
+          <View style={{ flex: 1 }}><GradientButton label={uri ? "Chụp lại" : "Chụp ảnh"} onPress={() => pick("camera")} /></View>
+          <View style={{ flex: 1 }}><SecondaryButton label="Thư viện" onPress={() => pick("library")} /></View>
         </View>
       )}
+      {drawing && uri ? <PhotoMarker uri={uri} marks={marks} onChange={onMarks} onClose={() => setDrawing(false)} /> : null}
     </View>
   );
 }
