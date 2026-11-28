@@ -21,6 +21,8 @@ export type Inspection = {
   id: string; projectId: string; number: string; checkDate: string; reporterId: string; reporterName: string;
   attentionEmployeeId: string | null; attentionName: string; cc: string; status: InspectionStatus; note: string;
   submittedAt: string | null; fixedAt: string | null; closedAt: string | null; createdAt: string;
+  /** Logo trái trên file Excel (thư viện logo nhà thầu); logo phải = chứng nhận ISO của TNM, bật / tắt. */
+  leftLogoId: string | null; showCertLogo: boolean;
   items: InspectionItem[];
 };
 /** assignee: người nhận báo cáo (Sếp lập → PM; PM lập → chỉ huy trưởng). canCreate: người đang xem lập được báo cáo cho dự án này. */

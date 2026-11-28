@@ -6,6 +6,7 @@ import { fixIssue, INSPECTION_STATUS_LABELS, inspectionTitle, submitIssue, type 
 import type { Notify } from "../Toast";
 import { downloadBytes } from "../purchases/FormExport";
 import { SkeletonTable } from "../Skeleton";
+import { LogoPicker, listLogos, logoImage } from "../LogoPicker";
 import * as api from "./inspectionApi";
 import { MarkedPhoto, PhotoMarker, burnMarks } from "./PhotoMarker";
 
@@ -162,8 +163,11 @@ function InspectionDetail(props: { id: string; projects: readonly InspectionProj
         ...(item.afterPhoto ? { after: await burnMarks(await api.photoBytes(item.afterPhoto), item.afterMarks) } : {}),
       };
     }
+    const leftUrl = inspection.leftLogoId ? (await listLogos()).find((logo) => logo.id === inspection.leftLogoId)?.url : undefined;
+    const leftLogo = leftUrl ? await logoImage(leftUrl).catch(() => undefined) : undefined;
+    const certLogo = inspection.showCertLogo ? await logoImage("/report-logos/iso-certified.png").catch(() => undefined) : undefined;
     const { buildInspectionWorkbook } = await import("../../../modules/inspections/export");
-    const bytes = await buildInspectionWorkbook({ inspection, project: { code: project?.code ?? "", name: project?.name ?? "" }, photos });
+    const bytes = await buildInspectionWorkbook({ inspection, project: { code: project?.code ?? "", name: project?.name ?? "" }, photos, leftLogo, certLogo });
     downloadBytes(bytes, `${inspection.number} ${project?.name ?? ""} ${inspection.checkDate}.xlsx`.replace(/[\\/:*?"<>|]+/g, "-"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   }, "Đã tạo file Excel QHSE PHOTO REPORT.");
   const blockSubmit = submitIssue(inspection);
@@ -190,6 +194,25 @@ function InspectionDetail(props: { id: string; projects: readonly InspectionProj
         {canEdit && inspection.status === "draft" && <button type="button" className="button danger" disabled={busy} onClick={() => { if (window.confirm(`Xóa báo cáo nháp ${inspection.number}?`)) void run(async () => { await api.deleteInspection(inspection.id); props.onBack(); }, "Đã xóa báo cáo nháp."); }}><Trash2 size={15} aria-hidden="true" /> Xóa nháp</button>}
       </div>
       {inspection.status === "draft" && blockSubmit && <p className="muted">{blockSubmit}</p>}
+      <details className="panel pj-section si-logos" open={canEdit && inspection.status === "draft"}>
+        <summary><b>Logo trên file Excel</b> <small className="muted">· trái: logo nhà thầu ({inspection.leftLogoId ? "đã chọn" : "chưa chọn"}) · phải: chứng nhận ISO ({inspection.showCertLogo ? "bật" : "tắt"})</small></summary>
+        <div className="si-logo-grid">
+          <div>
+            <h4>Logo trái · nhà thầu</h4>
+            <p className="muted"><small>Chọn logo đã lưu, hoặc lưu logo mới (dùng lại được ở các phiếu, dự án khác). Phiếu mới của dự án tự lấy logo của phiếu trước.</small></p>
+            <LogoPicker value={inspection.leftLogoId} disabled={!canEdit || busy} onError={(message) => setNotice(message, "error")} onChange={(id) => void run(() => api.updateHeader(inspection.id, { leftLogoId: id }), id ? "Đã chọn logo trái." : "Đã bỏ logo trái.")} />
+          </div>
+          <div>
+            <h4>Logo phải · chứng nhận</h4>
+            <label className="si-cert">
+              <input type="checkbox" checked={inspection.showCertLogo} disabled={!canEdit || busy} onChange={(event) => void run(() => api.updateHeader(inspection.id, { showCertLogo: event.target.checked }), event.target.checked ? "Đã bật logo chứng nhận." : "Đã tắt logo chứng nhận.")} />
+              {/* eslint-disable-next-line @next/next/no-img-element -- ảnh tĩnh nhỏ */}
+              <img src="/report-logos/iso-certified.png" alt="BSI ISO 9001, 14001, 45001" style={{ opacity: inspection.showCertLogo ? 1 : 0.35 }} />
+            </label>
+            <small className="muted">Bật / tắt tấm BSI ISO 9001 · 14001 · 45001 góc phải.</small>
+          </div>
+        </div>
+      </details>
       {canFix && inspection.status === "open" && <p className="list-notice is-warn">Bạn là người khắc phục: với mỗi lỗi chụp ảnh sau khi sửa (khoanh được), ghi Comment; ngày hoàn thành mặc định hôm nay. Xong hết thì bấm “Báo đã khắc phục xong”.</p>}
       {inspection.items.map((item, index) => <ItemCard key={item.id} inspection={inspection} item={item} index={index} urls={urls} canEdit={canEdit} canFix={canFix} viewer={viewer} onSaved={() => void load()} onRemoved={() => void load()} setNotice={setNotice} />)}
       {Array.from({ length: adding }, (_, index) => <ItemCard key={`new-${index}`} inspection={inspection} item={null} index={inspection.items.length + index} urls={urls} canEdit={canEdit} canFix={false} viewer={viewer} onSaved={() => { setAdding(0); void load(); }} onRemoved={() => undefined} setNotice={setNotice} />)}

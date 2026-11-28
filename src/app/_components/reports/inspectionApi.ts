@@ -31,6 +31,7 @@ const toInspection = (row: Row): Inspection => ({
   id: str(row.id), projectId: str(row.project_id), number: str(row.number), checkDate: str(row.check_date), reporterId: str(row.reporter_id), reporterName: str(row.reporter_name),
   attentionEmployeeId: opt(row.attention_employee_id), attentionName: str(row.attention_name), cc: str(row.cc), status: str(row.status) as InspectionStatus, note: str(row.note),
   submittedAt: opt(row.submitted_at), fixedAt: opt(row.fixed_at), closedAt: opt(row.closed_at), createdAt: str(row.created_at),
+  leftLogoId: opt(row.left_logo_id), showCertLogo: row.show_cert_logo !== false,
   items: ((row.site_inspection_items ?? []) as Row[]).map(toItem).sort((a, b) => a.seq - b.seq),
 });
 
@@ -73,13 +74,15 @@ export async function createInspection(input: { projectId: string; checkDate: st
   fail(error);
   return str((data as Row).id);
 }
-export async function updateHeader(id: string, patch: Partial<{ checkDate: string; attentionEmployeeId: string | null; attentionName: string; cc: string; note: string }>) {
+export async function updateHeader(id: string, patch: Partial<{ checkDate: string; attentionEmployeeId: string | null; attentionName: string; cc: string; note: string; leftLogoId: string | null; showCertLogo: boolean }>) {
   const body: Row = {};
   if (patch.checkDate !== undefined) body.check_date = patch.checkDate;
   if (patch.attentionEmployeeId !== undefined) body.attention_employee_id = patch.attentionEmployeeId;
   if (patch.attentionName !== undefined) body.attention_name = patch.attentionName;
   if (patch.cc !== undefined) body.cc = patch.cc;
   if (patch.note !== undefined) body.note = patch.note;
+  if (patch.leftLogoId !== undefined) body.left_logo_id = patch.leftLogoId;
+  if (patch.showCertLogo !== undefined) body.show_cert_logo = patch.showCertLogo;
   const { error } = await client().from("site_inspections").update(body).eq("id", id);
   fail(error);
 }

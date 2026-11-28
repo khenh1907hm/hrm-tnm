@@ -11,6 +11,8 @@ export type InspectionExportInput = {
   inspection: Inspection; project: { code: string; name: string };
   /** Ảnh đã in nét khoanh, theo id lỗi. */
   photos: Record<string, { before?: BurnedPhoto | undefined; after?: BurnedPhoto | undefined }>;
+  /** Logo trái (nhà thầu) và logo phải (chứng nhận ISO), ảnh PNG; bỏ trống = không chèn. */
+  leftLogo?: BurnedPhoto | undefined; certLogo?: BurnedPhoto | undefined;
 };
 
 const COLS = 31; // A..AE
@@ -27,6 +29,19 @@ export async function buildInspectionWorkbook(input: InspectionExportInput): Pro
   const merge = (range: string) => { try { ws.mergeCells(range); } catch { /* đã gộp */ } };
   const put = (address: string, value: ExcelJS.CellValue, style: Partial<ExcelJS.Style> = {}) => { const cell = ws.getCell(address); cell.value = value; Object.assign(cell, style); return cell; };
 
+  // Hàng logo như mẫu: logo nhà thầu góc trái (cột A–F), chứng nhận ISO góc phải (cột AA–AE), giữ tỉ lệ ảnh
+  ws.getRow(1).height = 30; ws.getRow(2).height = 26;
+  const logo = (image: BurnedPhoto | undefined, firstCol: number, spanCols: number, alignRight: boolean) => {
+    if (!image) return;
+    const boxW = spanCols * 3.4 * 7.0, boxH = (30 + 26) * (96 / 72) - 6;
+    const scale = Math.min(boxW / image.width, boxH / image.height);
+    const width = Math.round(image.width * scale), height = Math.round(image.height * scale);
+    const id = book.addImage({ buffer: image.bytes.slice().buffer as ArrayBuffer, extension: "png" });
+    const colOffset = alignRight ? Math.max(0, (boxW - width) / (3.4 * 7.0)) : 0.1;
+    ws.addImage(id, { tl: { col: firstCol - 1 + colOffset, row: 0.1 }, ext: { width, height }, editAs: "oneCell" });
+  };
+  logo(input.leftLogo, 1, 6, false);
+  logo(input.certLogo, 26, 6, true);
   merge("G2:Y2");
   put("G2", "QHSE PHOTO REPORT", { font: { bold: true, size: 18 }, alignment: { horizontal: "center" } });
   const head = (row: number, label: string, value: string, labelRight: string, valueRight: string) => {
