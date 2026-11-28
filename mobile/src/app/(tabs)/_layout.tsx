@@ -11,11 +11,11 @@ import { colors, fonts, gradients } from "@/lib/theme";
 
 const TABS: Record<string, { label: string; icon: IconName }> = {
   index: { label: "Điểm danh", icon: "clock" },
-  report: { label: "Báo cáo", icon: "report" },
+  approve: { label: "Duyệt", icon: "check" },
   settings: { label: "Cài đặt", icon: "settings" },
   account: { label: "Tài khoản", icon: "user" },
 };
-/** Nút + chen vào giữa, sau tab thứ mấy. */
+/** Báo cáo ngày (report) không nằm trên thanh menu: mở từ nút + → Báo cáo ngày. Nút + chen vào giữa, sau tab thứ mấy. */
 const CENTER_AFTER = 2;
 
 function TabItem({ focused, label, icon, onPress }: { focused: boolean; label: string; icon: IconName; onPress: () => void }) {
@@ -94,9 +94,10 @@ export default function TabsLayout() {
       screenOptions={{ headerShown: false, animation: "shift", sceneStyle: { backgroundColor: colors.bg } }}
     >
       <Tabs.Screen name="index" />
-      <Tabs.Screen name="report" />
+      <Tabs.Screen name="approve" />
       <Tabs.Screen name="settings" />
       <Tabs.Screen name="account" />
+      <Tabs.Screen name="report" />
     </Tabs>
   );
 }
