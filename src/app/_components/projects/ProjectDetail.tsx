@@ -27,7 +27,7 @@ import { errorMessage, viewerFor, type EmployeeSource, type ProjectViewer } from
 import { formatDateVn } from "./ProjectsPage";
 import { ReportsTab } from "./ReportsTab";
 import { TimesheetsTab } from "./TimesheetsTab";
-import { ToolChecksTab } from "./ToolChecksTab";
+import { MonthlyReportTab } from "./MonthlyReportTab";
 import { ExplanatoryTab } from "./ExplanatoryTab";
 import { ProjectProcurement, type ProcurementStage } from "../purchases/ProjectProcurement";
 
@@ -74,19 +74,19 @@ async function fetchProjectData(store: ProjectStore, project: Project): Promise<
   return { project, members, memberRates: memberRates ?? [], budgets: budgets ?? [], timesheets, costs: costs ?? [], subcontracts, payments: payments ?? [], expenses: expenses ?? [], locks, holidays, settings, myEmployeeId, finance, checks, today };
 }
 
-type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "podraft" | "purchases" | "payments" | "members" | "daily" | "timesheets" | "checks" | "tools" | "reports" | "settings";
+type Tab = "overview" | "contract" | "budget" | "explanatory" | "materials" | "podraft" | "purchases" | "payments" | "members" | "daily" | "timesheets" | "checks" | "tools" | "monthly" | "reports" | "settings";
 /** Theo thứ tự quy trình vận hành: Confirmed Contract → Budget → Material Request → PO Draft → PO → Request for Payment → thi công. */
 const TABS: readonly [Tab, string, string?][] = [
   ["overview", "Overview"], ["contract", "Confirmed Contract", "P-COST-01"], ["budget", "Budget Sheet", "P-COST-03"], ["explanatory", "Explanatory Report", "P-COST-05"],
   ["materials", "Purchasing", "Material Request → PO Draft → Purchase Order → Request for Payment"],
-  ["members", "Org Chart & Members"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["tools", "Tool Check"], ["reports", "Reports"], ["settings", "Settings"],
+  ["members", "Org Chart & Members"], ["timesheets", "Timesheets"], ["checks", "GPS Check-in"], ["reports", "Reports"], ["settings", "Settings"],
 ];
 /** Giai đoạn mua hàng: một tab "Purchasing", bên trong là sub-nav 4 bước. */
 const PROCUREMENT = new Set<string>(["materials", "podraft", "purchases", "payments"]);
 /** Mở thẳng một mục qua đường dẫn ?muc=ngan-sach (từ "Chờ tôi ký", thông báo). */
 export const TAB_SLUGS: Record<Tab, string> = {
   overview: "tong-quan", contract: "hop-dong", budget: "ngan-sach", explanatory: "bao-cao-giai-thich", materials: "yeu-cau-vat-tu", podraft: "don-nhap", purchases: "dat-hang", payments: "de-nghi-thanh-toan", members: "so-do", daily: "bao-cao-ngay",
-  timesheets: "cham-cong", checks: "cham-cong-gps", tools: "kiem-tra-dung-cu", reports: "bao-cao", settings: "cai-dat",
+  timesheets: "cham-cong", checks: "cham-cong-gps", tools: "kiem-tra-dung-cu", monthly: "bao-cao-thang", reports: "bao-cao", settings: "cai-dat",
 };
 const tabFromUrl = (): Tab => {
   if (typeof window === "undefined") return "overview";
@@ -132,7 +132,8 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
   }, [store.mode, project.id, data]);
   const stateUi = contractState ? CONTRACT_STATE_UI[contractState] : null;
   const visibleTabs = TABS.filter(([key]) => (key !== "budget" && key !== "contract" && key !== "explanatory") || viewer?.canSeeMoney || signsHere || actor.role === "admin");
-  /** Daily Report nằm trong tab Reports (đường dẫn cũ ?muc=bao-cao-ngay vẫn mở đúng). */
+  /** Daily Report, Monthly Report nằm trong tab Reports (đường dẫn cũ ?muc=bao-cao-ngay, ?muc=kiem-tra-dung-cu vẫn mở đúng). */
+  const REPORT_TABS = new Set<Tab>(["reports", "daily", "monthly", "tools"]);
   const canDaily = Boolean(viewer?.isLead || viewer?.canEditProject);
   const duration = data ? projectDuration(project, data.holidays, data.today) : null;
 
@@ -162,7 +163,7 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         {tab !== "contract" && <button type="button" className="link-button" onClick={() => setTab("contract")}>Mở Confirm Contract</button>}
       </div>}
       <div className="pj-tabs" role="tablist" aria-label="Mục của dự án">
-        {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key || (key === "reports" && tab === "daily") || (key === "materials" && PROCUREMENT.has(tab))} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key === "materials" && PROCUREMENT.has(tab) ? tab : key)}>{label}</button>)}
+        {visibleTabs.map(([key, label, form]) => <button key={key} type="button" role="tab" aria-selected={tab === key || (key === "reports" && REPORT_TABS.has(tab)) || (key === "materials" && PROCUREMENT.has(tab))} aria-label={label} title={form ? `${label} · ${form}` : undefined} onClick={() => setTab(key === "materials" && PROCUREMENT.has(tab) ? tab : key)}>{label}</button>)}
       </div>
       {!data || !viewer ? <SkeletonDetail label="Đang tải dữ liệu dự án…" /> : (() => {
         const tabProps: TabProps = { store, data, viewer, actor, employees: props.employees, reload: async () => { await reload(); props.onChanged(); }, setNotice };
@@ -182,7 +183,6 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         if (tab === "members") return <OrgChartTab {...tabProps} />;
         if (tab === "timesheets") return <TimesheetsTab {...tabProps} />;
         if (tab === "checks") return <ChecksTab {...tabProps} />;
-        if (tab === "tools") return <ToolChecksTab {...tabProps} />;
         if (tab === "settings") return <SettingsTab {...tabProps} onEditInfo={props.onEdit} />;
         if (tab === "explanatory") return withApprovers(<ExplanatoryTab {...tabProps} />, "explanatory");
         if (PROCUREMENT.has(tab)) {
@@ -192,11 +192,13 @@ export function ProjectDetail(props: { store: ProjectStore; actor: Actor; employ
         }
         return (
           <>
-            {canDaily && <div className="pj-subtabs" role="tablist" aria-label="Loại báo cáo">
-              <button type="button" role="tab" aria-selected={tab === "daily"} onClick={() => setTab("daily")}>Daily Report</button>
-              <button type="button" role="tab" aria-selected={tab !== "daily"} onClick={() => setTab("reports")}>Timesheet Report</button>
-            </div>}
-            {tab === "daily" && canDaily ? <DailyReportTab {...tabProps} /> : <ReportsTab {...tabProps} />}
+            <div className="pj-subtabs" role="tablist" aria-label="Loại báo cáo">
+              {canDaily && <button type="button" role="tab" aria-selected={tab === "daily"} onClick={() => setTab("daily")}>Daily Report</button>}
+              <button type="button" role="tab" aria-selected={tab === "reports" || (tab === "daily" && !canDaily)} onClick={() => setTab("reports")}>Timesheet Report</button>
+              <button type="button" role="tab" aria-selected={tab === "monthly" || tab === "tools"} onClick={() => setTab("monthly")}>Monthly Report</button>
+            </div>
+            {tab === "monthly" || tab === "tools" ? <MonthlyReportTab {...tabProps} section={tab === "tools" ? "tools" : "site"} onSection={(section) => setTab(section === "tools" ? "tools" : "monthly")} />
+              : tab === "daily" && canDaily ? <DailyReportTab {...tabProps} /> : <ReportsTab {...tabProps} />}
           </>
         );
       })()}

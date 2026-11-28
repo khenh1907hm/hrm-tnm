@@ -178,7 +178,7 @@ function Detail({ id }: { id: string }) {
         </Card>
       ))}
       {canEdit ? <SecondaryButton label="Thêm lỗi" icon={<Glyph name="add" size={18} color={colors.skyDeep} fillOpacity={0} />} onPress={() => setEditing({ item: blankItem(inspection.items.length + 1), mode: "before" })} /> : null}
-      {canEdit && inspection.status === "draft" ? <GradientButton label={blockSubmit ?? "Gửi cho trưởng dự án"} busy={busy} onPress={() => { if (blockSubmit) { toast(blockSubmit, "warn"); return; } void run(() => api.submit(inspection.id), `Đã gửi cho ${inspection.attentionName || "trưởng dự án"}.`); }} /> : null}
+      {canEdit && inspection.status === "draft" ? <GradientButton label={blockSubmit ?? `Gửi cho ${inspection.attentionName || "người khắc phục"}`} busy={busy} onPress={() => { if (blockSubmit) { toast(blockSubmit, "warn"); return; } void run(() => api.submit(inspection.id), `Đã gửi cho ${inspection.attentionName || "trưởng dự án"}.`); }} /> : null}
       {canFix && inspection.status === "open" ? <GradientButton label="Báo đã khắc phục xong" busy={busy} onPress={() => { if (blockFix) { toast(blockFix, "warn"); return; } void run(() => api.markFixed(inspection.id), "Đã báo cho người kiểm tra."); }} /> : null}
       {isReporter && inspection.status === "fixed" ? <>
         <GradientButton label="Đồng ý, đóng báo cáo" busy={busy} onPress={() => void run(() => api.close(inspection.id), "Đã đóng báo cáo.")} />
@@ -208,7 +208,7 @@ function List() {
   const byId = useMemo(() => new Map(projects.map((p) => [p.projectId, p])), [projects]);
   const start = async (project: InspectionProject) => {
     setPicking(false);
-    if (!project.pmEmployeeId) { toast("Dự án chưa có trưởng dự án (PM). Đặt PM trong dự án trước.", "warn"); return; }
+    if (!project.assigneeEmployeeId) { toast(project.pmEmployeeId ? "Dự án chưa có chỉ huy trưởng. Thêm chỉ huy trưởng ở Org Chart & Members của dự án trước." : "Dự án chưa có trưởng dự án (PM). Đặt PM trong dự án trước.", "warn"); return; }
     setBusy(true);
     try { const id = await api.create(project, todayISO(), ""); router.push(`/inspection?id=${encodeURIComponent(id)}` as Href); } catch (error) { toast(errorText(error), "err"); } finally { setBusy(false); }
   };
@@ -229,7 +229,7 @@ function List() {
         );
       })}
       <PickerSheet visible={picking} title="Chọn dự án kiểm tra" placeholder="Tìm mã, tên dự án" selectedId={null} emptyText="Không có dự án"
-        items={projects.map((p) => ({ id: p.projectId, title: p.name, subtitle: `${p.code} · PM: ${p.pmName || "chưa có"}`, badge: p.code, icon: "report", tone: "rose" }))}
+        items={projects.filter((p) => p.canCreate).map((p) => ({ id: p.projectId, title: p.name, subtitle: `${p.code} · giao ${p.assigneeIsCommander ? "CHT" : "PM"}: ${p.assigneeName || "chưa có"}`, badge: p.code, icon: "report", tone: "rose" }))}
         onSelect={(item) => { const found = projects.find((p) => p.projectId === item.id); if (found) void start(found); }} onClose={() => setPicking(false)} />
     </Screen>
   );

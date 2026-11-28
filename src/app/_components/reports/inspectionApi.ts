@@ -41,7 +41,15 @@ export async function canCreateInspection(): Promise<boolean> {
 export async function inspectionProjects(): Promise<InspectionProject[]> {
   const { data, error } = await client().rpc("site_inspection_projects");
   fail(error);
-  return ((data ?? []) as Row[]).map((row) => ({ projectId: str(row.project_id), code: str(row.code), name: str(row.name), site: str(row.site), status: str(row.status), pmEmployeeId: opt(row.pm_employee_id), pmName: str(row.pm_name) }));
+  return ((data ?? []) as Row[]).map((row) => {
+    const pmEmployeeId = opt(row.pm_employee_id);
+    const assigneeEmployeeId = row.assignee_employee_id === undefined ? pmEmployeeId : opt(row.assignee_employee_id);
+    return {
+      projectId: str(row.project_id), code: str(row.code), name: str(row.name), site: str(row.site), status: str(row.status), pmEmployeeId, pmName: str(row.pm_name),
+      canCreate: row.can_create !== false, assigneeEmployeeId, assigneeName: row.assignee_name === undefined ? str(row.pm_name) : str(row.assignee_name),
+      assigneeIsCommander: Boolean(assigneeEmployeeId) && assigneeEmployeeId !== pmEmployeeId && assigneeEmployeeId === opt(row.commander_employee_id),
+    };
+  });
 }
 export async function listInspections(projectId?: string | null): Promise<Inspection[]> {
   let query = client().from("site_inspections").select("*, site_inspection_items(*)").order("check_date", { ascending: false }).order("created_at", { ascending: false }).limit(300);

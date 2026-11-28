@@ -23,7 +23,11 @@ export type Inspection = {
   id: string; projectId: string; number: string; checkDate: string; reporterId: string; reporterName: string;
   attentionEmployeeId: string | null; attentionName: string; cc: string; status: InspectionStatus; items: Item[];
 };
-export type InspectionProject = { projectId: string; code: string; name: string; site: string; pmEmployeeId: string | null; pmName: string };
+/** assignee: người nhận báo cáo (Sếp lập → PM; PM lập → chỉ huy trưởng). canCreate: người đang xem được lập báo cáo cho dự án này. */
+export type InspectionProject = {
+  projectId: string; code: string; name: string; site: string; pmEmployeeId: string | null; pmName: string;
+  commanderName: string; canCreate: boolean; assigneeEmployeeId: string | null; assigneeName: string; assigneeIsCommander: boolean;
+};
 
 const BUCKET = "site-inspection-photos";
 type Row = Record<string, unknown>;
@@ -51,7 +55,7 @@ export function markFromDrag(shape: MarkShape, from: { x: number; y: number }, t
 const fail = (error: { message: string } | null) => {
   if (!error) return;
   const known: Record<string, string> = {
-    FORBIDDEN: "Bạn không có quyền với báo cáo này.", INSPECTION_NO_ITEMS: "Chưa có lỗi nào trong báo cáo.", INSPECTION_NO_ASSIGNEE: "Dự án chưa có trưởng dự án (PM) để giao.",
+    FORBIDDEN: "Bạn không có quyền với báo cáo này.", INSPECTION_NO_ITEMS: "Chưa có lỗi nào trong báo cáo.", INSPECTION_NO_ASSIGNEE: "Dự án chưa có người nhận (PM / chỉ huy trưởng) để giao.",
     INSPECTION_ITEMS_NOT_FIXED: "Còn lỗi chưa có ảnh sau / ngày hoàn thành.",
   };
   throw new Error(Object.entries(known).find(([code]) => error.message.includes(code))?.[1] ?? error.message);
@@ -71,7 +75,15 @@ export async function canCreate(): Promise<boolean> { const { data } = await sup
 export async function loadProjects(): Promise<InspectionProject[]> {
   const { data, error } = await supabase.rpc("site_inspection_projects");
   fail(error);
-  return ((data ?? []) as Row[]).map((r) => ({ projectId: str(r.project_id), code: str(r.code), name: str(r.name), site: str(r.site), pmEmployeeId: opt(r.pm_employee_id), pmName: str(r.pm_name) }));
+  return ((data ?? []) as Row[]).map((r) => {
+    const pmEmployeeId = opt(r.pm_employee_id);
+    const assigneeEmployeeId = r.assignee_employee_id === undefined ? pmEmployeeId : opt(r.assignee_employee_id);
+    return {
+      projectId: str(r.project_id), code: str(r.code), name: str(r.name), site: str(r.site), pmEmployeeId, pmName: str(r.pm_name),
+      commanderName: str(r.commander_name), canCreate: r.can_create !== false, assigneeEmployeeId, assigneeName: r.assignee_name === undefined ? str(r.pm_name) : str(r.assignee_name),
+      assigneeIsCommander: Boolean(assigneeEmployeeId) && assigneeEmployeeId !== pmEmployeeId && assigneeEmployeeId === opt(r.commander_employee_id),
+    };
+  });
 }
 export async function myEmployeeId(): Promise<string | null> {
   const { data } = await supabase.rpc("my_account");
@@ -90,7 +102,7 @@ export async function loadOne(id: string): Promise<Inspection | null> {
 }
 export async function create(project: InspectionProject, checkDate: string, cc: string): Promise<string> {
   const { data: auth } = await supabase.auth.getUser();
-  const { data, error } = await supabase.from("site_inspections").insert({ project_id: project.projectId, check_date: checkDate, reporter_id: auth.user?.id, number: "", attention_employee_id: project.pmEmployeeId, attention_name: project.pmName, cc }).select("id").single();
+  const { data, error } = await supabase.from("site_inspections").insert({ project_id: project.projectId, check_date: checkDate, reporter_id: auth.user?.id, number: "", attention_employee_id: project.assigneeEmployeeId, attention_name: project.assigneeName, cc }).select("id").single();
   fail(error);
   return str((data as Row).id);
 }

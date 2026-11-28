@@ -23,7 +23,11 @@ export type Inspection = {
   submittedAt: string | null; fixedAt: string | null; closedAt: string | null; createdAt: string;
   items: InspectionItem[];
 };
-export type InspectionProject = { projectId: string; code: string; name: string; site: string; status: string; pmEmployeeId: string | null; pmName: string };
+/** assignee: người nhận báo cáo (Sếp lập → PM; PM lập → chỉ huy trưởng). canCreate: người đang xem lập được báo cáo cho dự án này. */
+export type InspectionProject = {
+  projectId: string; code: string; name: string; site: string; status: string; pmEmployeeId: string | null; pmName: string;
+  canCreate: boolean; assigneeEmployeeId: string | null; assigneeName: string; assigneeIsCommander: boolean;
+};
 
 const clamp = (value: number) => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 /** Đọc nét khoanh từ JSON (bỏ giá trị lạ, giới hạn 0..1, tối đa 30 nét). */

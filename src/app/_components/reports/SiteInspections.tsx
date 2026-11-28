@@ -180,7 +180,7 @@ function InspectionDetail(props: { id: string; projects: readonly InspectionProj
         <span className={`pill ${TONE[inspection.status]}`} style={{ fontSize: 14 }}>{INSPECTION_STATUS_LABELS[inspection.status]}</span>
       </div>
       <div className="po-actions">
-        {canEdit && (inspection.status === "draft") && <button type="button" className="button primary" disabled={busy || Boolean(blockSubmit)} title={blockSubmit ?? ""} onClick={() => void run(() => api.submitInspection(inspection.id), `Đã gửi báo cáo cho ${inspection.attentionName || "trưởng dự án"}.`)}><Send size={15} aria-hidden="true" /> Gửi cho trưởng dự án</button>}
+        {canEdit && (inspection.status === "draft") && <button type="button" className="button primary" disabled={busy || Boolean(blockSubmit)} title={blockSubmit ?? ""} onClick={() => void run(() => api.submitInspection(inspection.id), `Đã gửi báo cáo cho ${inspection.attentionName || "trưởng dự án"}.`)}><Send size={15} aria-hidden="true" /> Gửi cho {inspection.attentionName || "người khắc phục"}</button>}
         {canFix && inspection.status === "open" && <button type="button" className="button primary" disabled={busy || Boolean(blockFix)} title={blockFix ?? ""} onClick={() => void run(() => api.markFixed(inspection.id), "Đã báo khắc phục xong cho người kiểm tra.")}><Check size={15} aria-hidden="true" /> Báo đã khắc phục xong</button>}
         {(isReporter || viewer.isAdmin) && inspection.status === "fixed" && <>
           <button type="button" className="button primary" disabled={busy} onClick={() => void run(() => api.closeInspection(inspection.id), "Đã đóng báo cáo.")}><Check size={15} aria-hidden="true" /> Đồng ý, đóng báo cáo</button>
@@ -199,8 +199,9 @@ function InspectionDetail(props: { id: string; projects: readonly InspectionProj
 }
 
 /** Lập báo cáo mới: chọn dự án → người nhận mặc định là trưởng dự án (PM). */
-function NewInspection(props: { projects: readonly InspectionProject[]; onCreated: (id: string) => void; onCancel: () => void; setNotice: Notify }) {
-  const [projectId, setProjectId] = useState(props.projects[0]?.projectId ?? "");
+function NewInspection(props: { projects: readonly InspectionProject[]; lockedProjectId?: string | undefined; onCreated: (id: string) => void; onCancel: () => void; setNotice: Notify }) {
+  const creatable = props.projects.filter((item) => item.canCreate);
+  const [projectId, setProjectId] = useState(props.lockedProjectId ?? creatable[0]?.projectId ?? "");
   const [checkDate, setCheckDate] = useState(() => todayVN(systemClock));
   const [cc, setCc] = useState("");
   const [busy, setBusy] = useState(false);
@@ -208,36 +209,36 @@ function NewInspection(props: { projects: readonly InspectionProject[]; onCreate
   return (
     <div className="mr-form">
       <div className="bs-head">
-        <label className="field wide"><span>Dự án *</span><select value={projectId} onChange={(event) => setProjectId(event.target.value)}>{props.projects.map((item) => <option key={item.projectId} value={item.projectId}>{item.code} · {item.name}</option>)}</select></label>
+        <label className="field wide"><span>Dự án *</span><select value={projectId} disabled={Boolean(props.lockedProjectId)} onChange={(event) => setProjectId(event.target.value)}>{creatable.map((item) => <option key={item.projectId} value={item.projectId}>{item.code} · {item.name}</option>)}</select></label>
         <label className="field"><span>Ngày kiểm tra</span><input type="date" value={checkDate} onChange={(event) => setCheckDate(event.target.value || checkDate)} /></label>
-        <p className="field"><span>Giao cho (trưởng dự án)</span><b>{project?.pmName || <span className="warn-text">Dự án chưa có PM</span>}</b></p>
+        <p className="field"><span>Giao cho ({project?.assigneeIsCommander || (project && project.pmEmployeeId && !project.assigneeEmployeeId) ? "chỉ huy trưởng" : "trưởng dự án"})</span><b>{project?.assigneeName || <span className="warn-text">{project?.pmEmployeeId ? "Dự án chưa có chỉ huy trưởng (thêm ở Org Chart & Members)" : "Dự án chưa có PM"}</span>}</b></p>
         <label className="field"><span>CC</span><input value={cc} placeholder="vd MR. AI & MR. DAN" onChange={(event) => setCc(event.target.value)} /></label>
       </div>
       <div className="button-row">
         <button type="button" className="button" onClick={props.onCancel}>Hủy</button>
-        <button type="button" className="button primary" disabled={busy || !project} onClick={() => { if (!project) return; setBusy(true); void api.createInspection({ projectId, checkDate, attentionEmployeeId: project.pmEmployeeId, attentionName: project.pmName, cc }).then(props.onCreated, (error: unknown) => { props.setNotice(error instanceof Error ? error.message : "Không tạo được.", "error"); setBusy(false); }); }}><Plus size={15} aria-hidden="true" /> Tạo báo cáo, thêm lỗi</button>
+        <button type="button" className="button primary" disabled={busy || !project?.assigneeEmployeeId} onClick={() => { if (!project) return; setBusy(true); void api.createInspection({ projectId, checkDate, attentionEmployeeId: project.assigneeEmployeeId, attentionName: project.assigneeName, cc }).then(props.onCreated, (error: unknown) => { props.setNotice(error instanceof Error ? error.message : "Không tạo được.", "error"); setBusy(false); }); }}><Plus size={15} aria-hidden="true" /> Tạo báo cáo, thêm lỗi</button>
       </div>
     </div>
   );
 }
 
 /** Tab Báo cáo công trình: danh sách theo dự án / tình trạng, lập mới (người được Sếp / Admin chỉ định), mở chi tiết. */
-export function SiteInspections(props: { viewer: InspectionViewer; openId: string | null; onOpen: (id: string | null) => void; setNotice: Notify }) {
+export function SiteInspections(props: { viewer: InspectionViewer; openId: string | null; onOpen: (id: string | null) => void; setNotice: Notify; /** Chỉ một dự án (tab Monthly Report trong dự án). */ projectId?: string }) {
   const { setNotice } = props;
   const [list, setList] = useState<Inspection[] | null>(null);
   const [projects, setProjects] = useState<InspectionProject[]>([]);
   const [canCreate, setCanCreate] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [projectFilter, setProjectFilter] = useState("");
+  const [projectFilter, setProjectFilter] = useState(props.projectId ?? "");
   const [status, setStatus] = useState<"" | Inspection["status"]>("");
   const [refresh, setRefresh] = useState(0);
   useEffect(() => {
     let active = true;
-    void Promise.all([api.listInspections(), api.inspectionProjects(), api.canCreateInspection()]).then(([items, projectList, can]) => {
+    void Promise.all([api.listInspections(props.projectId), api.inspectionProjects(), api.canCreateInspection()]).then(([items, projectList, can]) => {
       if (active) { setList(items); setProjects(projectList); setCanCreate(can); }
     }, (error: unknown) => { if (active) { setNotice(error instanceof Error ? error.message : "Không tải được báo cáo.", "error"); setList([]); } });
     return () => { active = false; };
-  }, [refresh, setNotice]);
+  }, [refresh, setNotice, props.projectId]);
   const byProject = useMemo(() => new Map(projects.map((item) => [item.projectId, item])), [projects]);
   if (props.openId) return <InspectionDetail id={props.openId} projects={projects} viewer={props.viewer} onBack={() => { props.onOpen(null); setRefresh((value) => value + 1); }} onChanged={() => setRefresh((value) => value + 1)} setNotice={setNotice} />;
   if (!list) return <SkeletonTable rows={5} />;
@@ -247,12 +248,12 @@ export function SiteInspections(props: { viewer: InspectionViewer; openId: strin
     <section className="panel pj-section">
       <div className="pj-section-head">
         <h2>Báo cáo công trình <small className="muted">(QHSE PHOTO REPORT)</small></h2>
-        {canCreate && !creating && <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus size={15} aria-hidden="true" /> Báo cáo mới</button>}
+        {canCreate && !creating && (props.projectId ? byProject.get(props.projectId)?.canCreate : projects.some((item) => item.canCreate)) && <button type="button" className="button primary" onClick={() => setCreating(true)}><Plus size={15} aria-hidden="true" /> Báo cáo mới</button>}
       </div>
       <p className="muted">Sếp kiểm tra công trường chụp lỗi, khoanh điểm cần sửa, ghi vấn đề, cách giải quyết, hạn hoàn thiện; báo cáo giao cho trưởng dự án. Trưởng dự án nhận thông báo, sửa xong chụp ảnh sau, ghi comment, ngày hoàn thành.{mine ? <> <b className="warn-text">Có {mine} báo cáo chờ bạn khắc phục.</b></> : null}</p>
-      {creating && <NewInspection projects={projects} onCancel={() => setCreating(false)} onCreated={(id) => { setCreating(false); props.onOpen(id); }} setNotice={setNotice} />}
+      {creating && <NewInspection projects={projects} lockedProjectId={props.projectId} onCancel={() => setCreating(false)} onCreated={(id) => { setCreating(false); props.onOpen(id); }} setNotice={setNotice} />}
       <div className="pj-toolbar">
-        <select aria-label="Dự án" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">Mọi dự án</option>{projects.map((item) => <option key={item.projectId} value={item.projectId}>{item.code} · {item.name}</option>)}</select>
+        {!props.projectId && <select aria-label="Dự án" value={projectFilter} onChange={(event) => setProjectFilter(event.target.value)}><option value="">Mọi dự án</option>{projects.map((item) => <option key={item.projectId} value={item.projectId}>{item.code} · {item.name}</option>)}</select>}
         <select aria-label="Tình trạng" value={status} onChange={(event) => setStatus(event.target.value as typeof status)}><option value="">Mọi tình trạng</option>{(Object.keys(INSPECTION_STATUS_LABELS) as Inspection["status"][]).map((key) => <option key={key} value={key}>{INSPECTION_STATUS_LABELS[key]}</option>)}</select>
       </div>
       {!shown.length ? <p className="muted">Chưa có báo cáo nào.</p> : (

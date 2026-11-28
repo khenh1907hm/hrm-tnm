@@ -44,7 +44,7 @@ function ToolReports(props: { setNotice: Notify }) {
   return (
     <section className="panel pj-section">
       <div className="pj-section-head"><h2>Báo cáo thiết bị <small className="muted">(Tool &amp; machine check)</small></h2></div>
-      <p className="muted">Kiểm tra dụng cụ, máy điện hằng tháng của từng dự án. Lập phiếu trên app điện thoại (nút + → Kiểm tra dụng cụ điện) hoặc tab Kiểm tra dụng cụ trong dự án; chọn thiết bị từ danh sách có sẵn, cùng loại tự đánh số 1, 2, 3.</p>
+      <p className="muted">Kiểm tra dụng cụ, máy điện hằng tháng của từng dự án. Lập phiếu trên app điện thoại (nút + → Kiểm tra dụng cụ điện) hoặc trong dự án: Reports → Monthly Report → Tool Check; chọn thiết bị từ danh sách có sẵn, cùng loại tự đánh số 1, 2, 3.</p>
       {!rows.length ? <p className="muted">Chưa có phiếu kiểm tra thiết bị nào.</p> : (
         <div className="table-scroll"><table className="pj-table">
           <thead><tr><th>Tháng</th><th>Dự án</th><th>Ngày kiểm tra</th><th>Người kiểm tra</th><th className="pj-num">Thiết bị</th><th className="pj-num">NG</th></tr></thead>
